@@ -1,0 +1,6 @@
+apiVersion: nodeobservability.olm.openshift.io/v1alpha1
+kind: NodeObservabilityRun
+metadata:
+  name: nodeobservabilityrun-sample
+spec:
+  # TODO(user): Add fields here

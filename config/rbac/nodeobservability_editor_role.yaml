@@ -1,0 +1,24 @@
+# permissions for end users to edit nodeobservabilities.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: nodeobservability-editor-role
+rules:
+- apiGroups:
+  - nodeobservability.olm.openshift.io
+  resources:
+  - nodeobservabilities
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - nodeobservability.olm.openshift.io
+  resources:
+  - nodeobservabilities/status
+  verbs:
+  - get
