@@ -1,0 +1,9 @@
+apiVersion: nodeobservability.olm.openshift.io/v1alpha1
+kind: NodeObservability
+metadata:
+  name: nodeobservability-sample
+spec:
+  labels:
+    app: "node-observability"
+  image: "quay.io/prometheus/busybox"
+  expectedcount: 1

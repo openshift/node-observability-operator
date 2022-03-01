@@ -1,0 +1,20 @@
+# permissions for end users to view nodeobservabilities.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: nodeobservability-viewer-role
+rules:
+- apiGroups:
+  - nodeobservability.olm.openshift.io
+  resources:
+  - nodeobservabilities
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - nodeobservability.olm.openshift.io
+  resources:
+  - nodeobservabilities/status
+  verbs:
+  - get

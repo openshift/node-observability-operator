@@ -1,0 +1,9 @@
+apiVersion: nodeobservability.olm.openshift.io/v1alpha1
+kind: NodeObservability
+metadata:
+  name: nodeobservability-sample
+spec:
+  labels:
+  #image: "quay.io/prometheus/busybox"
+  #image: "registry.access.redhat.com/ubi8/ubi-minimal:8.5-218"
+  image: "quay.io/luzuccar/node-observability-agent:latest"

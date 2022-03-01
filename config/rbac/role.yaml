@@ -1,0 +1,114 @@
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccount
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
+  - nodeobservability.olm.openshift.io
+  resources:
+  - nodeobservabilities
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - nodeobservability.olm.openshift.io
+  resources:
+  - nodeobservabilities/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - nodeobservability.olm.openshift.io
+  resources:
+  - nodeobservabilities/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - nodeobservability.olm.openshift.io
+  resources:
+  - nodeobservabilityruns
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - nodeobservability.olm.openshift.io
+  resources:
+  - nodeobservabilityruns/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - nodeobservability.olm.openshift.io
+  resources:
+  - nodeobservabilityruns/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - rbac
+  resources:
+  - clusterrole
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
+  - rbac
+  resources:
+  - clusterrolebinding
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
+  - security
+  resources:
+  - securitycontextconstraint
+  verbs:
+  - create
+  - get
+  - list
+  - watch

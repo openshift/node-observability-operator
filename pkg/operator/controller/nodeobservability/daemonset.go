@@ -1,0 +1,140 @@
+package nodeobservabilitycontroller
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/openshift/node-observability-operator/api/v1alpha1"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
+)
+
+const (
+	podName          = "node-observability-agent"
+	socketName       = "socket"
+	path             = "/var/run/crio/crio.sock"
+	mountPath        = "/var/run/crio/crio.sock"
+	defaultScheduler = "default-scheduler"
+)
+
+// ensureDaemonSet ensures that the daemonset exists
+// Returns a Boolean value indicating whether it exists, a pointer to the
+// daemonset and an error when relevant
+func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeObs *v1alpha1.NodeObservability, sa *corev1.ServiceAccount) (bool, *appsv1.DaemonSet, error) {
+	nameSpace := types.NamespacedName{Namespace: nodeObs.Namespace, Name: nodeObs.Name}
+	desired := r.desiredDaemonSet(nodeObs, sa)
+	exist, current, err := r.currentDaemonSet(ctx, nameSpace)
+	if err != nil {
+		return false, nil, fmt.Errorf("failed to get DaemonSet: %w", err)
+	}
+	if !exist {
+		if err := r.createDaemonSet(ctx, desired); err != nil {
+			return false, nil, err
+		}
+		return r.currentDaemonSet(ctx, nameSpace)
+	}
+	// Set NodeObservability instance as the owner and controller
+	ctrl.SetControllerReference(nodeObs, desired, r.Scheme)
+	return true, current, nil
+}
+
+// currentDaemonSet check if the daemonset exists
+func (r *NodeObservabilityReconciler) currentDaemonSet(ctx context.Context, nameSpace types.NamespacedName) (bool, *appsv1.DaemonSet, error) {
+	ds := &appsv1.DaemonSet{}
+	if err := r.Get(ctx, nameSpace, ds); err != nil {
+		if errors.IsNotFound(err) {
+			return false, nil, nil
+		}
+		return false, nil, err
+	}
+	return true, ds, nil
+}
+
+// createDaemonSet creates the serviceaccount
+func (r *NodeObservabilityReconciler) createDaemonSet(ctx context.Context, ds *appsv1.DaemonSet) error {
+	if err := r.Create(ctx, ds); err != nil {
+		return fmt.Errorf("failed to create DaemonSet %s/%s: %w", ds.Namespace, ds.Name, err)
+	}
+	r.Log.Info("created DaemonSet", "DaemonSet.Namespace", ds.Namespace, "DaemonSet.Name", ds.Name)
+	return nil
+}
+
+// desiredDaemonSet returns a DaemonSet object
+func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObservability, sa *corev1.ServiceAccount) *appsv1.DaemonSet {
+
+	ls := labelsForNodeObservability(nodeObs.Name)
+	tgp := int64(30)
+	vst := corev1.HostPathSocket
+	privileged := true
+
+	ds := &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      nodeObs.Name,
+			Namespace: nodeObs.Namespace,
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: ls,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: ls,
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Image:           nodeObs.Spec.Image,
+						ImagePullPolicy: corev1.PullIfNotPresent,
+						Name:            podName,
+						// TODO - this will change once the shell script in the node-observability-agent is
+						// finalized
+						Command:                  []string{"/bin/sh", "-c", "curl --unix-socket /var/run/crio/crio.sock http://localhost/debug/pprof/profile > /mnt/crio-${NODE_IP}_$(date +\"%F-%T.%N\").out && sleep 3600"},
+						Resources:                corev1.ResourceRequirements{},
+						TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+						SecurityContext: &corev1.SecurityContext{
+							Privileged: &privileged,
+						},
+						Env: []corev1.EnvVar{{
+							Name: "NODE_IP",
+							ValueFrom: &corev1.EnvVarSource{
+								FieldRef: &corev1.ObjectFieldSelector{
+									FieldPath: "status.hostIP",
+								},
+							},
+						}},
+						VolumeMounts: []corev1.VolumeMount{{
+							MountPath: mountPath,
+							Name:      socketName,
+							ReadOnly:  false,
+						}},
+					}},
+					DNSPolicy:                     corev1.DNSClusterFirst,
+					RestartPolicy:                 corev1.RestartPolicyAlways,
+					SchedulerName:                 defaultScheduler,
+					ServiceAccountName:            sa.Name,
+					TerminationGracePeriodSeconds: &tgp,
+					Volumes: []corev1.Volume{{
+						Name: socketName,
+						VolumeSource: corev1.VolumeSource{
+							HostPath: &corev1.HostPathVolumeSource{
+								Path: path,
+								Type: &vst,
+							},
+						},
+					}},
+					NodeSelector: nodeObs.Spec.Labels,
+				},
+			},
+		},
+	}
+	return ds
+}
+
+// labelsForiNodeObservability returns the labels for selecting the resources
+// belonging to the given node observability CR name.
+func labelsForNodeObservability(name string) map[string]string {
+	return map[string]string{"app": "nodeobservability", "nodeobs_cr": name}
+}
