@@ -1,6 +1,6 @@
 # NodeObservability Operator [WIP]
 
-The `NodeObservability` Operator allows you to deploy and manage [NodeObservability Agent](https://github.com/openshift/node-observability-agent), these agenst will be deployed as DaemonSets (on all or slected Nodes). The agent is used to trigger crio and kubelet profile data to the containers hostPath for later retrieval (this is the MVP). 
+The `NodeObservability` Operator allows you to deploy and manage [NodeObservability Agent](https://github.com/openshift/node-observability-agent), these agents will be deployed as DaemonSets (on all or slected Nodes). The agent is used to trigger crio and kubelet profile data to the containers hostPath for later retrieval (this is the MVP). 
 
 **Note**: This Operator is in the early stages of implementation.
 

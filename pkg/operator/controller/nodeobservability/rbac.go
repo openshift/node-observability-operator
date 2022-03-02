@@ -54,9 +54,12 @@ func (r *NodeObservabilityReconciler) ensureClusterRole(ctx context.Context, nod
 // currentClusterRole checks that the clusterrole  exists
 func (r *NodeObservabilityReconciler) currentClusterRole(ctx context.Context, nameSpace types.NamespacedName) (bool, *rbacv1.ClusterRole, error) {
 	cr := &rbacv1.ClusterRole{}
-	if err := r.Get(ctx, nameSpace, cr); err != nil {
-		if errors.IsNotFound(err) {
+	if err := r.Get(ctx, nameSpace, cr); err != nil || r.Err.Set[crObj] {
+		if errors.IsNotFound(err) || r.Err.NotFound[crObj] {
 			return false, nil, nil
+		}
+		if r.Err.Set[crObj] {
+			err = fmt.Errorf("failed to get ClusterRole: simulated error")
 		}
 		return false, nil, err
 	}
@@ -110,7 +113,7 @@ func (r *NodeObservabilityReconciler) ensureClusterRoleBinding(ctx context.Conte
 	desired := r.desiredClusterRoleBinding(nodeObs, saName)
 	exist, current, err := r.currentClusterRoleBinding(ctx, nameSpace)
 	if err != nil {
-		return false, nil, fmt.Errorf("failed to get ClusterRoleBinding: %w", err)
+		return false, nil, fmt.Errorf("failed to get ClusterRoleBinding: %v", err)
 	}
 	if !exist {
 		if err := r.createClusterRoleBinding(ctx, desired); err != nil {
@@ -126,9 +129,13 @@ func (r *NodeObservabilityReconciler) ensureClusterRoleBinding(ctx context.Conte
 // currentClusterRoleBinding checks if the clusterrolebinding exists
 func (r *NodeObservabilityReconciler) currentClusterRoleBinding(ctx context.Context, nameSpace types.NamespacedName) (bool, *rbacv1.ClusterRoleBinding, error) {
 	crb := &rbacv1.ClusterRoleBinding{}
-	if err := r.Get(ctx, nameSpace, crb); err != nil {
-		if errors.IsNotFound(err) {
+
+	if err := r.Get(ctx, nameSpace, crb); err != nil || r.Err.Set[crbObj] {
+		if errors.IsNotFound(err) || r.Err.NotFound[crbObj] {
 			return false, nil, nil
+		}
+		if r.Err.Set[crbObj] {
+			err = fmt.Errorf("failed to get ClusterRoleiBinding: simulated error")
 		}
 		return false, nil, err
 	}

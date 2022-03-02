@@ -29,7 +29,7 @@ func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeO
 	desired := r.desiredDaemonSet(nodeObs, sa)
 	exist, current, err := r.currentDaemonSet(ctx, nameSpace)
 	if err != nil {
-		return false, nil, fmt.Errorf("failed to get DaemonSet: %w", err)
+		return false, nil, fmt.Errorf("failed to get DaemonSet: %v", err)
 	}
 	if !exist {
 		if err := r.createDaemonSet(ctx, desired); err != nil {
@@ -45,9 +45,12 @@ func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeO
 // currentDaemonSet check if the daemonset exists
 func (r *NodeObservabilityReconciler) currentDaemonSet(ctx context.Context, nameSpace types.NamespacedName) (bool, *appsv1.DaemonSet, error) {
 	ds := &appsv1.DaemonSet{}
-	if err := r.Get(ctx, nameSpace, ds); err != nil {
-		if errors.IsNotFound(err) {
+	if err := r.Get(ctx, nameSpace, ds); err != nil || r.Err.Set[dsObj] {
+		if errors.IsNotFound(err) || r.Err.NotFound[dsObj] {
 			return false, nil, nil
+		}
+		if r.Err.Set[dsObj] {
+			err = fmt.Errorf("failed to get DaemonSet: simulated error")
 		}
 		return false, nil, err
 	}

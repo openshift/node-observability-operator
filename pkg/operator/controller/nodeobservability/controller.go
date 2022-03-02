@@ -43,6 +43,8 @@ type NodeObservabilityReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
+	// Used to inject errors for testing
+	Err ErrTestObject
 }
 
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilities,verbs=get;list;watch;create;update;patch;delete
@@ -65,7 +67,6 @@ type NodeObservabilityReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.10.0/pkg/reconcile
 func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	//log := r.Log
 
 	// Fetch the NodeObservability instance
 	nodeObs := &v1alpha1.NodeObservability{}
@@ -96,7 +97,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to ensure securitycontectconstraints : %w", err)
 	} else if !haveSCC {
-		return reconcile.Result{}, fmt.Errorf("failed to get securitycontextconstraints : %w", err)
+		return reconcile.Result{}, fmt.Errorf("failed to get securitycontextconstraints")
 	}
 	r.Log.Info(fmt.Sprintf("SecurityContextConstraints : %s", scc.Name))
 
@@ -105,7 +106,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to ensure secret : %w", err)
 	} else if !haveSecret {
-		return reconcile.Result{}, fmt.Errorf("failed to get secret : %w", err)
+		return reconcile.Result{}, fmt.Errorf("failed to get secret")
 	}
 	r.Log.Info(fmt.Sprintf("Secret : %s", secret.Name))
 
@@ -114,7 +115,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to ensure serviceaccount : %w", err)
 	} else if !haveSA {
-		return reconcile.Result{}, fmt.Errorf("failed to get serviceaccount : %w", err)
+		return reconcile.Result{}, fmt.Errorf("failed to get serviceaccount")
 	}
 	r.Log.Info(fmt.Sprintf("ServiceAccount : %s", sa.Name))
 
@@ -123,7 +124,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to ensure clusterrole : %w", err)
 	} else if !haveCR {
-		return reconcile.Result{}, fmt.Errorf("failed to get clusterrole : %w", err)
+		return reconcile.Result{}, fmt.Errorf("failed to get clusterrole")
 	}
 	r.Log.Info(fmt.Sprintf("ClusterRole : %s", cr.Name))
 
@@ -132,7 +133,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to ensure clusterrolebinding : %w", err)
 	} else if !haveCRB {
-		return reconcile.Result{}, fmt.Errorf("failed to get clusterrolebinding : %w", err)
+		return reconcile.Result{}, fmt.Errorf("failed to get clusterrolebinding")
 	}
 	r.Log.Info(fmt.Sprintf("ClusterRoleBinding : %s", crb.Name))
 
@@ -141,7 +142,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to ensure daemonset : %w", err)
 	} else if !haveDS {
-		return reconcile.Result{}, fmt.Errorf("failed to get daemonset : %w", err)
+		return reconcile.Result{}, fmt.Errorf("failed to get daemonset")
 	}
 	r.Log.Info(fmt.Sprintf("DaemonSet : %s", ds.Name))
 

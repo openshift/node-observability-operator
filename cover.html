@@ -55,17 +55,17 @@
 			<div id="nav">
 				<select id="files">
 				
-				<option value="file0">github.com/lmzuccarelli/node-observability-operator/pkg/operator/controller/nodeobservability/controller.go (66.7%)</option>
+				<option value="file0">github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservability/controller.go (84.8%)</option>
 				
-				<option value="file1">github.com/lmzuccarelli/node-observability-operator/pkg/operator/controller/nodeobservability/daemonset.go (78.6%)</option>
+				<option value="file1">github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservability/daemonset.go (83.3%)</option>
 				
-				<option value="file2">github.com/lmzuccarelli/node-observability-operator/pkg/operator/controller/nodeobservability/rbac.go (74.5%)</option>
+				<option value="file2">github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservability/rbac.go (80.4%)</option>
 				
-				<option value="file3">github.com/lmzuccarelli/node-observability-operator/pkg/operator/controller/nodeobservability/scc.go (75.0%)</option>
+				<option value="file3">github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservability/scc.go (80.8%)</option>
 				
-				<option value="file4">github.com/lmzuccarelli/node-observability-operator/pkg/operator/controller/nodeobservability/secret.go (75.0%)</option>
+				<option value="file4">github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservability/secret.go (80.8%)</option>
 				
-				<option value="file5">github.com/lmzuccarelli/node-observability-operator/pkg/operator/controller/nodeobservability/serviceaccount.go (73.9%)</option>
+				<option value="file5">github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservability/serviceaccount.go (80.0%)</option>
 				
 				</select>
 			</div>
@@ -101,7 +101,7 @@ import (
         "context"
         "fmt"
 
-        "github.com/lmzuccarelli/node-observability-operator/api/v1alpha1"
+        "github.com/openshift/node-observability-operator/api/v1alpha1"
         appsv1 "k8s.io/api/apps/v1"
         corev1 "k8s.io/api/core/v1"
         "k8s.io/apimachinery/pkg/api/errors"
@@ -124,6 +124,8 @@ type NodeObservabilityReconciler struct {
         client.Client
         Log    logr.Logger
         Scheme *runtime.Scheme
+        // Used to inject errors for testing
+        Err ErrTestObject
 }
 
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilities,verbs=get;list;watch;create;update;patch;delete
@@ -146,7 +148,6 @@ type NodeObservabilityReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.10.0/pkg/reconcile
 func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) <span class="cov8" title="1">{
-        //log := r.Log
 
         // Fetch the NodeObservability instance
         nodeObs := &amp;v1alpha1.NodeObservability{}
@@ -174,55 +175,55 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
         // ensure scc
         haveSCC, scc, err := r.ensureSecurityContextConstraints(ctx, nodeObs)
-        if err != nil </span><span class="cov0" title="0">{
+        if err != nil </span><span class="cov8" title="1">{
                 return reconcile.Result{}, fmt.Errorf("failed to ensure securitycontectconstraints : %w", err)
-        }</span> else<span class="cov8" title="1"> if !haveSCC </span><span class="cov0" title="0">{
-                return reconcile.Result{}, fmt.Errorf("failed to get securitycontextconstrainrs : %w", err)
+        }</span> else<span class="cov8" title="1"> if !haveSCC </span><span class="cov8" title="1">{
+                return reconcile.Result{}, fmt.Errorf("failed to get securitycontextconstraints")
         }</span>
         <span class="cov8" title="1">r.Log.Info(fmt.Sprintf("SecurityContextConstraints : %s", scc.Name))
 
         // ensure secret
         haveSecret, secret, err := r.ensureSecret(ctx, nodeObs)
-        if err != nil </span><span class="cov0" title="0">{
+        if err != nil </span><span class="cov8" title="1">{
                 return reconcile.Result{}, fmt.Errorf("failed to ensure secret : %w", err)
-        }</span> else<span class="cov8" title="1"> if !haveSecret </span><span class="cov0" title="0">{
-                return reconcile.Result{}, fmt.Errorf("failed to get secret : %w", err)
+        }</span> else<span class="cov8" title="1"> if !haveSecret </span><span class="cov8" title="1">{
+                return reconcile.Result{}, fmt.Errorf("failed to get secret")
         }</span>
         <span class="cov8" title="1">r.Log.Info(fmt.Sprintf("Secret : %s", secret.Name))
 
         // ensure serviceaccount with the secret
         haveSA, sa, err := r.ensureServiceAccount(ctx, nodeObs, secret)
-        if err != nil </span><span class="cov0" title="0">{
+        if err != nil </span><span class="cov8" title="1">{
                 return reconcile.Result{}, fmt.Errorf("failed to ensure serviceaccount : %w", err)
-        }</span> else<span class="cov8" title="1"> if !haveSA </span><span class="cov0" title="0">{
-                return reconcile.Result{}, fmt.Errorf("failed to get serviceaccount : %w", err)
+        }</span> else<span class="cov8" title="1"> if !haveSA </span><span class="cov8" title="1">{
+                return reconcile.Result{}, fmt.Errorf("failed to get serviceaccount")
         }</span>
         <span class="cov8" title="1">r.Log.Info(fmt.Sprintf("ServiceAccount : %s", sa.Name))
 
         // check clusterrole
         haveCR, cr, err := r.ensureClusterRole(ctx, nodeObs)
-        if err != nil </span><span class="cov0" title="0">{
+        if err != nil </span><span class="cov8" title="1">{
                 return reconcile.Result{}, fmt.Errorf("failed to ensure clusterrole : %w", err)
-        }</span> else<span class="cov8" title="1"> if !haveCR </span><span class="cov0" title="0">{
-                return reconcile.Result{}, fmt.Errorf("failed to get clusterrole : %w", err)
+        }</span> else<span class="cov8" title="1"> if !haveCR </span><span class="cov8" title="1">{
+                return reconcile.Result{}, fmt.Errorf("failed to get clusterrole")
         }</span>
         <span class="cov8" title="1">r.Log.Info(fmt.Sprintf("ClusterRole : %s", cr.Name))
 
         // check clusterolebinding with serviceaccount
         haveCRB, crb, err := r.ensureClusterRoleBinding(ctx, nodeObs, sa.Name)
-        if err != nil </span><span class="cov0" title="0">{
+        if err != nil </span><span class="cov8" title="1">{
                 return reconcile.Result{}, fmt.Errorf("failed to ensure clusterrolebinding : %w", err)
-        }</span> else<span class="cov8" title="1"> if !haveCRB </span><span class="cov0" title="0">{
-                return reconcile.Result{}, fmt.Errorf("failed to get clusterrolebinding : %w", err)
+        }</span> else<span class="cov8" title="1"> if !haveCRB </span><span class="cov8" title="1">{
+                return reconcile.Result{}, fmt.Errorf("failed to get clusterrolebinding")
         }</span>
         <span class="cov8" title="1">r.Log.Info(fmt.Sprintf("ClusterRoleBinding : %s", crb.Name))
 
         // check daemonset
         haveDS, ds, err := r.ensureDaemonSet(ctx, nodeObs, sa)
-        if err != nil </span><span class="cov0" title="0">{
+        if err != nil </span><span class="cov8" title="1">{
                 return reconcile.Result{}, fmt.Errorf("failed to ensure daemonset : %w", err)
-        }</span> else<span class="cov8" title="1"> if !haveDS </span><span class="cov0" title="0">{
-                return reconcile.Result{}, fmt.Errorf("failed to get daemonset : %w", err)
+        }</span> else<span class="cov8" title="1"> if !haveDS </span><span class="cov8" title="1">{
+                return reconcile.Result{}, fmt.Errorf("failed to get daemonset")
         }</span>
         <span class="cov8" title="1">r.Log.Info(fmt.Sprintf("DaemonSet : %s", ds.Name))
 
@@ -273,7 +274,7 @@ import (
         "context"
         "fmt"
 
-        "github.com/lmzuccarelli/node-observability-operator/api/v1alpha1"
+        "github.com/openshift/node-observability-operator/api/v1alpha1"
         appsv1 "k8s.io/api/apps/v1"
         corev1 "k8s.io/api/core/v1"
         "k8s.io/apimachinery/pkg/api/errors"
@@ -298,7 +299,7 @@ func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeO
         desired := r.desiredDaemonSet(nodeObs, sa)
         exist, current, err := r.currentDaemonSet(ctx, nameSpace)
         if err != nil </span><span class="cov0" title="0">{
-                return false, nil, fmt.Errorf("failed to get DaemonSet: %w", err)
+                return false, nil, fmt.Errorf("failed to get DaemonSet: %v", err)
         }</span>
         <span class="cov8" title="1">if !exist </span><span class="cov8" title="1">{
                 if err := r.createDaemonSet(ctx, desired); err != nil </span><span class="cov0" title="0">{
@@ -314,11 +315,14 @@ func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeO
 // currentDaemonSet check if the daemonset exists
 func (r *NodeObservabilityReconciler) currentDaemonSet(ctx context.Context, nameSpace types.NamespacedName) (bool, *appsv1.DaemonSet, error) <span class="cov8" title="1">{
         ds := &amp;appsv1.DaemonSet{}
-        if err := r.Get(ctx, nameSpace, ds); err != nil </span><span class="cov8" title="1">{
-                if errors.IsNotFound(err) </span><span class="cov8" title="1">{
+        if err := r.Get(ctx, nameSpace, ds); err != nil || r.Err.Set[dsObj] </span><span class="cov8" title="1">{
+                if errors.IsNotFound(err) || r.Err.NotFound[dsObj] </span><span class="cov8" title="1">{
                         return false, nil, nil
                 }</span>
-                <span class="cov0" title="0">return false, nil, err</span>
+                <span class="cov8" title="1">if r.Err.Set[dsObj] </span><span class="cov8" title="1">{
+                        err = fmt.Errorf("failed to get DaemonSet: simulated error")
+                }</span>
+                <span class="cov8" title="1">return false, nil, err</span>
         }
         <span class="cov8" title="1">return true, ds, nil</span>
 }
@@ -415,7 +419,7 @@ import (
         "context"
         "fmt"
 
-        "github.com/lmzuccarelli/node-observability-operator/api/v1alpha1"
+        "github.com/openshift/node-observability-operator/api/v1alpha1"
         rbacv1 "k8s.io/api/rbac/v1"
         "k8s.io/apimachinery/pkg/api/errors"
         metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -465,11 +469,14 @@ func (r *NodeObservabilityReconciler) ensureClusterRole(ctx context.Context, nod
 // currentClusterRole checks that the clusterrole  exists
 func (r *NodeObservabilityReconciler) currentClusterRole(ctx context.Context, nameSpace types.NamespacedName) (bool, *rbacv1.ClusterRole, error) <span class="cov8" title="1">{
         cr := &amp;rbacv1.ClusterRole{}
-        if err := r.Get(ctx, nameSpace, cr); err != nil </span><span class="cov8" title="1">{
-                if errors.IsNotFound(err) </span><span class="cov8" title="1">{
+        if err := r.Get(ctx, nameSpace, cr); err != nil || r.Err.Set[crObj] </span><span class="cov8" title="1">{
+                if errors.IsNotFound(err) || r.Err.NotFound[crObj] </span><span class="cov8" title="1">{
                         return false, nil, nil
                 }</span>
-                <span class="cov0" title="0">return false, nil, err</span>
+                <span class="cov8" title="1">if r.Err.Set[crObj] </span><span class="cov8" title="1">{
+                        err = fmt.Errorf("failed to get ClusterRole: simulated error")
+                }</span>
+                <span class="cov8" title="1">return false, nil, err</span>
         }
         <span class="cov8" title="1">return true, cr, nil</span>
 }
@@ -521,7 +528,7 @@ func (r *NodeObservabilityReconciler) ensureClusterRoleBinding(ctx context.Conte
         desired := r.desiredClusterRoleBinding(nodeObs, saName)
         exist, current, err := r.currentClusterRoleBinding(ctx, nameSpace)
         if err != nil </span><span class="cov0" title="0">{
-                return false, nil, fmt.Errorf("failed to get ClusterRoleBinding: %w", err)
+                return false, nil, fmt.Errorf("failed to get ClusterRoleBinding: %v", err)
         }</span>
         <span class="cov8" title="1">if !exist </span><span class="cov8" title="1">{
                 if err := r.createClusterRoleBinding(ctx, desired); err != nil </span><span class="cov0" title="0">{
@@ -537,11 +544,15 @@ func (r *NodeObservabilityReconciler) ensureClusterRoleBinding(ctx context.Conte
 // currentClusterRoleBinding checks if the clusterrolebinding exists
 func (r *NodeObservabilityReconciler) currentClusterRoleBinding(ctx context.Context, nameSpace types.NamespacedName) (bool, *rbacv1.ClusterRoleBinding, error) <span class="cov8" title="1">{
         crb := &amp;rbacv1.ClusterRoleBinding{}
-        if err := r.Get(ctx, nameSpace, crb); err != nil </span><span class="cov8" title="1">{
-                if errors.IsNotFound(err) </span><span class="cov8" title="1">{
+
+        if err := r.Get(ctx, nameSpace, crb); err != nil || r.Err.Set[crbObj] </span><span class="cov8" title="1">{
+                if errors.IsNotFound(err) || r.Err.NotFound[crbObj] </span><span class="cov8" title="1">{
                         return false, nil, nil
                 }</span>
-                <span class="cov0" title="0">return false, nil, err</span>
+                <span class="cov8" title="1">if r.Err.Set[crbObj] </span><span class="cov8" title="1">{
+                        err = fmt.Errorf("failed to get ClusterRoleiBinding: simulated error")
+                }</span>
+                <span class="cov8" title="1">return false, nil, err</span>
         }
         <span class="cov8" title="1">return true, crb, nil</span>
 }
@@ -591,8 +602,8 @@ import (
         "context"
         "fmt"
 
-        "github.com/lmzuccarelli/node-observability-operator/api/v1alpha1"
         securityv1 "github.com/openshift/api/security/v1"
+        "github.com/openshift/node-observability-operator/api/v1alpha1"
         corev1 "k8s.io/api/core/v1"
         "k8s.io/apimachinery/pkg/api/errors"
         metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -611,7 +622,7 @@ func (r *NodeObservabilityReconciler) ensureSecurityContextConstraints(ctx conte
         desired := r.desiredSecurityContextConstraints(nodeObs)
         exist, current, err := r.currentSecurityContextConstraints(ctx, nodeObs)
         if err != nil </span><span class="cov0" title="0">{
-                return false, nil, fmt.Errorf("failed to get SecurityContextConstraints: %w", err)
+                return false, nil, fmt.Errorf("failed to get SecurityContextConstraints: %v", err)
         }</span>
         <span class="cov8" title="1">if !exist </span><span class="cov8" title="1">{
                 if err := r.createSecurityContextConstraints(ctx, desired); err != nil </span><span class="cov0" title="0">{
@@ -628,11 +639,14 @@ func (r *NodeObservabilityReconciler) ensureSecurityContextConstraints(ctx conte
 func (r *NodeObservabilityReconciler) currentSecurityContextConstraints(ctx context.Context, nodeObs *v1alpha1.NodeObservability) (bool, *securityv1.SecurityContextConstraints, error) <span class="cov8" title="1">{
         nameSpace := types.NamespacedName{Namespace: nodeObs.Namespace, Name: sccName}
         scc := &amp;securityv1.SecurityContextConstraints{}
-        if err := r.Get(ctx, nameSpace, scc); err != nil </span><span class="cov8" title="1">{
-                if errors.IsNotFound(err) </span><span class="cov8" title="1">{
+        if err := r.Get(ctx, nameSpace, scc); err != nil || r.Err.Set[sccObj] </span><span class="cov8" title="1">{
+                if errors.IsNotFound(err) || r.Err.NotFound[sccObj] </span><span class="cov8" title="1">{
                         return false, nil, nil
                 }</span>
-                <span class="cov0" title="0">return false, nil, err</span>
+                <span class="cov8" title="1">if r.Err.Set[sccObj] </span><span class="cov8" title="1">{
+                        err = fmt.Errorf("failed to get SecurityContextConstraints: simulated error")
+                }</span>
+                <span class="cov8" title="1">return false, nil, err</span>
         }
         <span class="cov8" title="1">return true, scc, nil</span>
 }
@@ -693,7 +707,7 @@ import (
         "context"
         "fmt"
 
-        "github.com/lmzuccarelli/node-observability-operator/api/v1alpha1"
+        "github.com/openshift/node-observability-operator/api/v1alpha1"
         corev1 "k8s.io/api/core/v1"
         "k8s.io/apimachinery/pkg/api/errors"
         metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -713,7 +727,7 @@ func (r *NodeObservabilityReconciler) ensureSecret(ctx context.Context, nodeObs 
         desired := r.desiredSecret(nodeObs)
         exist, current, err := r.currentSecret(ctx, nameSpace)
         if err != nil </span><span class="cov0" title="0">{
-                return false, nil, fmt.Errorf("failed to get Secret: %w", err)
+                return false, nil, fmt.Errorf("failed to get Secret: %v", err)
         }</span>
         <span class="cov8" title="1">if !exist </span><span class="cov8" title="1">{
                 if err := r.createSecret(ctx, desired); err != nil </span><span class="cov0" title="0">{
@@ -729,11 +743,14 @@ func (r *NodeObservabilityReconciler) ensureSecret(ctx context.Context, nodeObs 
 // currentSecret checks that the serviceaccount exists
 func (r *NodeObservabilityReconciler) currentSecret(ctx context.Context, nameSpace types.NamespacedName) (bool, *corev1.Secret, error) <span class="cov8" title="1">{
         secret := &amp;corev1.Secret{}
-        if err := r.Get(ctx, nameSpace, secret); err != nil </span><span class="cov8" title="1">{
-                if errors.IsNotFound(err) </span><span class="cov8" title="1">{
+        if err := r.Get(ctx, nameSpace, secret); err != nil || r.Err.Set[secretObj] </span><span class="cov8" title="1">{
+                if errors.IsNotFound(err) || r.Err.NotFound[secretObj] </span><span class="cov8" title="1">{
                         return false, nil, nil
                 }</span>
-                <span class="cov0" title="0">return false, nil, err</span>
+                <span class="cov8" title="1">if r.Err.Set[secretObj] </span><span class="cov8" title="1">{
+                        err = fmt.Errorf("failed to get Secret: simulated error")
+                }</span>
+                <span class="cov8" title="1">return false, nil, err</span>
         }
         <span class="cov8" title="1">return true, secret, nil</span>
 }
@@ -773,7 +790,7 @@ import (
         "context"
         "fmt"
 
-        "github.com/lmzuccarelli/node-observability-operator/api/v1alpha1"
+        "github.com/openshift/node-observability-operator/api/v1alpha1"
         corev1 "k8s.io/api/core/v1"
         "k8s.io/apimachinery/pkg/api/errors"
         metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -793,7 +810,7 @@ func (r *NodeObservabilityReconciler) ensureServiceAccount(ctx context.Context, 
         desired := r.desiredServiceAccount(nodeObs, secret)
         exist, current, err := r.currentServiceAccount(ctx, nameSpace)
         if err != nil </span><span class="cov0" title="0">{
-                return false, nil, fmt.Errorf("failed to get ServiceAccount: %w", err)
+                return false, nil, fmt.Errorf("failed to get ServiceAccount: %v", err)
         }</span>
         <span class="cov8" title="1">if !exist </span><span class="cov8" title="1">{
                 if err := r.createServiceAccount(ctx, desired); err != nil </span><span class="cov0" title="0">{
@@ -809,11 +826,14 @@ func (r *NodeObservabilityReconciler) ensureServiceAccount(ctx context.Context, 
 // currentServiceAccount checks that the serviceaccount exists
 func (r *NodeObservabilityReconciler) currentServiceAccount(ctx context.Context, nameSpace types.NamespacedName) (bool, *corev1.ServiceAccount, error) <span class="cov8" title="1">{
         sa := &amp;corev1.ServiceAccount{}
-        if err := r.Get(ctx, nameSpace, sa); err != nil </span><span class="cov8" title="1">{
-                if errors.IsNotFound(err) </span><span class="cov8" title="1">{
+        if err := r.Get(ctx, nameSpace, sa); err != nil || r.Err.Set[saObj] </span><span class="cov8" title="1">{
+                if errors.IsNotFound(err) || r.Err.NotFound[saObj] </span><span class="cov8" title="1">{
                         return false, nil, nil
                 }</span>
-                <span class="cov0" title="0">return false, nil, err</span>
+                <span class="cov8" title="1">if r.Err.Set[saObj] </span><span class="cov8" title="1">{
+                        err = fmt.Errorf("failed to get ServiceAccount: simulated error")
+                }</span>
+                <span class="cov8" title="1">return false, nil, err</span>
         }
         <span class="cov8" title="1">return true, sa, nil</span>
 }
