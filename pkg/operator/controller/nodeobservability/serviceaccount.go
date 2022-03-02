@@ -24,7 +24,7 @@ func (r *NodeObservabilityReconciler) ensureServiceAccount(ctx context.Context, 
 	desired := r.desiredServiceAccount(nodeObs, secret)
 	exist, current, err := r.currentServiceAccount(ctx, nameSpace)
 	if err != nil {
-		return false, nil, fmt.Errorf("failed to get ServiceAccount: %w", err)
+		return false, nil, fmt.Errorf("failed to get ServiceAccount: %v", err)
 	}
 	if !exist {
 		if err := r.createServiceAccount(ctx, desired); err != nil {
@@ -40,9 +40,12 @@ func (r *NodeObservabilityReconciler) ensureServiceAccount(ctx context.Context, 
 // currentServiceAccount checks that the serviceaccount exists
 func (r *NodeObservabilityReconciler) currentServiceAccount(ctx context.Context, nameSpace types.NamespacedName) (bool, *corev1.ServiceAccount, error) {
 	sa := &corev1.ServiceAccount{}
-	if err := r.Get(ctx, nameSpace, sa); err != nil {
-		if errors.IsNotFound(err) {
+	if err := r.Get(ctx, nameSpace, sa); err != nil || r.Err.Set[saObj] {
+		if errors.IsNotFound(err) || r.Err.NotFound[saObj] {
 			return false, nil, nil
+		}
+		if r.Err.Set[saObj] {
+			err = fmt.Errorf("failed to get ServiceAccount: simulated error")
 		}
 		return false, nil, err
 	}

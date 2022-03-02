@@ -24,7 +24,7 @@ func (r *NodeObservabilityReconciler) ensureSecret(ctx context.Context, nodeObs 
 	desired := r.desiredSecret(nodeObs)
 	exist, current, err := r.currentSecret(ctx, nameSpace)
 	if err != nil {
-		return false, nil, fmt.Errorf("failed to get Secret: %w", err)
+		return false, nil, fmt.Errorf("failed to get Secret: %v", err)
 	}
 	if !exist {
 		if err := r.createSecret(ctx, desired); err != nil {
@@ -40,9 +40,12 @@ func (r *NodeObservabilityReconciler) ensureSecret(ctx context.Context, nodeObs 
 // currentSecret checks that the serviceaccount exists
 func (r *NodeObservabilityReconciler) currentSecret(ctx context.Context, nameSpace types.NamespacedName) (bool, *corev1.Secret, error) {
 	secret := &corev1.Secret{}
-	if err := r.Get(ctx, nameSpace, secret); err != nil {
-		if errors.IsNotFound(err) {
+	if err := r.Get(ctx, nameSpace, secret); err != nil || r.Err.Set[secretObj] {
+		if errors.IsNotFound(err) || r.Err.NotFound[secretObj] {
 			return false, nil, nil
+		}
+		if r.Err.Set[secretObj] {
+			err = fmt.Errorf("failed to get Secret: simulated error")
 		}
 		return false, nil, err
 	}

@@ -24,7 +24,7 @@ func (r *NodeObservabilityReconciler) ensureSecurityContextConstraints(ctx conte
 	desired := r.desiredSecurityContextConstraints(nodeObs)
 	exist, current, err := r.currentSecurityContextConstraints(ctx, nodeObs)
 	if err != nil {
-		return false, nil, fmt.Errorf("failed to get SecurityContextConstraints: %w", err)
+		return false, nil, fmt.Errorf("failed to get SecurityContextConstraints: %v", err)
 	}
 	if !exist {
 		if err := r.createSecurityContextConstraints(ctx, desired); err != nil {
@@ -41,9 +41,12 @@ func (r *NodeObservabilityReconciler) ensureSecurityContextConstraints(ctx conte
 func (r *NodeObservabilityReconciler) currentSecurityContextConstraints(ctx context.Context, nodeObs *v1alpha1.NodeObservability) (bool, *securityv1.SecurityContextConstraints, error) {
 	nameSpace := types.NamespacedName{Namespace: nodeObs.Namespace, Name: sccName}
 	scc := &securityv1.SecurityContextConstraints{}
-	if err := r.Get(ctx, nameSpace, scc); err != nil {
-		if errors.IsNotFound(err) {
+	if err := r.Get(ctx, nameSpace, scc); err != nil || r.Err.Set[sccObj] {
+		if errors.IsNotFound(err) || r.Err.NotFound[sccObj] {
 			return false, nil, nil
+		}
+		if r.Err.Set[sccObj] {
+			err = fmt.Errorf("failed to get SecurityContextConstraints: simulated error")
 		}
 		return false, nil, err
 	}
