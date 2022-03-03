@@ -34,6 +34,10 @@ import (
 	"github.com/go-logr/logr"
 )
 
+const (
+	terminating = "Terminating"
+)
+
 var (
 	clock utilclock.Clock = utilclock.RealClock{}
 )
@@ -156,14 +160,16 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		r.Log.Error(err, "Failed to list pods", "NodeObservability.Namespace", nodeObs.Namespace, "NodeObservability.Name", nodeObs.Name)
 		return ctrl.Result{}, err
 	}
+
 	count := 0
+
 	for x, pod := range podList.Items {
 		r.Log.Info(fmt.Sprintf("Pod phase status %d %s", x, pod.Status.Phase))
-		if pod.Status.Phase == corev1.PodRunning {
+		if pod.Status.Phase != corev1.PodFailed && pod.Status.Phase != terminating {
 			count++
 		}
 	}
-	//if nodeObs.Status.Count != count {
+
 	r.Log.Info("Updating status")
 	nodeObs.Status.Count = len(podList.Items)
 	now := metav1.NewTime(clock.Now())
@@ -174,7 +180,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{}, err
 	}
 	r.Log.Info(fmt.Sprintf("Status updated : %d", count))
-	//}
+
 	return ctrl.Result{}, nil
 }
 
