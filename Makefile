@@ -43,6 +43,9 @@ ENVTEST_K8S_VERSION = 1.23
 # CONTAINER_ENGINE defines which container executable to use
 CONTAINER_ENGINE ?= podman
 
+# VERBOSE used in testing for verbose output
+VERBOSE ?=
+
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -96,7 +99,7 @@ vet: ## Run go vet against code.
 
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test -mod=vendor ./pkg/... -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ${VERBOSE} -mod=vendor ./pkg/... -coverprofile test/unit/results/cover.out
 
 ##@ Build
 

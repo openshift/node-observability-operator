@@ -50,7 +50,7 @@ func TestReconcile(t *testing.T) {
 
 	eventWaitTimeout := time.Duration(1 * time.Second)
 
-	// used to simulate errors
+	// used to simulate errors for all objects
 	ErrRuns := []ErrTestObject{
 		{
 			Set:      nil,
@@ -197,11 +197,14 @@ func TestReconcile(t *testing.T) {
 		},
 	}
 
+	// loop through test cases (bootstrap and delete)
 	for _, tc := range testCases {
+		// loop through error objects
 		for _, errTest := range ErrRuns {
+			// run the tests
 			t.Run(tc.name, func(t *testing.T) {
 				cl := fake.NewClientBuilder().WithScheme(test.Scheme).WithRuntimeObjects(tc.existingObjects...).Build()
-
+				// for each run we clear the expected Events
 				tc.expectedEvents = nil
 
 				r := &NodeObservabilityReconciler{
@@ -210,9 +213,10 @@ func TestReconcile(t *testing.T) {
 					Log:    zap.New(zap.UseDevMode(true)),
 					Err:    errTest,
 				}
-
+				// only check for errors when the ErrorTestObject Set and NotFound maps are nill
 				tc.errExpected = (errTest.Set != nil || errTest.NotFound != nil) && tc.name != "Delete"
 
+				// the add and modify events should only be added when there are no 'simulated' errors
 				if (errTest.Set == nil && errTest.NotFound == nil) && tc.name != "Delete" {
 					tc.expectedEvents = append(tc.expectedEvents, teAdd)
 					tc.expectedEvents = append(tc.expectedEvents, teMod)
@@ -260,6 +264,7 @@ func TestReconcile(t *testing.T) {
 	}
 }
 
+// testRquest - used to create request
 func testRequest() ctrl.Request {
 	return ctrl.Request{
 		NamespacedName: types.NamespacedName{
@@ -269,6 +274,7 @@ func testRequest() ctrl.Request {
 	}
 }
 
+// testNodeObservability - minimal CR for the test
 func testNodeObservability() *operatorv1alpha1.NodeObservability {
 	return &operatorv1alpha1.NodeObservability{
 		ObjectMeta: metav1.ObjectMeta{
