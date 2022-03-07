@@ -54,8 +54,8 @@ type NodeObservabilityRunStatus struct {
 }
 
 // +kubebuilder:printcolumn:JSONPath=".spec.nodeObservabilityRef.name", name="NodeObservabilityRef", type="string"
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 
 // NodeObservabilityRun is the Schema for the nodeobservabilityruns API
 type NodeObservabilityRun struct {

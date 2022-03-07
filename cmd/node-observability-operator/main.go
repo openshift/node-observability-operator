@@ -31,10 +31,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	nodeobservabilityv1alpha1 "github.com/lmzuccarelli/node-observability-operator/api/v1alpha1"
-	controller "github.com/lmzuccarelli/node-observability-operator/pkg/operator/controller/nodeobservability"
-	nodeobservabilityrun "github.com/lmzuccarelli/node-observability-operator/pkg/operator/controller/nodeobservabilityrun"
 	securityv1 "github.com/openshift/api/security/v1"
+	nodeobservabilityv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	controller "github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservability"
+	nodeobservabilityrun "github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservabilityrun"
 	rbacv1 "k8s.io/api/rbac/v1"
 	//+kubebuilder:scaffold:imports
 )
