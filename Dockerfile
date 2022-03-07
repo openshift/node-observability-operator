@@ -6,7 +6,7 @@ FROM golang:1.17 as builder
 WORKDIR /workspace
 
 # Copy the go source
-COPY main.go main.go
+COPY cmd cmd
 COPY api/ api/
 COPY pkg/ pkg/
 COPY vendor/ vendor/
@@ -14,7 +14,7 @@ COPY go.mod go.mod
 COPY go.sum go.sum
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager cmd/node-observability-operator/main.go
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details

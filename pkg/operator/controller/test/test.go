@@ -26,18 +26,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-)
-
-var (
-	// Scheme - the test scheme
-	Scheme = runtime.NewScheme()
 )
 
 // Event is a simplified representation of the watch event received from the controller runtime client.
