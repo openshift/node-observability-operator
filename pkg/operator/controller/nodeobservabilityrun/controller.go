@@ -44,7 +44,6 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
-
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err

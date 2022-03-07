@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
+
 	//"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -30,7 +31,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	nodeobservabilityv1alpha1 "github.com/lmzuccarelli/node-observability-operator/api/v1alpha1"
+	nodeobservabilityv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 	//+kubebuilder:scaffold:imports
 )
 
