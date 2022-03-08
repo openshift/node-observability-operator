@@ -19,13 +19,14 @@ const (
 	path             = "/var/run/crio/crio.sock"
 	mountPath        = "/var/run/crio/crio.sock"
 	defaultScheduler = "default-scheduler"
+	daemonSetName    = "node-observability-ds"
 )
 
 // ensureDaemonSet ensures that the daemonset exists
 // Returns a Boolean value indicating whether it exists, a pointer to the
 // daemonset and an error when relevant
 func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeObs *v1alpha1.NodeObservability, sa *corev1.ServiceAccount) (bool, *appsv1.DaemonSet, error) {
-	nameSpace := types.NamespacedName{Namespace: nodeObs.Namespace, Name: nodeObs.Name}
+	nameSpace := types.NamespacedName{Namespace: nodeObs.Namespace, Name: daemonSetName}
 	desired := r.desiredDaemonSet(nodeObs, sa)
 	exist, current, err := r.currentDaemonSet(ctx, nameSpace)
 	if err != nil {
@@ -69,14 +70,14 @@ func (r *NodeObservabilityReconciler) createDaemonSet(ctx context.Context, ds *a
 // desiredDaemonSet returns a DaemonSet object
 func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObservability, sa *corev1.ServiceAccount) *appsv1.DaemonSet {
 
-	ls := labelsForNodeObservability(nodeObs.Name)
+	ls := labelsForNodeObservability(daemonSetName)
 	tgp := int64(30)
 	vst := corev1.HostPathSocket
 	privileged := true
 
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      nodeObs.Name,
+			Name:      daemonSetName,
 			Namespace: nodeObs.Namespace,
 		},
 		Spec: appsv1.DaemonSetSpec{

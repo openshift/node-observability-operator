@@ -17,7 +17,6 @@ limitations under the License.
 package nodeobservabilitycontroller
 
 const (
-	// NodeObservabilityBaseName  is the base name for any NodeObservability resource.
+	// nodeObservabilityBaseName  is the base name for any NodeObservability resource.
 	nodeObservabilityBaseName = "node-observability"
-	serviceAccountName        = "node-observability-sa"
 )

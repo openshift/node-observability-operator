@@ -159,7 +159,7 @@ func TestReconcile(t *testing.T) {
 		ObjType:   "daemonset",
 		NamespacedName: types.NamespacedName{
 			Namespace: "",
-			Name:      "test",
+			Name:      daemonSetName,
 		},
 	}
 
