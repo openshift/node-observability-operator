@@ -18,54 +18,52 @@ package nodeobservabilitycontroller
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
-	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
-func TestEnsureServiceAccount(t *testing.T) {
+func TestEnsureSecret(t *testing.T) {
 	nodeObs := &operatorv1alpha1.NodeObservability{}
-	makeServiceAccount := func() *corev1.ServiceAccount {
-		sa := corev1.ServiceAccount{
+	makeSecret := func() *corev1.Secret {
+		secret := corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      serviceAccountName,
-				Namespace: nodeObs.Namespace,
+				Namespace:   nodeObs.Namespace,
+				Name:        secretName,
+				Annotations: annotationsForSecret(),
 			},
-			Secrets: []corev1.ObjectReference{{
-				Name: test.SecretName,
-			}},
+			Type: corev1.SecretTypeServiceAccountToken,
 		}
-		return &sa
+		return &secret
+
 	}
 	testCases := []struct {
 		name            string
 		existingObjects []runtime.Object
 		expectedExist   bool
-		expectedSA      *corev1.ServiceAccount
+		expectedSecret  *corev1.Secret
 		errExpected     bool
 	}{
 		{
 			name:            "Does not exist",
 			existingObjects: []runtime.Object{},
 			expectedExist:   true,
-			expectedSA:      makeServiceAccount(),
+			expectedSecret:  makeSecret(),
 		},
 		{
 			name: "Exists",
 			existingObjects: []runtime.Object{
-				makeServiceAccount(),
+				makeSecret(),
 			},
-			expectedExist: true,
-			expectedSA:    makeServiceAccount(),
+			expectedExist:  true,
+			expectedSecret: makeSecret(),
 		},
 	}
 
@@ -78,17 +76,7 @@ func TestEnsureServiceAccount(t *testing.T) {
 				Log:    zap.New(zap.UseDevMode(true)),
 			}
 			nodeObs := &operatorv1alpha1.NodeObservability{}
-			// ensure secret
-			_, secret, err := r.ensureSecret(context.TODO(), nodeObs)
-			if err != nil {
-				if !tc.errExpected {
-					t.Fatalf("unexpected error received: %v", err)
-				}
-				return
-			}
-			r.Log.Info(fmt.Sprintf("Secret : %s", secret.Name))
-
-			gotExist, _, err := r.ensureServiceAccount(context.TODO(), nodeObs, secret)
+			gotExist, _, err := r.ensureSecret(context.TODO(), nodeObs)
 			if err != nil {
 				if !tc.errExpected {
 					t.Fatalf("unexpected error received: %v", err)

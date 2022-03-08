@@ -18,7 +18,6 @@ package test
 
 import (
 	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 )
@@ -27,19 +26,14 @@ const (
 	Name              = "test"
 	OperandNamespace  = "node-observability-operator"
 	TestNamespace     = ""
-	OperandName       = "node-observability-operator-test"
+	OperandName       = "node-observability-operator"
 	OperatorNamespace = "node-observability-operator"
 	SecretName        = "node-observability-secret"
 )
 
 var (
-	TrueVar           = true
-	NodeObservability = &operatorv1alpha1.NodeObservability{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: Name,
-		},
-	}
-	Scheme = runtime.NewScheme()
+	TrueVar = true
+	Scheme  = runtime.NewScheme()
 )
 
 func init() {
