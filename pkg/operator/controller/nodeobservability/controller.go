@@ -20,7 +20,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/openshift/node-observability-operator/api/v1alpha1"
+	"github.com/go-logr/logr"
+	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -30,8 +31,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	"github.com/go-logr/logr"
 )
 
 const (
@@ -73,7 +72,7 @@ type NodeObservabilityReconciler struct {
 func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
 	// Fetch the NodeObservability instance
-	nodeObs := &v1alpha1.NodeObservability{}
+	nodeObs := &operatorv1alpha1.NodeObservability{}
 	err := r.Get(ctx, req.NamespacedName, nodeObs)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -187,7 +186,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 // SetupWithManager sets up the controller with the Manager.
 func (r *NodeObservabilityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.NodeObservability{}).
+		For(&operatorv1alpha1.NodeObservability{}).
 		Owns(&appsv1.DaemonSet{}).
 		Complete(r)
 }

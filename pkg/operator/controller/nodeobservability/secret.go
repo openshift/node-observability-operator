@@ -33,8 +33,8 @@ func (r *NodeObservabilityReconciler) ensureSecret(ctx context.Context, nodeObs 
 		return r.currentSecret(ctx, nameSpace)
 	}
 	// Set NodeObservability instance as the owner and controller
-	ctrl.SetControllerReference(nodeObs, desired, r.Scheme)
-	return true, current, nil
+	err = ctrl.SetControllerReference(nodeObs, desired, r.Scheme)
+	return true, current, err
 }
 
 // currentSecret checks that the serviceaccount exists

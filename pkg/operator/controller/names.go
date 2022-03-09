@@ -16,7 +16,7 @@ limitations under the License.
 
 package nodeobservabilitycontroller
 
-const (
-	// nodeObservabilityBaseName  is the base name for any NodeObservability resource.
-	nodeObservabilityBaseName = "node-observability"
-)
+//const (
+// nodeObservabilityBaseName  is the base name for any NodeObservability resource.
+//nodeObservabilityBaseName = "node-observability"
+//)

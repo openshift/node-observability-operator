@@ -24,18 +24,17 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	securityv1 "github.com/openshift/api/security/v1"
+	nodeobservabilityv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	controller "github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservability"
+	nodeobservabilityrun "github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservabilityrun"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	securityv1 "github.com/openshift/api/security/v1"
-	nodeobservabilityv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
-	controller "github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservability"
-	nodeobservabilityrun "github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservabilityrun"
-	rbacv1 "k8s.io/api/rbac/v1"
 	//+kubebuilder:scaffold:imports
 )
 

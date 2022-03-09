@@ -59,6 +59,23 @@ endif
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
+# include machinery build
+#include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
+#	golang.mk \
+#	targets/openshift/images.mk \
+#	targets/openshift/deps-gomod.mk \
+#)
+
+PACKAGE=github.com/openshift/node-observability-operator
+MAIN_PACKAGE=$(PACKAGE)/cmd/node-observability-operator
+
+BIN=bin/$(lastword $(subst /, ,$(MAIN_PACKAGE)))
+BIN_DIR=$(shell pwd)/bin
+
+GOLANGCI_LINT_BIN=$(BIN_DIR)/golangci-lint
+
+GOBUILD_VERSION_ARGS = -ldflags "-X $(PACKAGE)/pkg/version.SHORTCOMMIT=$(SHORTCOMMIT) -X $(PACKAGE)/pkg/version.COMMIT=$(COMMIT)"
+
 .PHONY: all
 all: build
 
@@ -89,6 +106,12 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
+verify: lint
+	hack/verify-gofmt.sh
+	hack/verify-deps.sh
+	hack/verify-generated.sh
+	hack/verify-olm.sh
+
 .PHONY: fmt
 fmt: ## Run go fmt against code.
 	go fmt -mod=vendor  ./...
@@ -103,17 +126,18 @@ test: manifests generate fmt vet envtest ## Run tests.
 
 ##@ Build
 
+GO=GO111MODULE=on GOFLAGS=-mod=vendor CGO_ENABLED=0 go
+
 .PHONY: build-operator
 build-operator: ## Build operator binary, no additional checks or code generation
-	go build -mod=vendor -o bin/node-observability-operator github.com/openshift/node-observability-operator/cmd/node-observability-operator
+	$(GO) build $(GOBUILD_VERSION_ARGS) -o $(BIN) $(MAIN_PACKAGE)
 
 .PHONY: build
-build: generate fmt vet ## Build manager binary.
-	go build -mod=vendor -o bin/node-observability-operator github.com/openshift/node-observability-operator/cmd/node-observability-operator
+build: generate fmt vet build-operator ## Build manager binary.
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run -mod=vendor ./cmd/node-observability-operator/main.go
+	$(GO) run -mod=vendor ./cmd/node-observability-operator/main.go
 
 .PHONY: container-build
 container-build: test ## Build image with the manager.
@@ -230,3 +254,17 @@ catalog-build: opm ## Build a catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+
+
+.PHONY: lint
+## Checks the code with golangci-lint
+lint: $(GOLANGCI_LINT_BIN)
+	$(GOLANGCI_LINT_BIN) run -c .golangci.yaml --deadline=30m
+
+$(GOLANGCI_LINT_BIN):
+	mkdir -p $(BIN_DIR)
+	hack/golangci-lint.sh $(GOLANGCI_LINT_BIN)
+
+$(OPERATOR_SDK_BIN):
+	mkdir -p $(BIN_DIR)
+	hack/operator-sdk.sh $(OPERATOR_SDK_BIN)
