@@ -39,8 +39,8 @@ func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeO
 		return r.currentDaemonSet(ctx, nameSpace)
 	}
 	// Set NodeObservability instance as the owner and controller
-	ctrl.SetControllerReference(nodeObs, desired, r.Scheme)
-	return true, current, nil
+	err = ctrl.SetControllerReference(nodeObs, desired, r.Scheme)
+	return true, current, err
 }
 
 // currentDaemonSet check if the daemonset exists

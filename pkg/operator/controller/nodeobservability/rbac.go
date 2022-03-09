@@ -47,8 +47,8 @@ func (r *NodeObservabilityReconciler) ensureClusterRole(ctx context.Context, nod
 		return r.currentClusterRole(ctx, nameSpace)
 	}
 	// Set NodeObservability instance as the owner and controller
-	ctrl.SetControllerReference(nodeObs, desired, r.Scheme)
-	return true, current, nil
+	err = ctrl.SetControllerReference(nodeObs, desired, r.Scheme)
+	return true, current, err
 }
 
 // currentClusterRole checks that the clusterrole  exists
@@ -122,8 +122,8 @@ func (r *NodeObservabilityReconciler) ensureClusterRoleBinding(ctx context.Conte
 		return r.currentClusterRoleBinding(ctx, nameSpace)
 	}
 	// Set NodeObservability instance as the owner and controller
-	ctrl.SetControllerReference(nodeObs, desired, r.Scheme)
-	return true, current, nil
+	err = ctrl.SetControllerReference(nodeObs, desired, r.Scheme)
+	return true, current, err
 }
 
 // currentClusterRoleBinding checks if the clusterrolebinding exists

@@ -22,16 +22,14 @@ import (
 	"time"
 
 	securityv1 "github.com/openshift/api/security/v1"
+	"github.com/openshift/node-observability-operator/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Event is a simplified representation of the watch event received from the controller runtime client.
@@ -45,7 +43,7 @@ func init() {
 	if err := clientgoscheme.AddToScheme(Scheme); err != nil {
 		panic(err)
 	}
-	if err := operatorv1alpha1.AddToScheme(Scheme); err != nil {
+	if err := v1alpha1.AddToScheme(Scheme); err != nil {
 		panic(err)
 	}
 	if err := appsv1.AddToScheme(Scheme); err != nil {
@@ -88,7 +86,7 @@ func NewEvent(we watch.Event) Event {
 	case *corev1.Namespace:
 		te.ObjType = "namespace"
 		te.Name = obj.Name
-	case *operatorv1alpha1.NodeObservability:
+	case *v1alpha1.NodeObservability:
 		te.ObjType = "nodeobservability"
 		te.Namespace = obj.Namespace
 		te.Name = obj.Name

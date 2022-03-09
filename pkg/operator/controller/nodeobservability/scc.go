@@ -33,8 +33,8 @@ func (r *NodeObservabilityReconciler) ensureSecurityContextConstraints(ctx conte
 		return r.currentSecurityContextConstraints(ctx, nodeObs)
 	}
 	// Set NodeObservability instance as the owner and controller
-	ctrl.SetControllerReference(nodeObs, desired, r.Scheme)
-	return true, current, nil
+	err = ctrl.SetControllerReference(nodeObs, desired, r.Scheme)
+	return true, current, err
 }
 
 // currentSecurityContextConstraints checks that the securitycontextconstraints exists
