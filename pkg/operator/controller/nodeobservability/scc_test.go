@@ -21,13 +21,14 @@ import (
 	"testing"
 
 	securityv1 "github.com/openshift/api/security/v1"
-	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
-	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	test "github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
 func TestEnsureScc(t *testing.T) {

@@ -1,29 +1,32 @@
-# NodeObservability Operator [WIP]
+# NodeObservability Operator
 
-The `NodeObservability` Operator allows you to deploy and manage [NodeObservability Agent](https://github.com/openshift/node-observability-agent), these agents will be deployed as DaemonSets (on all or slected Nodes). \
-The agent is used to trigger crio and kubelet profile data to the nodes hostPath for later retrieval (this is the MVP). 
+The NodeObservability Operator allows you to deploy and manage [NodeObservability Agent](https://github.com/openshift/node-observability-agent) on worker nodes. The agent is deployed through DaemonSets on all or selected nodes. It also triggers the crio and kubelet profile data to the nodes hostPath for later retrieval.
 
 **Note**: This Operator is in the early stages of implementation, and will be changing.
 
 ## Deploying the `NodeObservability` Operator
-The following procedure describes how to deploy the `NodeObservability` Operator for BareMetal
-installs.
 
-### Installing the `NodeObservability` Operator by building and pushing the Operator image to a registry
-1. Build and push the Operator image to a registry:
+You can deploy the NodeObservability Operator for a BareMetal installation by using the following procedure:
+
+### Installing the `NodeObservability` Operator
+
+You can install the NodeObservability Operator by building and pushing the Operator image into a registry.
+
+1. To build and push the Operator image into a registry, run the following commands:
    ```sh
    # set the envar CONTAINER_ENGINE to the preffered container manager tool (default is podman)
    $ export IMG=<registry>/<username>/node-observability-operator:latest
    $ make container-build
    $ make container-push
    ```
-2. Run the following command to deploy the `NodeObservability` Operator:
+2. To deploy the NodeObservability Operator, run the following command:
     ```
     $ make deploy
     ```
 
-### Run the `NodeObservability` locally (for developers)
-1. Execute the following `make` targets
+### Creating the local NodeObservabilitya
+
+1. To create make targets, run the following command:
    ```sh
    $ make install
    $ make run

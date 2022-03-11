@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/openshift/node-observability-operator/api/v1alpha1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
 const (
