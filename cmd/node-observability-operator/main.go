@@ -35,7 +35,7 @@ import (
 	//+kubebuilder:scaffold:imports
 
 	nodeobservabilityv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
-	controller "github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservability"
+	nodeobservabilitycontroller "github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservability"
 	nodeobservabilityrun "github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservabilityrun"
 )
 
@@ -85,7 +85,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.NodeObservabilityReconciler{
+	if err = (&nodeobservabilitycontroller.NodeObservabilityReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 		Log:    ctrl.Log.WithName("controller").WithName("NodeObservability"),
