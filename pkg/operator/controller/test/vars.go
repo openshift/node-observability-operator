@@ -17,9 +17,10 @@ limitations under the License.
 package test
 
 import (
-	"github.com/openshift/node-observability-operator/api/v1alpha1"
-	"k8s.io/apimachinery/pkg/runtime"
+	runtime "k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+
+	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
 const (

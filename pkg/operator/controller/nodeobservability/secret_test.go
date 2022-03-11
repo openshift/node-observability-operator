@@ -22,12 +22,12 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	fake "sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
-	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
-	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	test "github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
 func TestEnsureSecret(t *testing.T) {

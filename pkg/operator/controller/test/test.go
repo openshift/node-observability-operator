@@ -22,14 +22,15 @@ import (
 	"time"
 
 	securityv1 "github.com/openshift/api/security/v1"
-	"github.com/openshift/node-observability-operator/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/watch"
+	types "k8s.io/apimachinery/pkg/types"
+	watch "k8s.io/apimachinery/pkg/watch"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	client "sigs.k8s.io/controller-runtime/pkg/client"
+
+	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
 // Event is a simplified representation of the watch event received from the controller runtime client.
