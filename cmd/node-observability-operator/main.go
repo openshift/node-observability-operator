@@ -39,6 +39,10 @@ import (
 	nodeobservabilityrun "github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservabilityrun"
 )
 
+const (
+	agentName = "node-observability-agent"
+)
+
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("node-observability")
@@ -95,9 +99,11 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&nodeobservabilityrun.NodeObservabilityRunReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Log:    ctrl.Log.WithName("controller").WithName("NodeObservabilityRun"),
+		Client:    mgr.GetClient(),
+		Scheme:    mgr.GetScheme(),
+		Log:       ctrl.Log.WithName("controller").WithName("NodeObservabilityRun"),
+		Namespace: operatorNamespace,
+		AgentName: agentName,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "NodeObservabilityRun")
 		os.Exit(1)

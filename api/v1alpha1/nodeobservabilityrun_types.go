@@ -45,12 +45,22 @@ type NodeObservabilityRunStatus struct {
 	// It is represented in RFC3339 form and is in UTC.
 	FinishedTimestamp *metav1.Time `json:"finishedTimestamp,omitempty"`
 
+	// Agents represents the list of Nodes that are included in this Run
+	// agents are Pods, and as such, not all are always ready/available
+	Agents []AgentNode `json:"agents,omitempty"`
+
 	// Conditions contain details for aspects of the current state of this API Resource.
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
 	// Output is the output location of this NodeObservabilityRun
 	// When not set, no output location is known
 	Output *string `json:"output,omitempty"`
+}
+
+type AgentNode struct {
+	Name string `json:"name,omitempty"`
+	IP   string `json:"ip,omitempty"`
+	Port int32  `json:"port,omitempty"`
 }
 
 // +kubebuilder:printcolumn:JSONPath=".spec.nodeObservabilityRef.name", name="NodeObservabilityRef", type="string"
