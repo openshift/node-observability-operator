@@ -96,7 +96,8 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 						Name:            podName,
 						// TODO - this will change once the shell script in the node-observability-agent is
 						// finalized
-						Command:                  []string{"/bin/sh", "-c", "curl --unix-socket /var/run/crio/crio.sock http://localhost/debug/pprof/profile > /mnt/crio-${NODE_IP}_$(date +\"%F-%T.%N\").out && sleep 3600"},
+						Command:                  []string{"node-observability-agent"},
+						Args:                     []string{"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token", "--storage=/run"},
 						Resources:                corev1.ResourceRequirements{},
 						TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 						SecurityContext: &corev1.SecurityContext{

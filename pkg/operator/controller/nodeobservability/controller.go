@@ -56,10 +56,14 @@ type NodeObservabilityReconciler struct {
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilities/finalizers,verbs=update
 //+kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=list;get;create;watch;
 //+kubebuilder:rbac:groups=core,resources=secrets,verbs=list;get;create;watch;
-//+kubebuilder:rbac:groups=core,resources=serviceaccount,verbs=list;get;create;watch;
-//+kubebuilder:rbac:groups=rbac,resources=clusterrole,verbs=list;get;create;watch;
-//+kubebuilder:rbac:groups=rbac,resources=clusterrolebinding,verbs=list;get;create;watch;
-//+kubebuilder:rbac:groups=security,resources=securitycontextconstraint,verbs=list;get;create;watch;
+//+kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=list;get;create;watch;
+//+kubebuilder:rbac:groups=core,resources=pods,verbs=list;get;
+//+kubebuilder:rbac:groups=core,resources=nodes,verbs=list;get;
+//+kubebuilder:rbac:groups=core,resources=nodes/proxy,verbs=list;get;
+//+kubebuilder:rbac:urls=/debug/*,verbs=get;
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=list;get;create;watch;
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,verbs=list;get;create;watch;
+//+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=list;get;create;watch;use;
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
