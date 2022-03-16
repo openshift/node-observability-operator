@@ -7,5 +7,5 @@ metrics:
 webhook:
   port: 9443
 leaderElection:
-  leaderElect: true
+  leaderElect: false
   resourceName: 94c735b6.olm.openshift.io
