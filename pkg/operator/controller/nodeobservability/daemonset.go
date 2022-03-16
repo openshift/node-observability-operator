@@ -91,11 +91,9 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
-						Image:           nodeObs.Spec.Image,
-						ImagePullPolicy: corev1.PullIfNotPresent,
-						Name:            podName,
-						// TODO - this will change once the shell script in the node-observability-agent is
-						// finalized
+						Image:                    nodeObs.Spec.Image,
+						ImagePullPolicy:          corev1.PullIfNotPresent,
+						Name:                     podName,
 						Command:                  []string{"node-observability-agent"},
 						Args:                     []string{"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token", "--storage=/run"},
 						Resources:                corev1.ResourceRequirements{},
