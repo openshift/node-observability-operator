@@ -6,6 +6,10 @@ metadata:
   creationTimestamp: null
   name: manager-role
 rules:
+- nonResourceURLs:
+  - /debug/*
+  verbs:
+  - get
 - apiGroups:
   - apps
   resources:
@@ -18,6 +22,27 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - nodes
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ""
+  resources:
+  - nodes/proxy
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ""
+  resources:
   - secrets
   verbs:
   - create
@@ -27,7 +52,7 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - serviceaccount
+  - serviceaccounts
   verbs:
   - create
   - get
@@ -86,29 +111,30 @@ rules:
   - patch
   - update
 - apiGroups:
-  - rbac
+  - rbac.authorization.k8s.io
   resources:
-  - clusterrole
+  - clusterrolebindings
   verbs:
   - create
   - get
   - list
   - watch
 - apiGroups:
-  - rbac
+  - rbac.authorization.k8s.io
   resources:
-  - clusterrolebinding
+  - clusterroles
   verbs:
   - create
   - get
   - list
   - watch
 - apiGroups:
-  - security
+  - security.openshift.io
   resources:
-  - securitycontextconstraint
+  - securitycontextconstraints
   verbs:
   - create
   - get
   - list
+  - use
   - watch
