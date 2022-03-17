@@ -11,15 +11,6 @@ rules:
   verbs:
   - get
 - apiGroups:
-  - apps
-  resources:
-  - daemonsets
-  verbs:
-  - create
-  - get
-  - list
-  - watch
-- apiGroups:
   - ""
   resources:
   - nodes
@@ -40,14 +31,6 @@ rules:
   verbs:
   - get
   - list
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - create
-  - get
-  - list
   - watch
 - apiGroups:
   - ""
@@ -55,6 +38,7 @@ rules:
   - serviceaccounts
   verbs:
   - create
+  - delete
   - get
   - list
   - watch
@@ -116,6 +100,7 @@ rules:
   - clusterrolebindings
   verbs:
   - create
+  - delete
   - get
   - list
   - watch
@@ -125,6 +110,7 @@ rules:
   - clusterroles
   verbs:
   - create
+  - delete
   - get
   - list
   - watch
@@ -134,7 +120,56 @@ rules:
   - securitycontextconstraints
   verbs:
   - create
+  - delete
   - get
   - list
   - use
+  - watch
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  creationTimestamp: null
+  name: manager-role
+  namespace: node-observability-operator
+rules:
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
   - watch

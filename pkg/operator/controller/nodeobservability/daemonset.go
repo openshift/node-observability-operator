@@ -44,7 +44,6 @@ func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeO
 // currentDaemonSet check if the daemonset exists
 func (r *NodeObservabilityReconciler) currentDaemonSet(ctx context.Context, nameSpace types.NamespacedName) (bool, *appsv1.DaemonSet, error) {
 	ds := &appsv1.DaemonSet{}
-	r.Log.Info(fmt.Sprintf("CurrentSearch - Context:%v\nNamespacedName:%v\n", ctx, nameSpace))
 	if err := r.Get(ctx, nameSpace, ds); err != nil || r.Err.Set[dsObj] {
 		if errors.IsNotFound(err) || r.Err.NotFound[dsObj] {
 			return false, nil, nil

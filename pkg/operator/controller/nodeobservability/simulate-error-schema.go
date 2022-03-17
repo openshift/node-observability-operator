@@ -1,12 +1,11 @@
 package nodeobservabilitycontroller
 
 const (
-	saObj     = "serviceaccount"
-	sccObj    = "securitycontextconstraint"
-	crObj     = "clusterrole"
-	crbObj    = "clusterrolebinding"
-	secretObj = "secret"
-	dsObj     = "daemonset"
+	saObj  = "serviceaccount"
+	sccObj = "securitycontextconstraint"
+	crObj  = "clusterrole"
+	crbObj = "clusterrolebinding"
+	dsObj  = "daemonset"
 )
 
 // ErrTestObject - simple struct used to inject errors for testing

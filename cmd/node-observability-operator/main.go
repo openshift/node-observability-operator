@@ -79,6 +79,7 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "94c735b6.olm.openshift.io",
+		Namespace:              "node-observability-operator",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
