@@ -59,7 +59,7 @@ func main() {
 	var operatorNamespace string
 	var operandImage string
 
-	flag.StringVar(&operatorNamespace, "operator-namespace", "node-observability-opertaor", "The node observability operator namespace.")
+	flag.StringVar(&operatorNamespace, "operator-namespace", "node-observability-operator", "The node observability operator namespace.")
 	flag.StringVar(&operandImage, "operand-image", "quay.io/openshif/node-observability-operator:lates", "The operand container image to use.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
