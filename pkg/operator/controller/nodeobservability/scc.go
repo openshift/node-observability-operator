@@ -9,7 +9,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
@@ -33,8 +32,6 @@ func (r *NodeObservabilityReconciler) ensureSecurityContextConstraints(ctx conte
 		}
 		return r.currentSecurityContextConstraints(ctx, nodeObs)
 	}
-	// Set NodeObservability instance as the owner and controller
-	err = ctrl.SetControllerReference(nodeObs, desired, r.Scheme)
 	return true, current, err
 }
 
@@ -72,6 +69,14 @@ func (r *NodeObservabilityReconciler) desiredSecurityContextConstraints(nodeObs 
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      sccName,
 			Namespace: nodeObs.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					Name:       nodeObs.Name,
+					Kind:       nodeObs.Kind,
+					UID:        nodeObs.UID,
+					APIVersion: nodeObs.APIVersion,
+				},
+			},
 		},
 		AllowPrivilegedContainer: true,
 		AllowHostIPC:             false,

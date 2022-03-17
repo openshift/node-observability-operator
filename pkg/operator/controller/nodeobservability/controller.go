@@ -78,6 +78,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	// Fetch the NodeObservability instance
 	nodeObs := &operatorv1alpha1.NodeObservability{}
+	r.Log.Info(fmt.Sprintf("Context:%v\nNamespacedName:%v\n", ctx, req.NamespacedName))
 	err := r.Get(ctx, req.NamespacedName, nodeObs)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -96,7 +97,6 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	// For the pods to deploy on each node and execute the crio & kubelet script we need the following
 	// - custom scc (mainly allowHostPathDirPlugin set to true)
 	// - serviceaccount
-	// - secret
 	// - clusterrole (use the scc)
 	// - clusterrolebinding (bind the sa to the role)
 
@@ -109,17 +109,8 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	}
 	r.Log.Info(fmt.Sprintf("SecurityContextConstraints : %s", scc.Name))
 
-	// ensure secret
-	haveSecret, secret, err := r.ensureSecret(ctx, nodeObs)
-	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("failed to ensure secret : %w", err)
-	} else if !haveSecret {
-		return reconcile.Result{}, fmt.Errorf("failed to get secret")
-	}
-	r.Log.Info(fmt.Sprintf("Secret : %s", secret.Name))
-
-	// ensure serviceaccount with the secret
-	haveSA, sa, err := r.ensureServiceAccount(ctx, nodeObs, secret)
+	// ensure serviceaccount
+	haveSA, sa, err := r.ensureServiceAccount(ctx, nodeObs)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to ensure serviceaccount : %w", err)
 	} else if !haveSA {

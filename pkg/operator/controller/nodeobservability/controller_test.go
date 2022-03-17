@@ -66,14 +66,6 @@ func TestReconcile(t *testing.T) {
 		},
 		{
 			Set: map[string]bool{
-				secretObj: true,
-			},
-			NotFound: map[string]bool{
-				secretObj: false,
-			},
-		},
-		{
-			Set: map[string]bool{
 				saObj: true,
 			},
 			NotFound: map[string]bool{
@@ -110,14 +102,6 @@ func TestReconcile(t *testing.T) {
 			},
 			NotFound: map[string]bool{
 				sccObj: true,
-			},
-		},
-		{
-			Set: map[string]bool{
-				secretObj: true,
-			},
-			NotFound: map[string]bool{
-				secretObj: true,
 			},
 		},
 		{

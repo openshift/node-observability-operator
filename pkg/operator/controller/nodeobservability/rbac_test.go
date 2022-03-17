@@ -161,23 +161,14 @@ func TestEnsureClusterRole(t *testing.T) {
 				Log:    zap.New(zap.UseDevMode(true)),
 			}
 			nodeObs := &operatorv1alpha1.NodeObservability{}
-			// ensure secret
-			_, secret, err := r.ensureSecret(context.TODO(), nodeObs)
+			_, serviceAccount, err := r.ensureServiceAccount(context.TODO(), nodeObs)
 			if err != nil {
 				if !tc.errExpected {
 					t.Fatalf("unexpected error received: %v", err)
 				}
 				return
 			}
-			r.Log.Info(fmt.Sprintf("Secret : %s", secret.Name))
-			_, serviceAccount, err := r.ensureServiceAccount(context.TODO(), nodeObs, secret)
-			if err != nil {
-				if !tc.errExpected {
-					t.Fatalf("unexpected error received: %v", err)
-				}
-				return
-			}
-			r.Log.Info(fmt.Sprintf("Secret : %s", serviceAccount.Name))
+			r.Log.Info(fmt.Sprintf("ServiceAccount : %s", serviceAccount.Name))
 
 			gotExist, _, err := r.ensureClusterRoleBinding(context.TODO(), nodeObs, serviceAccount.Name)
 			if err != nil {

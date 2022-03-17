@@ -18,7 +18,6 @@ package nodeobservabilitycontroller
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -40,9 +39,6 @@ func TestEnsureServiceAccount(t *testing.T) {
 				Name:      serviceAccountName,
 				Namespace: nodeObs.Namespace,
 			},
-			Secrets: []corev1.ObjectReference{{
-				Name: test.SecretName,
-			}},
 		}
 		return &sa
 	}
@@ -78,17 +74,8 @@ func TestEnsureServiceAccount(t *testing.T) {
 				Log:    zap.New(zap.UseDevMode(true)),
 			}
 			nodeObs := &operatorv1alpha1.NodeObservability{}
-			// ensure secret
-			_, secret, err := r.ensureSecret(context.TODO(), nodeObs)
-			if err != nil {
-				if !tc.errExpected {
-					t.Fatalf("unexpected error received: %v", err)
-				}
-				return
-			}
-			r.Log.Info(fmt.Sprintf("Secret : %s", secret.Name))
 
-			gotExist, _, err := r.ensureServiceAccount(context.TODO(), nodeObs, secret)
+			gotExist, _, err := r.ensureServiceAccount(context.TODO(), nodeObs)
 			if err != nil {
 				if !tc.errExpected {
 					t.Fatalf("unexpected error received: %v", err)

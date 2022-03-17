@@ -133,16 +133,7 @@ func TestEnsureDaemonset(t *testing.T) {
 				Log:    zap.New(zap.UseDevMode(true)),
 			}
 			nodeObs := &operatorv1alpha1.NodeObservability{}
-			// ensure secret
-			_, secret, err := r.ensureSecret(context.TODO(), nodeObs)
-			if err != nil {
-				if !tc.errExpected {
-					t.Fatalf("unexpected error received: %v", err)
-				}
-				return
-			}
-			r.Log.Info(fmt.Sprintf("Secret : %s", secret.Name))
-			_, serviceAccount, err := r.ensureServiceAccount(context.TODO(), nodeObs, secret)
+			_, serviceAccount, err := r.ensureServiceAccount(context.TODO(), nodeObs)
 			if err != nil {
 				if !tc.errExpected {
 					t.Fatalf("unexpected error received: %v", err)
