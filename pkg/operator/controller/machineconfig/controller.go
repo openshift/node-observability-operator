@@ -24,6 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 <<<<<<< HEAD
+<<<<<<< HEAD
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -31,6 +32,9 @@ import (
 =======
 	"k8s.io/apimachinery/pkg/runtime"
 >>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
+=======
+	"k8s.io/apimachinery/pkg/runtime"
+>>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -44,6 +48,7 @@ import (
 type MachineconfigReconciler struct {
 	client.Client
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 	Scheme         *runtime.Scheme
 	Log            logr.Logger
@@ -81,12 +86,17 @@ var (
 )
 
 =======
+=======
+>>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
 	Scheme     *runtime.Scheme
 	Log        logr.Logger
 	CtrlConfig *v1alpha1.Machineconfig
 }
 
+<<<<<<< HEAD
 >>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
+=======
+>>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=machineconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=machineconfigs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=machineconfigs/finalizers,verbs=update
@@ -102,9 +112,13 @@ var (
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.0/pkg/reconcile
 func (r *MachineconfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 	_ = r.Log.WithValues("nodeobservability/machineconfig", req.NamespacedName)
 >>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
+=======
+	_ = r.Log.WithValues("nodeobservability/machineconfig", req.NamespacedName)
+>>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
 	r.Log.Info("Reconciling MachineConfig of Nodeobservability operator")
 
 	// Fetch the nodeobservability.olm.openshift.io/machineconfig CR
@@ -120,6 +134,7 @@ func (r *MachineconfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 		// Error reading the object - requeue the request.
 		r.Log.Error(err, "failed to fetch MachineConfig")
+<<<<<<< HEAD
 <<<<<<< HEAD
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, err
 	}
@@ -138,6 +153,8 @@ func (r *MachineconfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	return r.checkMCPUpdateStatus(ctx, req)
 =======
+=======
+>>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
 		return ctrl.Result{Requeue: true, RequeueAfter: 15 * time.Second}, err
 	}
 	r.Log.Info(fmt.Sprintf("MachineConfig resource found : Namespace %s : Name %s ", req.NamespacedName.Namespace, req.NamespacedName.Name))
@@ -153,7 +170,10 @@ func (r *MachineconfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	return ctrl.Result{}, nil
+<<<<<<< HEAD
 >>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
+=======
+>>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -163,6 +183,7 @@ func (r *MachineconfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 func (r *MachineconfigReconciler) ensureProfilingMCPExists(ctx context.Context) (*mcv1.MachineConfigPool, error) {
 
@@ -335,6 +356,8 @@ func (r *MachineconfigReconciler) checkMCPUpdateStatus(ctx context.Context, req 
 		r.CtrlConfig.Status.UpdateStatus.InProgress = corev1.ConditionTrue
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 =======
+=======
+>>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
 // checkMCPUpdateStatus is for reconciling update status of all worker machines
 func (r *MachineconfigReconciler) checkMCPUpdateStatus(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	listOptions := []client.ListOption{}
@@ -357,11 +380,15 @@ func (r *MachineconfigReconciler) checkMCPUpdateStatus(ctx context.Context, req 
 		r.Log.Info("config update under progress")
 		r.CtrlConfig.Status.UpdateStatus.InProgress = corev1.ConditionTrue
 		return ctrl.Result{Requeue: true, RequeueAfter: 15 * time.Second}, nil
+<<<<<<< HEAD
 >>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
+=======
+>>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
 	}
 
 	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdated) &&
 		mcp.Status.UpdatedMachineCount == mcp.Status.MachineCount {
+<<<<<<< HEAD
 <<<<<<< HEAD
 		r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "ConfigUpdate", "config update completed on all machines")
 		r.Log.Info("config update completed on all machines")
@@ -381,16 +408,22 @@ func (r *MachineconfigReconciler) checkMCPUpdateStatus(ctx context.Context, req 
 		r.Log.Info("waiting for update to finish on all machines", "MachineConfigPool", ProfilingMCPName)
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 =======
+=======
+>>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
 		r.Log.Info("config update completed on all machines")
 		r.CtrlConfig.Status.UpdateStatus.InProgress = "false"
 	} else {
 		r.Log.Info("waiting for update to finish on all machines", "MachineConfigPool", "worker")
 		return ctrl.Result{Requeue: true, RequeueAfter: 15 * time.Second}, nil
+<<<<<<< HEAD
 >>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
+=======
+>>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
 	}
 
 	return ctrl.Result{}, nil
 }
+<<<<<<< HEAD
 <<<<<<< HEAD
 
 func (r *MachineconfigReconciler) revertPrevSyncChanges(ctx context.Context) error {
@@ -428,3 +461,5 @@ func (r *MachineconfigReconciler) revertPrevSyncChanges(ctx context.Context) err
 }
 =======
 >>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
+=======
+>>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
