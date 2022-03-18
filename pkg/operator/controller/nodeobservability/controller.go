@@ -26,7 +26,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilclock "k8s.io/apimachinery/pkg/util/clock"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -36,6 +38,7 @@ import (
 
 const (
 	terminating = "Terminating"
+	finalizer   = "NodeObservability"
 )
 
 var (
@@ -94,7 +97,20 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		r.Log.Error(err, "Failed to get NodeObservability")
 		return ctrl.Result{}, err
 	}
+	if nodeObs.DeletionTimestamp != nil {
+		r.Log.Info("NodeObservability resource is going to be delete. Taking action")
+		if err := r.ensureNodeObservabilityDeleted(nodeObs); err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed to ensure nodeobservability deletion: %w", err)
+		}
+	}
 	r.Log.Info(fmt.Sprintf("NodeObservability resource found : Namespace %s : Name %s ", req.NamespacedName.Namespace, nodeObs.Name))
+
+	// Set finalizers on the NodeObservability resource
+	updated, err := r.withFinalizers(nodeObs)
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("failed to update NodeObservability with finalizers:, %w", err)
+	}
+	nodeObs = updated
 
 	// For the pods to deploy on each node and execute the crio & kubelet script we need the following
 	// - custom scc (mainly allowHostPathDirPlugin set to true)
@@ -187,4 +203,86 @@ func (r *NodeObservabilityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&operatorv1alpha1.NodeObservability{}).
 		Owns(&appsv1.DaemonSet{}).
 		Complete(r)
+}
+func hasFinalizer(nodeObs *operatorv1alpha1.NodeObservability) bool {
+	hasFinalizer := false
+	for _, f := range nodeObs.Finalizers {
+		if f == finalizer {
+			hasFinalizer = true
+			break
+		}
+	}
+	return hasFinalizer
+}
+func (r *NodeObservabilityReconciler) withoutFinalizers(nodeObs *operatorv1alpha1.NodeObservability, finalizerFlag string) (*operatorv1alpha1.NodeObservability, error) {
+	withoutFinalizers := nodeObs.DeepCopy()
+	name := types.NamespacedName{
+		Namespace: withoutFinalizers.Namespace,
+		Name:      withoutFinalizers.Name,
+	}
+
+	newFinalizers := make([]string, 0)
+	for _, item := range withoutFinalizers.Finalizers {
+		if item == finalizerFlag {
+			continue
+		}
+		newFinalizers = append(newFinalizers, item)
+	}
+	if len(newFinalizers) == 0 {
+		// Sanitize for unit tests so we don't need to distinguish empty array
+		// and nil.
+		newFinalizers = nil
+	}
+	withoutFinalizers.Finalizers = newFinalizers
+	if err := r.Client.Update(context.TODO(), withoutFinalizers); err != nil {
+		return withoutFinalizers, fmt.Errorf("failed to remove finalizers: %w", err)
+	}
+	if err := r.Client.Get(context.TODO(), name, withoutFinalizers); err != nil {
+		return withoutFinalizers, fmt.Errorf("failed to get nodeobservability after finalizer removal: %w", err)
+	}
+	return withoutFinalizers, nil
+}
+
+func (r *NodeObservabilityReconciler) withFinalizers(nodeObs *operatorv1alpha1.NodeObservability) (*operatorv1alpha1.NodeObservability, error) {
+	withFinalizers := nodeObs.DeepCopy()
+	name := types.NamespacedName{
+		Namespace: withFinalizers.Namespace,
+		Name:      withFinalizers.Name,
+	}
+
+	if !hasFinalizer(withFinalizers) {
+		withFinalizers.Finalizers = append(withFinalizers.Finalizers, finalizer)
+	}
+
+	if err := r.Client.Update(context.TODO(), withFinalizers); err != nil {
+		return withFinalizers, fmt.Errorf("failed to update finalizers: %w", err)
+	}
+	if err := r.Client.Get(context.TODO(), name, withFinalizers); err != nil {
+		return withFinalizers, fmt.Errorf("failed to get nodeobservability after finalizer update: %w", err)
+	}
+	return withFinalizers, nil
+}
+
+func (r *NodeObservabilityReconciler) ensureNodeObservabilityDeleted(nodeObs *operatorv1alpha1.NodeObservability) error {
+	errs := []error{}
+
+	if err := r.deleteClusterRole(nodeObs); err != nil {
+		errs = append(errs, fmt.Errorf("failed to delete clusterrole : %w", err))
+	}
+	if err := r.deleteClusterRoleBinding(nodeObs); err != nil {
+		errs = append(errs, fmt.Errorf("failed to delete clusterrolebinding : %w", err))
+	}
+	if err := r.deleteSecurityContextConstraints(nodeObs); err != nil {
+		errs = append(errs, fmt.Errorf("failed to delete SCC : %w", err))
+	}
+	if len(errs) == 0 {
+		// Remove the finalizer.
+		if hasFinalizer(nodeObs) {
+			_, err := r.withoutFinalizers(nodeObs, finalizer)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("failed to remove finalizer from nodeobservability %s/%s: %w", nodeObs.Namespace, nodeObs.Name, err))
+			}
+		}
+	}
+	return utilerrors.NewAggregate(errs)
 }

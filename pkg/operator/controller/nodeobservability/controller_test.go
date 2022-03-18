@@ -1,18 +1,18 @@
-/*
-Copyright 2021.
+// /*
+// Copyright 2021.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// */
 
 package nodeobservabilitycontroller
 
@@ -23,11 +23,9 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
@@ -167,18 +165,24 @@ func TestReconcile(t *testing.T) {
 		errExpected     bool
 	}{
 		{
-			name:            "Bootstrap",
+			name:            "Bootstrapping",
 			existingObjects: []runtime.Object{testNodeObservability()},
 			inputRequest:    testRequest(),
 			expectedResult:  reconcile.Result{},
 			expectedEvents:  []test.Event{},
 		},
 		{
-			name:            "Delete",
+			name:            "Deleted",
 			existingObjects: []runtime.Object{},
 			inputRequest:    testRequest(),
 			expectedResult:  reconcile.Result{},
 		},
+		// {
+		// 	name:            "Deleting",
+		// 	existingObjects: []runtime.Object{testNodeObservabilityToBeDeleted()},
+		// 	inputRequest:    testRequest(),
+		// 	expectedResult:  reconcile.Result{},
+		// },
 	}
 
 	// loop through test cases (bootstrap and delete)
@@ -198,16 +202,28 @@ func TestReconcile(t *testing.T) {
 					Err:    errTest,
 				}
 				// only check for errors when the ErrorTestObject Set and NotFound maps are nill
-				tc.errExpected = (errTest.Set != nil || errTest.NotFound != nil) && tc.name != "Delete"
+				tc.errExpected = (errTest.Set != nil || errTest.NotFound != nil) && tc.name == "Bootstrapping"
 
 				// the add and modify events should only be added when there are no 'simulated' errors
-				if (errTest.Set == nil && errTest.NotFound == nil) && tc.name != "Delete" {
+				if (errTest.Set == nil && errTest.NotFound == nil) && tc.name == "Bootstrapping" {
+					//update finalizer
+					tc.expectedEvents = append(tc.expectedEvents, teMod)
+					//add daemonset
 					tc.expectedEvents = append(tc.expectedEvents, teAdd)
+					//update status
+					tc.expectedEvents = append(tc.expectedEvents, teMod)
+				}
+				if (errTest.Set == nil && errTest.NotFound == nil) && tc.name == "Deleting" {
+					//update finalizer
+					tc.expectedEvents = append(tc.expectedEvents, teMod)
+				}
+				if (errTest.Set != nil || errTest.NotFound != nil) && tc.name == "Bootstrapping" {
+					//update finalizer
 					tc.expectedEvents = append(tc.expectedEvents, teMod)
 				}
 
 				// special case for daemonset
-				if errTest.Set[dsObj] && tc.name != "Delete" {
+				if errTest.Set[dsObj] && tc.name == "Bootstrapping" {
 					tc.expectedEvents = append(tc.expectedEvents, teAdd)
 				}
 
@@ -248,7 +264,7 @@ func TestReconcile(t *testing.T) {
 	}
 }
 
-// testRquest - used to create request
+// // testRquest - used to create request
 func testRequest() ctrl.Request {
 	return ctrl.Request{
 		NamespacedName: types.NamespacedName{
@@ -270,3 +286,12 @@ func testNodeObservability() *operatorv1alpha1.NodeObservability {
 		},
 	}
 }
+
+// func testNodeObservabilityToBeDeleted() *operatorv1alpha1.NodeObservability {
+// 	nobs := testNodeObservability()
+// 	nobs.Finalizers = append(nobs.Finalizers, finalizer)
+// 	nobs.DeletionTimestamp = &metav1.Time{
+// 		Time: time.Now(),
+// 	}
+// 	return nobs
+// }

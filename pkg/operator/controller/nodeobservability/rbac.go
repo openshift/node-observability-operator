@@ -191,3 +191,27 @@ func (r *NodeObservabilityReconciler) desiredClusterRoleBinding(nodeObs *v1alpha
 func labelsForClusterRole(name string) map[string]string {
 	return map[string]string{"scc": "node-observability-scc-role", "role": name}
 }
+
+func (r *NodeObservabilityReconciler) deleteClusterRole(nodeObs *v1alpha1.NodeObservability) error {
+	cr := &rbacv1.ClusterRole{}
+	cr.Name = clusterRoleName
+	if err := r.Client.Delete(context.TODO(), cr); err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+func (r *NodeObservabilityReconciler) deleteClusterRoleBinding(nodeObs *v1alpha1.NodeObservability) error {
+	crb := &rbacv1.ClusterRoleBinding{}
+	crb.Name = clusterRoleBindingName
+	if err := r.Client.Delete(context.TODO(), crb); err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}

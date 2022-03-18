@@ -107,3 +107,15 @@ func (r *NodeObservabilityReconciler) desiredSecurityContextConstraints(nodeObs 
 	}
 	return scc
 }
+
+func (r *NodeObservabilityReconciler) deleteSecurityContextConstraints(nodeObs *v1alpha1.NodeObservability) error {
+	scc := &securityv1.SecurityContextConstraints{}
+	scc.Name = sccName
+	if err := r.Client.Delete(context.TODO(), scc); err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
