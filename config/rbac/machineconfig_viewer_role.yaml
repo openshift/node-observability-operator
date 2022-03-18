@@ -1,0 +1,20 @@
+# permissions for end users to view machineconfigs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: machineconfig-viewer-role
+rules:
+- apiGroups:
+  - nodeobservability.olm.openshift.io
+  resources:
+  - machineconfigs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - nodeobservability.olm.openshift.io
+  resources:
+  - machineconfigs/status
+  verbs:
+  - get

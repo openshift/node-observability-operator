@@ -25,4 +25,13 @@ resources:
   kind: NodeObservabilityRun
   path: github.com/openshift/node-observability-operator/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: olm.openshift.io
+  group: nodeobservability
+  kind: Machineconfig
+  path: github.com/openshift/node-observability-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"

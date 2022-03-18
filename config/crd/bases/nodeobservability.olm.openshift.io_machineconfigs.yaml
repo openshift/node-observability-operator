@@ -1,0 +1,61 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.7.0
+  creationTimestamp: null
+  name: machineconfigs.nodeobservability.olm.openshift.io
+spec:
+  group: nodeobservability.olm.openshift.io
+  names:
+    kind: Machineconfig
+    listKind: MachineconfigList
+    plural: machineconfigs
+    singular: machineconfig
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Machineconfig is the Schema for the machineconfigs API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: MachineconfigSpec defines the desired state of Machineconfig
+            type: object
+          status:
+            description: MachineconfigStatus defines the observed state of Machineconfig
+            properties:
+              updateStatus:
+                description: UpdateStatus contains of the status of the MCP update
+                properties:
+                  InProgress:
+                    type: string
+                required:
+                - InProgress
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
