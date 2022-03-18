@@ -1,0 +1,6 @@
+apiVersion: nodeobservability.olm.openshift.io/v1alpha1
+kind: Machineconfig
+metadata:
+  name: machineconfig-sample
+spec:
+  # TODO(user): Add fields here
