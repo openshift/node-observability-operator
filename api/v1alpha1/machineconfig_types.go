@@ -28,12 +28,15 @@ import (
 type MachineconfigSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+<<<<<<< HEAD
 
 	// EnableCrioProfiling is for enabling profiling of CRI-O service
 	EnableCrioProfiling bool `json:"enableCrioProfiling,omitempty"`
 
 	// EnableKubeletProfiling is for enabling profiling of CRI-O service
 	EnableKubeletProfiling bool `json:"enableKubeletProfiling,omitempty"`
+=======
+>>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
 }
 
 // MachineconfigStatus defines the observed state of Machineconfig

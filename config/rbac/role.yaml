@@ -65,6 +65,18 @@ rules:
 - apiGroups:
   - nodeobservability.olm.openshift.io
   resources:
+  - machineconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - nodeobservability.olm.openshift.io
+  resources:
   - machineconfigs/finalizers
   verbs:
   - update

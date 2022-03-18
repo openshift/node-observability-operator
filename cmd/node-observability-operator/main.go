@@ -125,6 +125,14 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Machineconfig")
 		os.Exit(1)
 	}
+	if err = (&machineconfigcontroller.MachineconfigReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+		Log:    ctrl.Log.WithName("controller").WithName("MachineConfig"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Machineconfig")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

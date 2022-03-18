@@ -35,6 +35,7 @@ spec:
             type: object
           spec:
             description: MachineconfigSpec defines the desired state of Machineconfig
+<<<<<<< HEAD
             properties:
               enableCrioProfiling:
                 description: EnableCrioProfiling is for enabling profiling of CRI-O
@@ -44,6 +45,8 @@ spec:
                 description: EnableKubeletProfiling is for enabling profiling of CRI-O
                   service
                 type: boolean
+=======
+>>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
             type: object
           status:
             description: MachineconfigStatus defines the observed state of Machineconfig

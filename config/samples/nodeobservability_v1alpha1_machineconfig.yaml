@@ -3,5 +3,9 @@ kind: Machineconfig
 metadata:
   name: machineconfig-sample
 spec:
+<<<<<<< HEAD
   enableCrioProfiling: true
   enableKubeletProfiling: true
+=======
+  # TODO(user): Add fields here
+>>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling

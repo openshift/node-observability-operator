@@ -23,10 +23,14 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+<<<<<<< HEAD
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+=======
+	"k8s.io/apimachinery/pkg/runtime"
+>>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -40,6 +44,7 @@ import (
 type MachineconfigReconciler struct {
 	client.Client
 
+<<<<<<< HEAD
 	Scheme         *runtime.Scheme
 	Log            logr.Logger
 	CtrlConfig     *v1alpha1.Machineconfig
@@ -75,6 +80,13 @@ var (
 	}
 )
 
+=======
+	Scheme     *runtime.Scheme
+	Log        logr.Logger
+	CtrlConfig *v1alpha1.Machineconfig
+}
+
+>>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=machineconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=machineconfigs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=machineconfigs/finalizers,verbs=update
@@ -89,6 +101,10 @@ var (
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.0/pkg/reconcile
 func (r *MachineconfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+<<<<<<< HEAD
+=======
+	_ = r.Log.WithValues("nodeobservability/machineconfig", req.NamespacedName)
+>>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
 	r.Log.Info("Reconciling MachineConfig of Nodeobservability operator")
 
 	// Fetch the nodeobservability.olm.openshift.io/machineconfig CR
@@ -104,6 +120,7 @@ func (r *MachineconfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 		// Error reading the object - requeue the request.
 		r.Log.Error(err, "failed to fetch MachineConfig")
+<<<<<<< HEAD
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, err
 	}
 	r.Log.Info("MachineConfig resource found", "namespace", req.NamespacedName.Namespace, "name", req.NamespacedName.Name)
@@ -120,6 +137,23 @@ func (r *MachineconfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	return r.checkMCPUpdateStatus(ctx, req)
+=======
+		return ctrl.Result{Requeue: true, RequeueAfter: 15 * time.Second}, err
+	}
+	r.Log.Info(fmt.Sprintf("MachineConfig resource found : Namespace %s : Name %s ", req.NamespacedName.Namespace, req.NamespacedName.Name))
+
+	_, justCreated, err := r.ensureCrioProfConfigExists(ctx)
+	if err != nil {
+		r.Log.Error(err, "failed to fetch crio profiling config")
+		return ctrl.Result{Requeue: true, RequeueAfter: 15 * time.Second}, err
+	}
+
+	if justCreated {
+		return r.checkMCPUpdateStatus(ctx, req)
+	}
+
+	return ctrl.Result{}, nil
+>>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -129,6 +163,7 @@ func (r *MachineconfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
+<<<<<<< HEAD
 func (r *MachineconfigReconciler) ensureProfilingMCPExists(ctx context.Context) (*mcv1.MachineConfigPool, error) {
 
 	namespace := types.NamespacedName{Namespace: r.CtrlConfig.Namespace, Name: ProfilingMCPName}
@@ -299,10 +334,35 @@ func (r *MachineconfigReconciler) checkMCPUpdateStatus(ctx context.Context, req 
 		r.Log.Info("config update under progress")
 		r.CtrlConfig.Status.UpdateStatus.InProgress = corev1.ConditionTrue
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+=======
+// checkMCPUpdateStatus is for reconciling update status of all worker machines
+func (r *MachineconfigReconciler) checkMCPUpdateStatus(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	listOptions := []client.ListOption{}
+	mcpList := &mcv1.MachineConfigPoolList{}
+	err := r.Client.List(context.TODO(), mcpList, listOptions...)
+	if err != nil {
+		r.Log.Error(err, "failed to fetch list of MCPs")
+		return ctrl.Result{}, err
+	}
+
+	var mcp mcv1.MachineConfigPool
+	for _, mcp = range mcpList.Items {
+		if mcp.Name == "worker" {
+			break
+		}
+	}
+
+	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdating) &&
+		r.CtrlConfig.Status.UpdateStatus.InProgress == "false" {
+		r.Log.Info("config update under progress")
+		r.CtrlConfig.Status.UpdateStatus.InProgress = corev1.ConditionTrue
+		return ctrl.Result{Requeue: true, RequeueAfter: 15 * time.Second}, nil
+>>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
 	}
 
 	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdated) &&
 		mcp.Status.UpdatedMachineCount == mcp.Status.MachineCount {
+<<<<<<< HEAD
 		r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "ConfigUpdate", "config update completed on all machines")
 		r.Log.Info("config update completed on all machines")
 		r.CtrlConfig.Status.UpdateStatus.InProgress = "false"
@@ -320,10 +380,18 @@ func (r *MachineconfigReconciler) checkMCPUpdateStatus(ctx context.Context, req 
 		}
 		r.Log.Info("waiting for update to finish on all machines", "MachineConfigPool", ProfilingMCPName)
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+=======
+		r.Log.Info("config update completed on all machines")
+		r.CtrlConfig.Status.UpdateStatus.InProgress = "false"
+	} else {
+		r.Log.Info("waiting for update to finish on all machines", "MachineConfigPool", "worker")
+		return ctrl.Result{Requeue: true, RequeueAfter: 15 * time.Second}, nil
+>>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
 	}
 
 	return ctrl.Result{}, nil
 }
+<<<<<<< HEAD
 
 func (r *MachineconfigReconciler) revertPrevSyncChanges(ctx context.Context) error {
 	if len(r.PrevSyncChange) == 0 {
@@ -358,3 +426,5 @@ func (r *MachineconfigReconciler) revertPrevSyncChanges(ctx context.Context) err
 
 	return nil
 }
+=======
+>>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
