@@ -154,6 +154,15 @@ func TestReconcile(t *testing.T) {
 		},
 	}
 
+	teDel := test.Event{
+		EventType: watch.Deleted,
+		ObjType:   "nodeobservability",
+		NamespacedName: types.NamespacedName{
+			Namespace: "",
+			Name:      "test",
+		},
+	}
+
 	testCases := []struct {
 		name            string
 		existingObjects []runtime.Object
@@ -177,12 +186,12 @@ func TestReconcile(t *testing.T) {
 			inputRequest:    testRequest(),
 			expectedResult:  reconcile.Result{},
 		},
-		// {
-		// 	name:            "Deleting",
-		// 	existingObjects: []runtime.Object{testNodeObservabilityToBeDeleted()},
-		// 	inputRequest:    testRequest(),
-		// 	expectedResult:  reconcile.Result{},
-		// },
+		{
+			name:            "Deleting",
+			existingObjects: []runtime.Object{testNodeObservabilityToBeDeleted()},
+			inputRequest:    testRequest(),
+			expectedResult:  reconcile.Result{},
+		},
 	}
 
 	// loop through test cases (bootstrap and delete)
@@ -213,9 +222,9 @@ func TestReconcile(t *testing.T) {
 					//update status
 					tc.expectedEvents = append(tc.expectedEvents, teMod)
 				}
-				if (errTest.Set == nil && errTest.NotFound == nil) && tc.name == "Deleting" {
+				if /*(errTest.Set == nil && errTest.NotFound == nil) &&*/ tc.name == "Deleting" {
 					//update finalizer
-					tc.expectedEvents = append(tc.expectedEvents, teMod)
+					tc.expectedEvents = append(tc.expectedEvents, teDel)
 				}
 				if (errTest.Set != nil || errTest.NotFound != nil) && tc.name == "Bootstrapping" {
 					//update finalizer
@@ -287,11 +296,11 @@ func testNodeObservability() *operatorv1alpha1.NodeObservability {
 	}
 }
 
-// func testNodeObservabilityToBeDeleted() *operatorv1alpha1.NodeObservability {
-// 	nobs := testNodeObservability()
-// 	nobs.Finalizers = append(nobs.Finalizers, finalizer)
-// 	nobs.DeletionTimestamp = &metav1.Time{
-// 		Time: time.Now(),
-// 	}
-// 	return nobs
-// }
+func testNodeObservabilityToBeDeleted() *operatorv1alpha1.NodeObservability {
+	nobs := testNodeObservability()
+	nobs.Finalizers = append(nobs.Finalizers, finalizer)
+	nobs.DeletionTimestamp = &metav1.Time{
+		Time: time.Now(),
+	}
+	return nobs
+}

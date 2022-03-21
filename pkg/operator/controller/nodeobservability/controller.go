@@ -99,9 +99,11 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	}
 	if nodeObs.DeletionTimestamp != nil {
 		r.Log.Info("NodeObservability resource is going to be delete. Taking action")
-		if err := r.ensureNodeObservabilityDeleted(nodeObs); err != nil {
+		if err := r.ensureNodeObservabilityDeleted(ctx, nodeObs); err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to ensure nodeobservability deletion: %w", err)
 		}
+		return reconcile.Result{}, nil
+
 	}
 	r.Log.Info(fmt.Sprintf("NodeObservability resource found : Namespace %s : Name %s ", req.NamespacedName.Namespace, nodeObs.Name))
 
@@ -214,12 +216,8 @@ func hasFinalizer(nodeObs *operatorv1alpha1.NodeObservability) bool {
 	}
 	return hasFinalizer
 }
-func (r *NodeObservabilityReconciler) withoutFinalizers(nodeObs *operatorv1alpha1.NodeObservability, finalizerFlag string) (*operatorv1alpha1.NodeObservability, error) {
+func (r *NodeObservabilityReconciler) withoutFinalizers(ctx context.Context, nodeObs *operatorv1alpha1.NodeObservability, finalizerFlag string) (*operatorv1alpha1.NodeObservability, error) {
 	withoutFinalizers := nodeObs.DeepCopy()
-	name := types.NamespacedName{
-		Namespace: withoutFinalizers.Namespace,
-		Name:      withoutFinalizers.Name,
-	}
 
 	newFinalizers := make([]string, 0)
 	for _, item := range withoutFinalizers.Finalizers {
@@ -234,11 +232,8 @@ func (r *NodeObservabilityReconciler) withoutFinalizers(nodeObs *operatorv1alpha
 		newFinalizers = nil
 	}
 	withoutFinalizers.Finalizers = newFinalizers
-	if err := r.Client.Update(context.TODO(), withoutFinalizers); err != nil {
+	if err := r.Update(ctx, withoutFinalizers); err != nil {
 		return withoutFinalizers, fmt.Errorf("failed to remove finalizers: %w", err)
-	}
-	if err := r.Client.Get(context.TODO(), name, withoutFinalizers); err != nil {
-		return withoutFinalizers, fmt.Errorf("failed to get nodeobservability after finalizer removal: %w", err)
 	}
 	return withoutFinalizers, nil
 }
@@ -254,16 +249,16 @@ func (r *NodeObservabilityReconciler) withFinalizers(nodeObs *operatorv1alpha1.N
 		withFinalizers.Finalizers = append(withFinalizers.Finalizers, finalizer)
 	}
 
-	if err := r.Client.Update(context.TODO(), withFinalizers); err != nil {
+	if err := r.Update(context.TODO(), withFinalizers); err != nil {
 		return withFinalizers, fmt.Errorf("failed to update finalizers: %w", err)
 	}
-	if err := r.Client.Get(context.TODO(), name, withFinalizers); err != nil {
+	if err := r.Get(context.TODO(), name, withFinalizers); err != nil {
 		return withFinalizers, fmt.Errorf("failed to get nodeobservability after finalizer update: %w", err)
 	}
 	return withFinalizers, nil
 }
 
-func (r *NodeObservabilityReconciler) ensureNodeObservabilityDeleted(nodeObs *operatorv1alpha1.NodeObservability) error {
+func (r *NodeObservabilityReconciler) ensureNodeObservabilityDeleted(ctx context.Context, nodeObs *operatorv1alpha1.NodeObservability) error {
 	errs := []error{}
 
 	if err := r.deleteClusterRole(nodeObs); err != nil {
@@ -278,7 +273,7 @@ func (r *NodeObservabilityReconciler) ensureNodeObservabilityDeleted(nodeObs *op
 	if len(errs) == 0 {
 		// Remove the finalizer.
 		if hasFinalizer(nodeObs) {
-			_, err := r.withoutFinalizers(nodeObs, finalizer)
+			_, err := r.withoutFinalizers(ctx, nodeObs, finalizer)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("failed to remove finalizer from nodeobservability %s/%s: %w", nodeObs.Namespace, nodeObs.Name, err))
 			}
