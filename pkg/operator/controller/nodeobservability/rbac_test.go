@@ -22,7 +22,9 @@ import (
 	"testing"
 
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -32,57 +34,176 @@ import (
 	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
-func TestEnsureClusterRole(t *testing.T) {
-	makeClusterRole := func() *rbacv1.ClusterRole {
-		nodeObs := &operatorv1alpha1.NodeObservability{}
-		clusterRole := rbacv1.ClusterRole{
-			ObjectMeta: metav1.ObjectMeta{
+func makeClusterRole() *rbacv1.ClusterRole {
+	nodeObs := &operatorv1alpha1.NodeObservability{}
+	clusterRole := rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterRoleName,
+			Namespace: nodeObs.Namespace,
+			Labels:    labelsForClusterRole(clusterRoleName),
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups:     []string{secGroup},
+				Resources:     []string{secResource},
+				ResourceNames: []string{secResourceName},
+				Verbs:         []string{use},
+			},
+			{
+				Verbs:     []string{get, list},
+				APIGroups: []string{""},
+				Resources: []string{nodes, nodesProxy, pods},
+			},
+			{
+				Verbs:           []string{get},
+				NonResourceURLs: []string{url},
+			},
+		},
+	}
+	return &clusterRole
+}
+
+func makeClusterRoleBinding() *rbacv1.ClusterRoleBinding {
+	nodeObs := &operatorv1alpha1.NodeObservability{}
+	clusterRoleBinding := rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterRoleBindingName,
+			Namespace: nodeObs.Namespace,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      serviceAccount,
+				Name:      serviceAccountName,
+				Namespace: test.TestNamespace,
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			Kind:     clusterRole,
+			Name:     clusterRoleName,
+			APIGroup: apiGroup,
+		},
+	}
+	return &clusterRoleBinding
+}
+func TestDeleteClusterRole(t *testing.T) {
+	testCasesClusterRole := []struct {
+		name            string
+		existingObjects []runtime.Object
+		expectedExist   bool
+		errExpected     bool
+	}{
+		{
+			name:            "Does not exist",
+			existingObjects: []runtime.Object{},
+			errExpected:     false,
+			expectedExist:   false,
+		},
+		{
+			name: "Exists",
+			existingObjects: []runtime.Object{
+				makeClusterRole(),
+			},
+			expectedExist: false,
+			errExpected:   false,
+		},
+	}
+	testCasesClusterRoleBinding := []struct {
+		name            string
+		existingObjects []runtime.Object
+		expectedExist   bool
+		errExpected     bool
+	}{
+		{
+			name:            "Does not exist",
+			existingObjects: []runtime.Object{},
+			errExpected:     false,
+			expectedExist:   false,
+		},
+		{
+			name: "Exists",
+			existingObjects: []runtime.Object{
+				makeClusterRoleBinding(),
+			},
+			expectedExist: false,
+			errExpected:   false,
+		},
+	}
+
+	for _, tc := range testCasesClusterRole {
+		t.Run(tc.name, func(t *testing.T) {
+			cl := fake.NewClientBuilder().WithRuntimeObjects(tc.existingObjects...).Build()
+			r := &NodeObservabilityReconciler{
+				Client: cl,
+				Scheme: test.Scheme,
+				Log:    zap.New(zap.UseDevMode(true)),
+			}
+			nodeObs := testNodeObservability()
+			err := r.deleteClusterRole(nodeObs)
+			if err != nil {
+				if !tc.errExpected {
+					t.Fatalf("unexpected error received: %v", err)
+				}
+				return
+			}
+			if tc.errExpected {
+				t.Fatalf("Error expected but wasn't received")
+			}
+			name := types.NamespacedName{
+				Namespace: nodeObs.Namespace,
 				Name:      clusterRoleName,
-				Namespace: nodeObs.Namespace,
-				Labels:    labelsForClusterRole(clusterRoleName),
-			},
-			Rules: []rbacv1.PolicyRule{
-				{
-					APIGroups:     []string{secGroup},
-					Resources:     []string{secResource},
-					ResourceNames: []string{secResourceName},
-					Verbs:         []string{use},
-				},
-				{
-					Verbs:     []string{get, list},
-					APIGroups: []string{""},
-					Resources: []string{nodes, nodesProxy, pods},
-				},
-				{
-					Verbs:           []string{get},
-					NonResourceURLs: []string{url},
-				},
-			},
-		}
-		return &clusterRole
+			}
+			err = cl.Get(context.TODO(), name, &rbacv1.ClusterRole{})
+			gotExist := true
+			if errors.IsNotFound(err) {
+				gotExist = false
+			} else if !tc.errExpected {
+				t.Fatalf("unexpected error received: %v", err)
+			}
+			if gotExist != tc.expectedExist {
+				t.Errorf("expected clusterrole's exist to be %t, got %t", tc.expectedExist, gotExist)
+			}
+		})
 	}
-	makeClusterRoleBinding := func() *rbacv1.ClusterRoleBinding {
-		nodeObs := &operatorv1alpha1.NodeObservability{}
-		clusterRoleBinding := rbacv1.ClusterRoleBinding{
-			ObjectMeta: metav1.ObjectMeta{
+
+	for _, tc := range testCasesClusterRoleBinding {
+		t.Run(tc.name, func(t *testing.T) {
+			cl := fake.NewClientBuilder().WithRuntimeObjects(tc.existingObjects...).Build()
+			r := &NodeObservabilityReconciler{
+				Client: cl,
+				Scheme: test.Scheme,
+				Log:    zap.New(zap.UseDevMode(true)),
+			}
+			nodeObs := testNodeObservability()
+			err := r.deleteClusterRoleBinding(nodeObs)
+			if err != nil {
+				if !tc.errExpected {
+					t.Fatalf("unexpected error received: %v", err)
+				}
+				return
+			}
+			if tc.errExpected {
+				t.Fatalf("Error expected but wasn't received")
+			}
+			name := types.NamespacedName{
+				Namespace: nodeObs.Namespace,
 				Name:      clusterRoleBindingName,
-				Namespace: nodeObs.Namespace,
-			},
-			Subjects: []rbacv1.Subject{
-				{
-					Kind:      serviceAccount,
-					Name:      serviceAccountName,
-					Namespace: test.TestNamespace,
-				},
-			},
-			RoleRef: rbacv1.RoleRef{
-				Kind:     clusterRole,
-				Name:     clusterRoleName,
-				APIGroup: apiGroup,
-			},
-		}
-		return &clusterRoleBinding
+			}
+			err = cl.Get(context.TODO(), name, &rbacv1.ClusterRoleBinding{})
+			gotExist := true
+			if errors.IsNotFound(err) {
+				gotExist = false
+			} else if !tc.errExpected {
+				t.Fatalf("unexpected error received: %v", err)
+			}
+			if gotExist != tc.expectedExist {
+				t.Errorf("expected clusterrolebinding's exist to be %t, got %t", tc.expectedExist, gotExist)
+			}
+		})
 	}
+}
+
+func TestEnsureClusterRole(t *testing.T) {
+
 	testCasesClusterRole := []struct {
 		name            string
 		existingObjects []runtime.Object
@@ -161,23 +282,14 @@ func TestEnsureClusterRole(t *testing.T) {
 				Log:    zap.New(zap.UseDevMode(true)),
 			}
 			nodeObs := &operatorv1alpha1.NodeObservability{}
-			// ensure secret
-			_, secret, err := r.ensureSecret(context.TODO(), nodeObs)
+			_, serviceAccount, err := r.ensureServiceAccount(context.TODO(), nodeObs)
 			if err != nil {
 				if !tc.errExpected {
 					t.Fatalf("unexpected error received: %v", err)
 				}
 				return
 			}
-			r.Log.Info(fmt.Sprintf("Secret : %s", secret.Name))
-			_, serviceAccount, err := r.ensureServiceAccount(context.TODO(), nodeObs, secret)
-			if err != nil {
-				if !tc.errExpected {
-					t.Fatalf("unexpected error received: %v", err)
-				}
-				return
-			}
-			r.Log.Info(fmt.Sprintf("Secret : %s", serviceAccount.Name))
+			r.Log.Info(fmt.Sprintf("ServiceAccount : %s", serviceAccount.Name))
 
 			gotExist, _, err := r.ensureClusterRoleBinding(context.TODO(), nodeObs, serviceAccount.Name)
 			if err != nil {

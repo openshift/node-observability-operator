@@ -8,7 +8,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
@@ -47,8 +46,6 @@ func (r *NodeObservabilityReconciler) ensureClusterRole(ctx context.Context, nod
 		}
 		return r.currentClusterRole(ctx, nameSpace)
 	}
-	// Set NodeObservability instance as the owner and controller
-	err = ctrl.SetControllerReference(nodeObs, desired, r.Scheme)
 	return true, current, err
 }
 
@@ -122,8 +119,6 @@ func (r *NodeObservabilityReconciler) ensureClusterRoleBinding(ctx context.Conte
 		}
 		return r.currentClusterRoleBinding(ctx, nameSpace)
 	}
-	// Set NodeObservability instance as the owner and controller
-	err = ctrl.SetControllerReference(nodeObs, desired, r.Scheme)
 	return true, current, err
 }
 
@@ -179,4 +174,28 @@ func (r *NodeObservabilityReconciler) desiredClusterRoleBinding(nodeObs *v1alpha
 // labelsForclusterRole returns the labels for selecting the resources
 func labelsForClusterRole(name string) map[string]string {
 	return map[string]string{"scc": "node-observability-scc-role", "role": name}
+}
+
+func (r *NodeObservabilityReconciler) deleteClusterRole(nodeObs *v1alpha1.NodeObservability) error {
+	cr := &rbacv1.ClusterRole{}
+	cr.Name = clusterRoleName
+	if err := r.Client.Delete(context.TODO(), cr); err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+func (r *NodeObservabilityReconciler) deleteClusterRoleBinding(nodeObs *v1alpha1.NodeObservability) error {
+	crb := &rbacv1.ClusterRoleBinding{}
+	crb.Name = clusterRoleBindingName
+	if err := r.Client.Delete(context.TODO(), crb); err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	return nil
 }

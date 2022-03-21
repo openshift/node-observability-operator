@@ -8,7 +8,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
@@ -20,9 +19,9 @@ const (
 // ensureServiceAccount ensures that the serviceaccount exists
 // Returns a Boolean value indicating whether it exists, a pointer to the
 // serviceaccount and an error when relevant
-func (r *NodeObservabilityReconciler) ensureServiceAccount(ctx context.Context, nodeObs *v1alpha1.NodeObservability, secret *corev1.Secret) (bool, *corev1.ServiceAccount, error) {
+func (r *NodeObservabilityReconciler) ensureServiceAccount(ctx context.Context, nodeObs *v1alpha1.NodeObservability) (bool, *corev1.ServiceAccount, error) {
 	nameSpace := types.NamespacedName{Namespace: nodeObs.Namespace, Name: serviceAccountName}
-	desired := r.desiredServiceAccount(nodeObs, secret)
+	desired := r.desiredServiceAccount(nodeObs)
 	exist, current, err := r.currentServiceAccount(ctx, nameSpace)
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to get ServiceAccount: %v", err)
@@ -33,8 +32,6 @@ func (r *NodeObservabilityReconciler) ensureServiceAccount(ctx context.Context, 
 		}
 		return r.currentServiceAccount(ctx, nameSpace)
 	}
-	// Set NodeObservability instance as the owner and controller
-	err = ctrl.SetControllerReference(nodeObs, desired, r.Scheme)
 	return true, current, err
 }
 
@@ -63,16 +60,21 @@ func (r *NodeObservabilityReconciler) createServiceAccount(ctx context.Context, 
 }
 
 // desiredServiceAccount returns a serviceaccount object
-func (r *NodeObservabilityReconciler) desiredServiceAccount(nodeObs *v1alpha1.NodeObservability, secret *corev1.Secret) *corev1.ServiceAccount {
+func (r *NodeObservabilityReconciler) desiredServiceAccount(nodeObs *v1alpha1.NodeObservability) *corev1.ServiceAccount {
 
 	sa := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: nodeObs.Namespace,
 			Name:      serviceAccountName,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					Name:       nodeObs.Name,
+					Kind:       nodeObs.Kind,
+					UID:        nodeObs.UID,
+					APIVersion: nodeObs.APIVersion,
+				},
+			},
 		},
-		Secrets: []corev1.ObjectReference{{
-			Name: secret.Name,
-		}},
 	}
 	return sa
 }

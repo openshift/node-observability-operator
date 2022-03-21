@@ -9,7 +9,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
@@ -39,8 +38,6 @@ func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeO
 		}
 		return r.currentDaemonSet(ctx, nameSpace)
 	}
-	// Set NodeObservability instance as the owner and controller
-	err = ctrl.SetControllerReference(nodeObs, desired, r.Scheme)
 	return true, current, err
 }
 
@@ -80,6 +77,14 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      daemonSetName,
 			Namespace: nodeObs.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					Name:       nodeObs.Name,
+					Kind:       nodeObs.Kind,
+					UID:        nodeObs.UID,
+					APIVersion: nodeObs.APIVersion,
+				},
+			},
 		},
 		Spec: appsv1.DaemonSetSpec{
 			Selector: &metav1.LabelSelector{

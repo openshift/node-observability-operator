@@ -9,7 +9,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
@@ -33,8 +32,6 @@ func (r *NodeObservabilityReconciler) ensureSecurityContextConstraints(ctx conte
 		}
 		return r.currentSecurityContextConstraints(ctx, nodeObs)
 	}
-	// Set NodeObservability instance as the owner and controller
-	err = ctrl.SetControllerReference(nodeObs, desired, r.Scheme)
 	return true, current, err
 }
 
@@ -101,4 +98,16 @@ func (r *NodeObservabilityReconciler) desiredSecurityContextConstraints(nodeObs 
 		Volumes: []securityv1.FSType{securityv1.FSTypeHostPath, securityv1.FSTypeSecret},
 	}
 	return scc
+}
+
+func (r *NodeObservabilityReconciler) deleteSecurityContextConstraints(nodeObs *v1alpha1.NodeObservability) error {
+	scc := &securityv1.SecurityContextConstraints{}
+	scc.Name = sccName
+	if err := r.Client.Delete(context.TODO(), scc); err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	return nil
 }

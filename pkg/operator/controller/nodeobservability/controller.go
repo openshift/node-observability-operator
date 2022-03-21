@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilclock "k8s.io/apimachinery/pkg/util/clock"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -36,6 +37,7 @@ import (
 
 const (
 	terminating = "Terminating"
+	finalizer   = "NodeObservability"
 )
 
 var (
@@ -54,16 +56,18 @@ type NodeObservabilityReconciler struct {
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilities,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilities/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilities/finalizers,verbs=update
-//+kubebuilder:rbac:groups=apps,resources=daemonsets,verbs=list;get;create;watch;
-//+kubebuilder:rbac:groups=core,resources=secrets,verbs=list;get;create;watch;
-//+kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=list;get;create;watch;
-//+kubebuilder:rbac:groups=core,resources=pods,verbs=list;get;
+//+kubebuilder:rbac:groups=apps,namespace=node-observability-operator,resources=daemonsets,verbs=list;get;create;watch;
+//+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=secrets,verbs=list;get;create;watch;delete;
+//+kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=list;get;create;watch;delete;
+//+kubebuilder:rbac:groups=core,resources=pods,verbs=list;get;watch
 //+kubebuilder:rbac:groups=core,resources=nodes,verbs=list;get;
 //+kubebuilder:rbac:groups=core,resources=nodes/proxy,verbs=list;get;
 //+kubebuilder:rbac:urls=/debug/*,verbs=get;
-//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=list;get;create;watch;
-//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,verbs=list;get;create;watch;
-//+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=list;get;create;watch;use;
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=list;get;create;watch;delete;
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,verbs=list;get;create;watch;delete;
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,namespace=node-observability-operator,resources=roles,verbs=list;get;create;watch;delete;
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,namespace=node-observability-operator,resources=rolebindings,verbs=list;get;create;watch;delete;
+//+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=list;get;create;watch;use;delete;
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -91,12 +95,26 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		r.Log.Error(err, "Failed to get NodeObservability")
 		return ctrl.Result{}, err
 	}
+	if nodeObs.DeletionTimestamp != nil {
+		r.Log.Info("NodeObservability resource is going to be deleted. Taking action")
+		if err := r.ensureNodeObservabilityDeleted(ctx, nodeObs); err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed to ensure nodeobservability deletion: %w", err)
+		}
+		return reconcile.Result{}, nil
+
+	}
 	r.Log.Info(fmt.Sprintf("NodeObservability resource found : Namespace %s : Name %s ", req.NamespacedName.Namespace, nodeObs.Name))
+
+	// Set finalizers on the NodeObservability resource
+	updated, err := r.withFinalizers(nodeObs)
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("failed to update NodeObservability with finalizers:, %w", err)
+	}
+	nodeObs = updated
 
 	// For the pods to deploy on each node and execute the crio & kubelet script we need the following
 	// - custom scc (mainly allowHostPathDirPlugin set to true)
 	// - serviceaccount
-	// - secret
 	// - clusterrole (use the scc)
 	// - clusterrolebinding (bind the sa to the role)
 
@@ -109,17 +127,8 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	}
 	r.Log.Info(fmt.Sprintf("SecurityContextConstraints : %s", scc.Name))
 
-	// ensure secret
-	haveSecret, secret, err := r.ensureSecret(ctx, nodeObs)
-	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("failed to ensure secret : %w", err)
-	} else if !haveSecret {
-		return reconcile.Result{}, fmt.Errorf("failed to get secret")
-	}
-	r.Log.Info(fmt.Sprintf("Secret : %s", secret.Name))
-
-	// ensure serviceaccount with the secret
-	haveSA, sa, err := r.ensureServiceAccount(ctx, nodeObs, secret)
+	// ensure serviceaccount
+	haveSA, sa, err := r.ensureServiceAccount(ctx, nodeObs)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to ensure serviceaccount : %w", err)
 	} else if !haveSA {
@@ -194,4 +203,72 @@ func (r *NodeObservabilityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&operatorv1alpha1.NodeObservability{}).
 		Owns(&appsv1.DaemonSet{}).
 		Complete(r)
+}
+
+func hasFinalizer(nodeObs *operatorv1alpha1.NodeObservability) bool {
+	hasFinalizer := false
+	for _, f := range nodeObs.Finalizers {
+		if f == finalizer {
+			hasFinalizer = true
+			break
+		}
+	}
+	return hasFinalizer
+}
+
+func (r *NodeObservabilityReconciler) withoutFinalizers(ctx context.Context, nodeObs *operatorv1alpha1.NodeObservability, finalizerFlag string) (*operatorv1alpha1.NodeObservability, error) {
+	withoutFinalizers := nodeObs.DeepCopy()
+
+	newFinalizers := make([]string, 0)
+	for _, item := range withoutFinalizers.Finalizers {
+		if item == finalizerFlag {
+			continue
+		}
+		newFinalizers = append(newFinalizers, item)
+	}
+	if len(newFinalizers) == 0 {
+		// Sanitize for unit tests so we don't need to distinguish empty array
+		// and nil.
+		newFinalizers = nil
+	}
+	withoutFinalizers.Finalizers = newFinalizers
+	if err := r.Update(ctx, withoutFinalizers); err != nil {
+		return withoutFinalizers, fmt.Errorf("failed to remove finalizers: %w", err)
+	}
+	return withoutFinalizers, nil
+}
+
+func (r *NodeObservabilityReconciler) withFinalizers(nodeObs *operatorv1alpha1.NodeObservability) (*operatorv1alpha1.NodeObservability, error) {
+	withFinalizers := nodeObs.DeepCopy()
+
+	if !hasFinalizer(withFinalizers) {
+		withFinalizers.Finalizers = append(withFinalizers.Finalizers, finalizer)
+	}
+
+	if err := r.Update(context.TODO(), withFinalizers); err != nil {
+		return withFinalizers, fmt.Errorf("failed to update finalizers: %w", err)
+	}
+	return withFinalizers, nil
+}
+
+func (r *NodeObservabilityReconciler) ensureNodeObservabilityDeleted(ctx context.Context, nodeObs *operatorv1alpha1.NodeObservability) error {
+	errs := []error{}
+
+	if err := r.deleteClusterRole(nodeObs); err != nil {
+		errs = append(errs, fmt.Errorf("failed to delete clusterrole : %w", err))
+	}
+	if err := r.deleteClusterRoleBinding(nodeObs); err != nil {
+		errs = append(errs, fmt.Errorf("failed to delete clusterrolebinding : %w", err))
+	}
+	if err := r.deleteSecurityContextConstraints(nodeObs); err != nil {
+		errs = append(errs, fmt.Errorf("failed to delete SCC : %w", err))
+	}
+	if len(errs) == 0 && hasFinalizer(nodeObs) {
+		// Remove the finalizer.
+		_, err := r.withoutFinalizers(ctx, nodeObs, finalizer)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to remove finalizer from nodeobservability %s/%s: %w", nodeObs.Namespace, nodeObs.Name, err))
+		}
+	}
+	return utilerrors.NewAggregate(errs)
 }
