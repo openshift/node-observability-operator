@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	utilclock "k8s.io/apimachinery/pkg/util/clock"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -240,10 +239,6 @@ func (r *NodeObservabilityReconciler) withoutFinalizers(ctx context.Context, nod
 
 func (r *NodeObservabilityReconciler) withFinalizers(nodeObs *operatorv1alpha1.NodeObservability) (*operatorv1alpha1.NodeObservability, error) {
 	withFinalizers := nodeObs.DeepCopy()
-	name := types.NamespacedName{
-		Namespace: withFinalizers.Namespace,
-		Name:      withFinalizers.Name,
-	}
 
 	if !hasFinalizer(withFinalizers) {
 		withFinalizers.Finalizers = append(withFinalizers.Finalizers, finalizer)
@@ -251,9 +246,6 @@ func (r *NodeObservabilityReconciler) withFinalizers(nodeObs *operatorv1alpha1.N
 
 	if err := r.Update(context.TODO(), withFinalizers); err != nil {
 		return withFinalizers, fmt.Errorf("failed to update finalizers: %w", err)
-	}
-	if err := r.Get(context.TODO(), name, withFinalizers); err != nil {
-		return withFinalizers, fmt.Errorf("failed to get nodeobservability after finalizer update: %w", err)
 	}
 	return withFinalizers, nil
 }
