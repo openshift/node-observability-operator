@@ -76,6 +76,7 @@ GOLANGCI_LINT_BIN=$(BIN_DIR)/golangci-lint
 
 GOBUILD_VERSION_ARGS = -ldflags "-X $(PACKAGE)/pkg/version.SHORTCOMMIT=$(SHORTCOMMIT) -X $(PACKAGE)/pkg/version.COMMIT=$(COMMIT)"
 
+E2E_TIMEOUT ?= 1h
 .PHONY: all
 all: build
 
@@ -106,6 +107,18 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
+ACK_GINKGO_DEPRECATIONS=1.16.5
+.PHONY: test-e2e
+test-e2e:
+	go test \
+	$(GOBUILD_VERSION_ARGS) \
+	-timeout $(E2E_TIMEOUT) \
+	-count 1 \
+	-v \
+	-tags e2e \
+	-run "$(TEST)" \
+	./test/e2e
+	
 verify: lint
 	hack/verify-gofmt.sh
 	hack/verify-deps.sh
