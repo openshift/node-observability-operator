@@ -69,14 +69,6 @@ func (r *NodeObservabilityReconciler) desiredSecurityContextConstraints(nodeObs 
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      sccName,
 			Namespace: nodeObs.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					Name:       nodeObs.Name,
-					Kind:       nodeObs.Kind,
-					UID:        nodeObs.UID,
-					APIVersion: nodeObs.APIVersion,
-				},
-			},
 		},
 		AllowPrivilegedContainer: true,
 		AllowHostIPC:             false,

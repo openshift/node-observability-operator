@@ -82,7 +82,6 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	// Fetch the NodeObservability instance
 	nodeObs := &operatorv1alpha1.NodeObservability{}
-	r.Log.Info(fmt.Sprintf("Context:%v\nNamespacedName:%v\n", ctx, req.NamespacedName))
 	err := r.Get(ctx, req.NamespacedName, nodeObs)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -97,7 +96,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{}, err
 	}
 	if nodeObs.DeletionTimestamp != nil {
-		r.Log.Info("NodeObservability resource is going to be delete. Taking action")
+		r.Log.Info("NodeObservability resource is going to be deleted. Taking action")
 		if err := r.ensureNodeObservabilityDeleted(ctx, nodeObs); err != nil {
 			return reconcile.Result{}, fmt.Errorf("failed to ensure nodeobservability deletion: %w", err)
 		}
@@ -205,6 +204,7 @@ func (r *NodeObservabilityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.DaemonSet{}).
 		Complete(r)
 }
+
 func hasFinalizer(nodeObs *operatorv1alpha1.NodeObservability) bool {
 	hasFinalizer := false
 	for _, f := range nodeObs.Finalizers {
@@ -215,6 +215,7 @@ func hasFinalizer(nodeObs *operatorv1alpha1.NodeObservability) bool {
 	}
 	return hasFinalizer
 }
+
 func (r *NodeObservabilityReconciler) withoutFinalizers(ctx context.Context, nodeObs *operatorv1alpha1.NodeObservability, finalizerFlag string) (*operatorv1alpha1.NodeObservability, error) {
 	withoutFinalizers := nodeObs.DeepCopy()
 
@@ -262,13 +263,11 @@ func (r *NodeObservabilityReconciler) ensureNodeObservabilityDeleted(ctx context
 	if err := r.deleteSecurityContextConstraints(nodeObs); err != nil {
 		errs = append(errs, fmt.Errorf("failed to delete SCC : %w", err))
 	}
-	if len(errs) == 0 {
+	if len(errs) == 0 && hasFinalizer(nodeObs) {
 		// Remove the finalizer.
-		if hasFinalizer(nodeObs) {
-			_, err := r.withoutFinalizers(ctx, nodeObs, finalizer)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("failed to remove finalizer from nodeobservability %s/%s: %w", nodeObs.Namespace, nodeObs.Name, err))
-			}
+		_, err := r.withoutFinalizers(ctx, nodeObs, finalizer)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("failed to remove finalizer from nodeobservability %s/%s: %w", nodeObs.Namespace, nodeObs.Name, err))
 		}
 	}
 	return utilerrors.NewAggregate(errs)

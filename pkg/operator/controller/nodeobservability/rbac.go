@@ -81,14 +81,6 @@ func (r *NodeObservabilityReconciler) desiredClusterRole(nodeObs *v1alpha1.NodeO
 			Name:      clusterRoleName,
 			Namespace: nodeObs.Namespace,
 			Labels:    labelsForClusterRole(clusterRoleName),
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					Name:       nodeObs.Name,
-					Kind:       nodeObs.Kind,
-					UID:        nodeObs.UID,
-					APIVersion: nodeObs.APIVersion,
-				},
-			},
 		},
 		Rules: []rbacv1.PolicyRule{
 			{
@@ -162,14 +154,6 @@ func (r *NodeObservabilityReconciler) desiredClusterRoleBinding(nodeObs *v1alpha
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterRoleBindingName,
 			Namespace: nodeObs.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					Name:       nodeObs.Name,
-					Kind:       nodeObs.Kind,
-					UID:        nodeObs.UID,
-					APIVersion: nodeObs.APIVersion,
-				},
-			},
 		},
 		Subjects: []rbacv1.Subject{
 			{
