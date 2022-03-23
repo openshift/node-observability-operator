@@ -18,58 +18,135 @@ package nodeobservabilityruncontroller
 
 import (
 	"context"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"time"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	nodeobservabilityv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
+const (
+	pollingPeriod = time.Second * 5
+)
+
 // NodeObservabilityRunReconciler reconciles a NodeObservabilityRun object
 type NodeObservabilityRunReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	Log       logr.Logger
+	Scheme    *runtime.Scheme
+	Namespace string
+	AgentName string
 }
 
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilityruns,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilityruns/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilityruns/finalizers,verbs=update
+//+kubebuilder:rbac:groups="",resources=endpoints,verbs=get;list;watch
 
 // Reconcile manages NodeObservabilityRuns
-func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
+	r.Log.V(3).Info("Reconcile", "Instance", req.NamespacedName.String())
 	instance := &nodeobservabilityv1alpha1.NodeObservabilityRun{}
-	err := r.Get(ctx, req.NamespacedName, instance)
+	err = r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			return ctrl.Result{}, nil
+			err = nil
+			return
 		}
-		return ctrl.Result{}, err
+		r.Log.Error(err, "failed to get NodeObservabilityRun")
+		return
 	}
 
 	if finished(instance) {
-		return ctrl.Result{}, nil
+		r.Log.V(3).Info("Finished", "Instance", req.NamespacedName.String())
+		return
 	}
 
+	defer func() {
+		errUpdate := r.Status().Update(ctx, instance, &client.UpdateOptions{})
+		if errUpdate != nil {
+			err = utilerrors.NewAggregate([]error{err, errUpdate})
+		}
+	}()
+
 	if inProgress(instance) {
-		err = r.handleInProgress(instance)
+		r.Log.V(3).Info("In Progress", "Instance", req.NamespacedName.String())
+		var requeue bool
+		requeue, err = r.handleInProgress(instance)
+		if requeue {
+			return ctrl.Result{RequeueAfter: pollingPeriod}, err
+		}
+		t := metav1.Now()
+		instance.Status.FinishedTimestamp = &t
+		return
+	}
+
+	targets, err := r.startRun(ctx, instance)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	err = r.startRun(instance)
+	instance.Status.Agents = targets
+	t := metav1.Now()
+	instance.Status.StartTimestamp = &t
 
-	return ctrl.Result{}, err
+	// one cycle takes cca 30s
+	return ctrl.Result{RequeueAfter: time.Second * 30}, err
 }
 
-func (r *NodeObservabilityRunReconciler) handleInProgress(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) error {
-	return nil
+func (r *NodeObservabilityRunReconciler) handleInProgress(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) (requeue bool, err error) {
+	var code int
+	var body string
+	for _, agent := range instance.Status.Agents {
+		body, code, err = httpGetCall(fmt.Sprintf("http://%s:%d/status", agent.IP, agent.Port))
+		if err != nil {
+			r.Log.Error(err, "failed to get agent status", "name", agent.Name, "IP", agent.IP)
+			// TODO: node consistently failing, restart whole process
+			// return
+			continue
+		}
+		if code == http.StatusConflict {
+			r.Log.V(3).Info("handleInProgress - received 409 StatusConflict", "name", agent.Name, "IP", agent.IP, "body", body)
+			requeue = true
+			return
+		}
+	}
+	return
 }
 
-func (r *NodeObservabilityRunReconciler) startRun(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) error {
-	return nil
+func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance *nodeobservabilityv1alpha1.NodeObservabilityRun) ([]nodeobservabilityv1alpha1.AgentNode, error) {
+	r.Log.V(3).Info("startRun", "instance", instance.Name)
+	endps, err := r.getAgentEndpoints(ctx)
+	if err != nil {
+		return nil, err
+	}
+	subset := endps.Subsets[0]
+	port := subset.Ports[0].Port
+
+	targets := []nodeobservabilityv1alpha1.AgentNode{}
+	for _, a := range subset.Addresses {
+		r.Log.V(3).Info("startRun - address for loop", "IP", a.IP)
+		body, code, err := httpGetCall(fmt.Sprintf("http://%s:%d/pprof", a.IP, port))
+		if err != nil || code != 200 {
+			r.Log.Error(err, "failed to start profiling", "removing node from list", a.TargetRef.Name, "IP", a.IP, "http code", code)
+			continue
+		}
+		r.Log.V(3).Info("startRun - address for loop", "code", code, "body", body)
+		targets = append(targets, nodeobservabilityv1alpha1.AgentNode{Name: a.TargetRef.Name, IP: a.IP, Port: port})
+	}
+
+	return targets, nil
 }
 
 func finished(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) bool {
@@ -86,6 +163,39 @@ func inProgress(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) bool {
 		return true
 	}
 	return false
+}
+
+func httpGetCall(url string) (string, int, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", 0, err
+	}
+	client := http.Client{Timeout: time.Second * 10}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", 0, err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", 0, err
+	}
+	return string(body), resp.StatusCode, nil
+}
+
+func (r *NodeObservabilityRunReconciler) getAgentEndpoints(ctx context.Context) (*corev1.Endpoints, error) {
+	endpoints := &corev1.Endpoints{}
+	if err := r.Get(ctx, types.NamespacedName{Name: r.AgentName, Namespace: r.Namespace}, endpoints); err != nil {
+		return nil, err
+	}
+	if len(endpoints.Subsets) != 1 {
+		return nil, fmt.Errorf("wrong Endpoints.Subsets length, expected 1 item")
+	}
+	if len(endpoints.Subsets[0].Ports) != 1 {
+		return nil, fmt.Errorf("wrong Endpoints.Subsets.Ports length, expected 1 item")
+	}
+	return endpoints, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
