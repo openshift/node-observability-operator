@@ -134,9 +134,11 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&machineconfigcontroller.MachineconfigReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Log:    ctrl.Log.WithName("controller").WithName("MachineConfig"),
+		Client:         mgr.GetClient(),
+		Scheme:         mgr.GetScheme(),
+		Log:            ctrl.Log.WithName("controller").WithName("MachineConfig"),
+		EventRecorder:  mgr.GetEventRecorderFor("node-observability"),
+		PrevSyncChange: make(map[string]machineconfigcontroller.PrevSyncData),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Machineconfig")
 		os.Exit(1)

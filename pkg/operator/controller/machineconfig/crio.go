@@ -34,15 +34,7 @@ import (
 
 const (
 	// CrioProfilingConfigName is the name CRI-O MachineConfig CR
-<<<<<<< HEAD
-<<<<<<< HEAD
 	CrioProfilingConfigName = "99-crio-profiling"
-=======
-	CrioProfilingConfigName = "crio-profiling"
->>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
-=======
-	CrioProfilingConfigName = "crio-profiling"
->>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
 
 	// CrioUnixSocketConfFile is the name of the CRI-O config file
 	CrioUnixSocketConfFile = "10-mco-profile-unix-socket.conf"
@@ -53,11 +45,6 @@ const (
 Environment="ENABLE_PROFILE_UNIX_SOCKET=true"`
 )
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-=======
->>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
 var (
 	// CrioProfileConfigLabels is for storing the labels of the resource
 	CrioProfileConfigLabels = map[string]string{
@@ -65,10 +52,6 @@ var (
 	}
 )
 
-<<<<<<< HEAD
->>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
-=======
->>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
 // ensureCrioProfConfigExists checks if CRI-O MachineConfig CR for
 // enabling profiling exists, if not creates the resource
 func (r *MachineconfigReconciler) ensureCrioProfConfigExists(ctx context.Context) (*mcv1.MachineConfig, bool, error) {
@@ -78,8 +61,6 @@ func (r *MachineconfigReconciler) ensureCrioProfConfigExists(ctx context.Context
 		return nil, false, err
 	}
 	if !exist {
-<<<<<<< HEAD
-<<<<<<< HEAD
 		if err := r.createCrioProfileConfig(ctx); err != nil {
 			return nil, false, err
 		}
@@ -87,21 +68,6 @@ func (r *MachineconfigReconciler) ensureCrioProfConfigExists(ctx context.Context
 		criomc, exist, err = r.fetchCrioProfileConfig(ctx, namespace)
 		if err != nil || !exist {
 			return nil, false, fmt.Errorf("failed to fetch just created crio config: %w", err)
-=======
-=======
->>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
-		if err := r.createCrioProfileConfig(ctx, namespace); err != nil {
-			return nil, false, err
-		}
-		ctrlruntime.SetControllerReference(r.CtrlConfig, criomc, r.Scheme)
-
-		criomc, exist, err = r.fetchCrioProfileConfig(ctx, namespace)
-		if err != nil || !exist {
-			return nil, false, fmt.Errorf("failed to fetch just created crio config: %v", err)
-<<<<<<< HEAD
->>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
-=======
->>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
 		}
 
 		return criomc, true, nil
@@ -109,8 +75,6 @@ func (r *MachineconfigReconciler) ensureCrioProfConfigExists(ctx context.Context
 	return criomc, false, nil
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 // ensureCrioProfConfigNotExists checks if CRI-O MachineConfig CR for
 // enabling profiling exists, if exists delete the resource
 func (r *MachineconfigReconciler) ensureCrioProfConfigNotExists(ctx context.Context) (bool, error) {
@@ -134,10 +98,6 @@ func (r *MachineconfigReconciler) ensureCrioProfConfigNotExists(ctx context.Cont
 	return false, nil
 }
 
-=======
->>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
-=======
->>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
 // fetchCrioProfileConfig is for fetching the CRI-O MC CR created
 // by this controller for enabling profiling
 func (r *MachineconfigReconciler) fetchCrioProfileConfig(ctx context.Context, namespace types.NamespacedName) (*mcv1.MachineConfig, bool, error) {
@@ -153,15 +113,7 @@ func (r *MachineconfigReconciler) fetchCrioProfileConfig(ctx context.Context, na
 }
 
 // createCrioProfileConfig is for creating CRI-O MC CR
-<<<<<<< HEAD
-<<<<<<< HEAD
 func (r *MachineconfigReconciler) createCrioProfileConfig(ctx context.Context) error {
-=======
-func (r *MachineconfigReconciler) createCrioProfileConfig(ctx context.Context, namespace types.NamespacedName) error {
->>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
-=======
-func (r *MachineconfigReconciler) createCrioProfileConfig(ctx context.Context, namespace types.NamespacedName) error {
->>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
 	criomc, err := r.getCrioConfig()
 	if err != nil {
 		return err
@@ -171,8 +123,6 @@ func (r *MachineconfigReconciler) createCrioProfileConfig(ctx context.Context, n
 		return fmt.Errorf("failed to create crio profiling config %s/%s: %w", criomc.Namespace, criomc.Name, err)
 	}
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 	ctrlruntime.SetControllerReference(r.CtrlConfig, criomc, r.Scheme)
 	r.Log.Info("successfully created CRI-O machine config(%s) for enabling profiling", CrioProfilingConfigName)
 	return nil
@@ -185,12 +135,6 @@ func (r *MachineconfigReconciler) deleteCrioProfileConfig(ctx context.Context, c
 	}
 
 	r.Log.Info("successfully removed CRI-O machine config(%s) to disable profiling", CrioProfilingConfigName)
-=======
-	r.Log.Info("successfully created CRI-O machine config(%s) for enabling profiling in namespace %s", CrioProfilingConfigName, namespace.Namespace)
->>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
-=======
-	r.Log.Info("successfully created CRI-O machine config(%s) for enabling profiling in namespace %s", CrioProfilingConfigName, namespace.Namespace)
->>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
 	return nil
 }
 
@@ -225,15 +169,7 @@ func getCrioIgnitionConfig() igntypes.Config {
 func convertIgnConfToRawExt(config igntypes.Config) (k8sruntime.RawExtension, error) {
 	data, err := json.Marshal(config)
 	if err != nil {
-<<<<<<< HEAD
-<<<<<<< HEAD
 		return k8sruntime.RawExtension{}, fmt.Errorf("failed to marshal crio ignition config: %w", err)
-=======
-		return k8sruntime.RawExtension{}, fmt.Errorf("failed to marshal crio ignition config: %v", err)
->>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
-=======
-		return k8sruntime.RawExtension{}, fmt.Errorf("failed to marshal crio ignition config: %v", err)
->>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
 	}
 
 	return k8sruntime.RawExtension{
@@ -251,8 +187,6 @@ func (r *MachineconfigReconciler) getCrioConfig() (*mcv1.MachineConfig, error) {
 	}
 
 	return &mcv1.MachineConfig{
-<<<<<<< HEAD
-<<<<<<< HEAD
 		TypeMeta: metav1.TypeMeta{
 			Kind:       MCKind,
 			APIVersion: MCAPIVersion,
@@ -260,16 +194,6 @@ func (r *MachineconfigReconciler) getCrioConfig() (*mcv1.MachineConfig, error) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   CrioProfilingConfigName,
 			Labels: ProfilingMCSelectorLabels,
-=======
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   CrioProfilingConfigName,
-			Labels: CrioProfileConfigLabels,
->>>>>>> 108b934... Create MachineConfig CR for enabling CRI-O profiling
-=======
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   CrioProfilingConfigName,
-			Labels: CrioProfileConfigLabels,
->>>>>>> 825ab6c... Create MachineConfig CR for enabling CRI-O profiling
 		},
 		Spec: mcv1.MachineConfigSpec{
 			Config: rawExt,
