@@ -28,7 +28,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    operators.operatorframework.io/builder: operator-sdk-v1.15.0+git
+    operators.operatorframework.io/builder: operator-sdk-v1.14.0+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
   name: node-observability-operator.v0.0.1
   namespace: placeholder
@@ -52,8 +52,8 @@ spec:
     for OpenShift customers.
   displayName: Node Observability Operator
   icon:
-  - base64data: "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"
-    mediatype: "image/png"
+  - base64data: ""
+    mediatype: ""
   install:
     spec:
       clusterPermissions:
@@ -62,6 +62,14 @@ spec:
           - /debug/*
           verbs:
           - get
+        - apiGroups:
+          - ""
+          resources:
+          - endpoints
+          verbs:
+          - get
+          - list
+          - watch
         - apiGroups:
           - ""
           resources:
@@ -224,7 +232,7 @@ spec:
                 - --leader-elect
                 command:
                 - /manager
-                image: quay.io/luzuccar/node-observability-operator:v0.0.1
+                image: quay.io/openshift/node-observability-operator:v0.0.1
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -337,10 +345,9 @@ spec:
   keywords:
   - node-observability-operator
   links:
-  - name: Source code
+  - name: Source Code
     url: https://github.com/openshift/node-observability-operator
   maturity: alpha
   provider:
     name: Red Hat, Inc.
   version: 0.0.1
-  minKubeVersion: "1.22.0"
