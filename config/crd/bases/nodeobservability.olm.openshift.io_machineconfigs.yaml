@@ -35,6 +35,15 @@ spec:
             type: object
           spec:
             description: MachineconfigSpec defines the desired state of Machineconfig
+            properties:
+              enableCrioProfiling:
+                description: EnableCrioProfiling is for enabling profiling of CRI-O
+                  service
+                type: boolean
+              enableKubeletProfiling:
+                description: EnableKubeletProfiling is for enabling profiling of CRI-O
+                  service
+                type: boolean
             type: object
           status:
             description: MachineconfigStatus defines the observed state of Machineconfig
