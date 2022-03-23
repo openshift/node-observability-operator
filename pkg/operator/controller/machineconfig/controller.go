@@ -106,7 +106,7 @@ func (r *MachineconfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		r.Log.Error(err, "failed to fetch MachineConfig")
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, err
 	}
-	r.Log.Info(fmt.Sprintf("MachineConfig resource found : Namespace %s : Name %s ", req.NamespacedName.Namespace, req.NamespacedName.Name))
+	r.Log.Info("MachineConfig resource found", "namespace", req.NamespacedName.Namespace, "name", req.NamespacedName.Name)
 
 	if _, err := r.ensureProfilingMCPExists(ctx); err != nil {
 		r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeWarning, "CreateConfigFailed", "failed to create %s mcp", ProfilingMCPName)
