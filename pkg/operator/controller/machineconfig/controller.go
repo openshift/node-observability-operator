@@ -47,6 +47,8 @@ type MachineconfigReconciler struct {
 	PrevSyncChange map[string]PrevSyncData
 }
 
+// PrevSyncData is for storing the config changes made in
+// previous reconciliation and the config used.
 type PrevSyncData struct {
 	action string
 	config interface{}
@@ -129,6 +131,8 @@ func (r *MachineconfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
+// ensureProfilingMCPExists is for creating the MCP required for
+// tracking profiling machine configs
 func (r *MachineconfigReconciler) ensureProfilingMCPExists(ctx context.Context) (*mcv1.MachineConfigPool, error) {
 
 	namespace := types.NamespacedName{Namespace: r.CtrlConfig.Namespace, Name: ProfilingMCPName}
@@ -153,6 +157,7 @@ func (r *MachineconfigReconciler) ensureProfilingMCPExists(ctx context.Context) 
 	return mcp, nil
 }
 
+// fetchProfilingMCP is for fetching the profiling MCP created by this controller
 func (r *MachineconfigReconciler) fetchProfilingMCP(ctx context.Context, namespace types.NamespacedName) (*mcv1.MachineConfigPool, bool, error) {
 	mcp := &mcv1.MachineConfigPool{}
 
@@ -165,6 +170,8 @@ func (r *MachineconfigReconciler) fetchProfilingMCP(ctx context.Context, namespa
 	return mcp, true, nil
 }
 
+// getProfilingMCP is for obtaining the tailored profiling MCP
+// required for creation
 func getProfilingMCP() *mcv1.MachineConfigPool {
 	nodeSelectorLabels := map[string]string{
 		"node-role.kubernetes.io/worker": "",
@@ -203,6 +210,7 @@ func getProfilingMCP() *mcv1.MachineConfigPool {
 	}
 }
 
+// createProfilingMCP is for creating the required profiling MCP
 func (r *MachineconfigReconciler) createProfilingMCP(ctx context.Context) error {
 	mcp := getProfilingMCP()
 
@@ -225,7 +233,7 @@ func (r *MachineconfigReconciler) checkProfConf(ctx context.Context) error {
 		if err != nil {
 			errored = true
 			r.Log.Error(err, "failed to enable crio profiling")
-			errs = fmt.Errorf("%w: %s", errs, err.Error())
+			errs = fmt.Errorf("%w: %s", errs, err)
 		}
 		if created {
 			r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "CreateConfig", "successfully created crio machine config")
@@ -239,7 +247,7 @@ func (r *MachineconfigReconciler) checkProfConf(ctx context.Context) error {
 		if err != nil {
 			errored = true
 			r.Log.Error(err, "failed to disable crio profiling")
-			errs = fmt.Errorf("%w: %s", errs, err.Error())
+			errs = fmt.Errorf("%w: %s", errs, err)
 		}
 		if deleted {
 			r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "DeleteConfig", "successfully deleted crio machine config")
@@ -254,7 +262,7 @@ func (r *MachineconfigReconciler) checkProfConf(ctx context.Context) error {
 		if err != nil {
 			errored = true
 			r.Log.Error(err, "failed to enable kubelet profiling")
-			errs = fmt.Errorf("%w: %s", errs, err.Error())
+			errs = fmt.Errorf("%w: %s", errs, err)
 		}
 		if created {
 			r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "CreateConfig", "successfully created kubelet config")
@@ -268,7 +276,7 @@ func (r *MachineconfigReconciler) checkProfConf(ctx context.Context) error {
 		if err != nil {
 			errored = true
 			r.Log.Error(err, "failed to disable kubelet profiling")
-			errs = fmt.Errorf("%w: %s", errs, err.Error())
+			errs = fmt.Errorf("%w: %s", errs, err)
 		}
 		if deleted {
 			r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "DeleteConfig", "successfully deleted kubelet config")
@@ -295,10 +303,9 @@ func (r *MachineconfigReconciler) checkMCPUpdateStatus(ctx context.Context, req 
 
 	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdating) &&
 		r.CtrlConfig.Status.UpdateStatus.InProgress == "false" {
-		r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "ConfigUpdate", "config update still under progress")
 		r.Log.Info("config update under progress")
 		r.CtrlConfig.Status.UpdateStatus.InProgress = corev1.ConditionTrue
-		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+		return ctrl.Result{RequeueAfter: 3 * time.Minute}, nil
 	}
 
 	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdated) &&
@@ -319,12 +326,14 @@ func (r *MachineconfigReconciler) checkMCPUpdateStatus(ctx context.Context, req 
 				fmt.Errorf("%d machines are in degraded state, will reconcile in 15s", mcp.Status.DegradedMachineCount)
 		}
 		r.Log.Info("waiting for update to finish on all machines", "MachineConfigPool", ProfilingMCPName)
-		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+		return ctrl.Result{RequeueAfter: 3 * time.Minute}, nil
 	}
 
 	return ctrl.Result{}, nil
 }
 
+// revertPrevSyncChanges is for restoring the cluster state to
+// as it was, before the changes made in previous reconciliation if any
 func (r *MachineconfigReconciler) revertPrevSyncChanges(ctx context.Context) error {
 	if len(r.PrevSyncChange) == 0 {
 		r.Log.Info("%s MCP has machines in degarded state, no changes made by the controller")
