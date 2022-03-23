@@ -25,6 +25,7 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -36,7 +37,7 @@ import (
 )
 
 const (
-	pollingPeriod = time.Second * 2
+	pollingPeriod = time.Second * 5
 )
 
 // NodeObservabilityRunReconciler reconciles a NodeObservabilityRun object
@@ -55,25 +56,32 @@ type NodeObservabilityRunReconciler struct {
 
 // Reconcile manages NodeObservabilityRuns
 func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
+	r.Log.V(3).Info("Reconcile", "Instance", req.NamespacedName.String())
 	instance := &nodeobservabilityv1alpha1.NodeObservabilityRun{}
 	err = r.Get(ctx, req.NamespacedName, instance)
-	if client.IgnoreNotFound(err) != nil {
+	if err != nil {
+		if errors.IsNotFound(err) {
+			err = nil
+			return
+		}
 		r.Log.Error(err, "failed to get NodeObservabilityRun")
 		return
 	}
 
 	if finished(instance) {
+		r.Log.V(3).Info("Finished", "Instance", req.NamespacedName.String())
 		return
 	}
 
 	defer func() {
-		errUpdate := r.Status().Update(ctx, instance, nil)
+		errUpdate := r.Status().Update(ctx, instance, &client.UpdateOptions{})
 		if errUpdate != nil {
 			err = utilerrors.NewAggregate([]error{err, errUpdate})
 		}
 	}()
 
 	if inProgress(instance) {
+		r.Log.V(3).Info("In Progress", "Instance", req.NamespacedName.String())
 		var requeue bool
 		requeue, err = r.handleInProgress(instance)
 		if requeue {
@@ -99,18 +107,21 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 
 func (r *NodeObservabilityRunReconciler) handleInProgress(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) (requeue bool, err error) {
 	var code int
+	var body string
 	for _, agent := range instance.Status.Agents {
-		_, code, err = httpGetCall(fmt.Sprintf("http://%s:%d/status", agent.IP, agent.Port))
+		body, code, err = httpGetCall(fmt.Sprintf("http://%s:%d/status", agent.IP, agent.Port))
 		if err != nil {
+			r.Log.Error(err, "failed to get agent status", "name", agent.Name, "IP", agent.IP)
 			// TODO: node consistently failing, restart whole process
-			return
+			// return
+			continue
 		}
 		if code == http.StatusConflict {
+			r.Log.V(3).Info("handleInProgress - received 409 StatusConflict", "name", agent.Name, "IP", agent.IP, "body", body)
 			requeue = true
 			return
 		}
 	}
-
 	return
 }
 
