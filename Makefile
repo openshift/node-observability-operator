@@ -28,15 +28,19 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 # This variable is used to construct full image tags for bundle and catalog images.
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
-# github.com/golang-nodeobservability-operator-bundle:$VERSION and github.com/golang-nodeobservability-operator-catalog:$VERSION.
+# github.com/node-observability-operator-bundle:$VERSION and github.com/node-observability-operator-catalog:$VERSION.
 IMAGE_TAG_BASE ?= openshift.io/node-observability-operator
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
 BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
 
+# INDEX_IMG defines the image:tag for the index build
+INDEX_IMG ?= $(IMAGE_TAG_BASE)-index:v$(VERSION)
+
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= controller:v$(VERSION)
+
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.23
 
@@ -59,13 +63,6 @@ endif
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
-# include machinery build
-#include $(addprefix ./vendor/github.com/openshift/build-machinery-go/make/, \
-#	golang.mk \
-#	targets/openshift/images.mk \
-#	targets/openshift/deps-gomod.mk \
-#)
-
 PACKAGE=github.com/openshift/node-observability-operator
 MAIN_PACKAGE=$(PACKAGE)/cmd/node-observability-operator
 
@@ -77,6 +74,14 @@ GOLANGCI_LINT_BIN=$(BIN_DIR)/golangci-lint
 GOBUILD_VERSION_ARGS = -ldflags "-X $(PACKAGE)/pkg/version.SHORTCOMMIT=$(SHORTCOMMIT) -X $(PACKAGE)/pkg/version.COMMIT=$(COMMIT)"
 
 E2E_TIMEOUT ?= 1h
+
+BUNDLE_DIR := bundle
+BUNDLE_MANIFEST_DIR := $(BUNDLE_DIR)/manifests
+
+OPERATOR_SDK_BIN=$(BIN_DIR)/operator-sdk
+
+AUTH ?=
+
 .PHONY: all
 all: build
 
@@ -159,7 +164,7 @@ container-build: test ## Build image with the manager.
 
 .PHONY: container-push
 container-push: ## Push image with the manager.
-	${CONTAINER_ENGINE} push ${IMG}
+	${CONTAINER_ENGINE} push ${IMG} $(AUTH)
 
 ##@ Deployment
 
@@ -213,20 +218,53 @@ rm -rf $$TMP_DIR ;\
 }
 endef
 
+.SILENT: olm-manifests
+.PHONY: olm-manifests
+# TODO: try to replace this rule with 'operator-sdk generate bundle'
+# A little helper command to generate the manifests of OLM bundle from the files in config/.
+# The idea is that config/ is the main directory for the manifests and OLM manifests are secondary
+# and is supposed to be updated afterwards.
+# Note that ClusterServiceVersion is not touched as is supposed to be verified manually.
+# The install strategy of ClusterServiceVersion contains the deployment which is not copied over from config/ either.
+olm-manifests: manifests
+	cp -f config/rbac/role.yaml $(BUNDLE_MANIFEST_DIR)/node-observability-operator_rbac.authorization.k8s.io_v1_clusterrole.yaml
+	cp -f config/rbac/role_binding.yaml $(BUNDLE_MANIFEST_DIR)/node-observability-operator_rbac.authorization.k8s.io_v1_clusterrolebinding.yaml
+	cp -f config/rbac/auth_proxy_role.yaml $(BUNDLE_MANIFEST_DIR)/node-observability-operator-auth-proxy_rbac.authorization.k8s.io_v1_clusterrole.yaml
+	cp -f config/rbac/auth_proxy_role_binding.yaml $(BUNDLE_MANIFEST_DIR)/node-observability-operator-auth-proxy_rbac.authorization.k8s.io_v1_clusterrolebinding.yaml
+	cp -f config/rbac/auth_proxy_service.yaml $(BUNDLE_MANIFEST_DIR)/node-observability-operator-auth-proxy_v1_service.yaml
+	# opm is unable to find CRD if the standard yaml --- is at the top
+	sed -i -e '/^---$$/d' -e '/^$$/d' $(BUNDLE_MANIFEST_DIR)/*.yaml
+	# as per the recommendation of 'operator-sdk bundle validate' command
+	# doing the best (yaml regexp is far from perfect) to strip the metadata.namespace from the bundle manifests
+	# trying to not touch cluster level resources as they don't have the namespace
+	for f in $$(\grep -l 'kind: *\(Service\|ConfigMap\|Secret\|Role\) *$$' $(BUNDLE_MANIFEST_DIR)/*.yaml); do sed -i '/namespace:/d' $${f};done
+
 .PHONY: bundle
 bundle: manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
-	operator-sdk generate kustomize manifests -q
+	$(OPERATOR_SDK_BIN) generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/manifests | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
-	operator-sdk bundle validate ./bundle
+	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK_BIN) generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
+	$(OPERATOR_SDK_BIN) bundle validate ./bundle
+
+.PHONY: validate-bundle
+validate-bundle: $(OPERATOR_SDK_BIN)
+	$(OPERATOR_SDK_BIN) bundle validate $(BUNDLE_DIR) --select-optional suite=operatorframework
 
 .PHONY: bundle-build
-bundle-build: ## Build the bundle image.
-	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+bundle-build: olm-manifests
+	$(CONTAINER_ENGINE) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
 bundle-push: ## Push the bundle image.
-	$(MAKE) docker-push IMG=$(BUNDLE_IMG)
+	$(MAKE) container-push IMG=$(BUNDLE_IMG)
+
+.PHONY: index-image-build
+index-image-build: opm
+	$(OPM) index add -c $(CONTAINER_ENGINE) --bundles ${BUNDLE_IMG} --tag ${INDEX_IMG}
+
+.PHONY: index-image-push
+index-image-push:
+	$(CONTAINER_ENGINE) push ${INDEX_IMG}
 
 .PHONY: opm
 OPM = ./bin/opm
@@ -267,7 +305,7 @@ catalog-build: opm ## Build a catalog image.
 # Push the catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
-	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+	$(MAKE) container-push IMG=$(CATALOG_IMG)
 
 
 .PHONY: lint

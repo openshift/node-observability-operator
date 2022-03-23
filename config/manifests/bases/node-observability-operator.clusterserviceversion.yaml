@@ -1,0 +1,52 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: node-observability-operator.v0.0.1
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: NodeObservability is the Schema for the nodeobservabilities API
+      displayName: Node Observability
+      kind: NodeObservability
+      name: nodeobservabilities.nodeobservability.olm.openshift.io
+      version: v1alpha1
+    - description: NodeObservabilityRun is the Schema for the nodeobservabilityruns
+        API
+      displayName: Node Observability Run
+      kind: NodeObservabilityRun
+      name: nodeobservabilityruns.nodeobservability.olm.openshift.io
+      version: v1alpha1
+  description: An Operator that will be able to gather debugging/profiling data over
+    a custom period of time which would be helpful to troubleshoot and resolve issues
+    for OpenShift customers.
+  displayName: Node Observability Operator
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: true
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: false
+    type: AllNamespaces
+  keywords:
+  - node-observability-operator
+  links:
+  - name: Source Code
+    url: https://github.com/openshift/node-observability-operator
+  maturity: alpha
+  provider:
+    name: Red Hat, Inc.
+  version: 0.0.1
