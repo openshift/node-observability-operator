@@ -3,4 +3,5 @@ kind: Machineconfig
 metadata:
   name: machineconfig-sample
 spec:
-  # TODO(user): Add fields here
+  enableCrioProfiling: true
+  enableKubeletProfiling: true
