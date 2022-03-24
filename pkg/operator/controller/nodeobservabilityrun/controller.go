@@ -93,14 +93,10 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 		return
 	}
 
-	targets, err := r.startRun(ctx, instance)
+	err = r.startRun(ctx, instance)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
-	instance.Status.Agents = targets
-	t := metav1.Now()
-	instance.Status.StartTimestamp = &t
 
 	// one cycle takes cca 30s
 	return ctrl.Result{RequeueAfter: time.Second * 30}, err
@@ -110,7 +106,7 @@ func (r *NodeObservabilityRunReconciler) handleInProgress(instance *nodeobservab
 	var errors []error
 	for _, agent := range instance.Status.Agents {
 		url := fmt.Sprintf("http://%s:%d/status", agent.IP, agent.Port)
-		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityErrorRetriable, httpGetCall(url))
+		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityRunErrorRetriable, httpGetCall(url))
 		if err != nil {
 			r.Log.Error(err, "failed to get agent status", "name", agent.Name, "IP", agent.IP)
 			errors = append(errors, err)
@@ -121,30 +117,39 @@ func (r *NodeObservabilityRunReconciler) handleInProgress(instance *nodeobservab
 	return false, utilerrors.NewAggregate(errors)
 }
 
-func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance *nodeobservabilityv1alpha1.NodeObservabilityRun) ([]nodeobservabilityv1alpha1.AgentNode, error) {
+func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance *nodeobservabilityv1alpha1.NodeObservabilityRun) error {
 	r.Log.V(3).Info("startRun", "instance", instance.Name)
 	endps, err := r.getAgentEndpoints(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	subset := endps.Subsets[0]
 	port := subset.Ports[0].Port
 
 	targets := []nodeobservabilityv1alpha1.AgentNode{}
+	failedTargets := []nodeobservabilityv1alpha1.AgentNode{}
+	for _, a := range subset.NotReadyAddresses {
+		failedTargets = append(failedTargets, nodeobservabilityv1alpha1.AgentNode{Name: a.TargetRef.Name, IP: a.IP, Port: port})
+	}
+
 	for _, a := range subset.Addresses {
 		r.Log.V(3).Info("startRun - address for loop", "IP", a.IP)
 		url := fmt.Sprintf("http://%s:%d/pprof", a.IP, port)
-		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityErrorRetriable, httpGetCall(url))
+		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityRunErrorRetriable, httpGetCall(url))
 		if err != nil {
 			r.Log.Error(err, "failed to start profiling", "removing node from list", a.TargetRef.Name, "IP", a.IP)
-			// TODO: node consistently failing, restart whole process
+			failedTargets = append(failedTargets, nodeobservabilityv1alpha1.AgentNode{Name: a.TargetRef.Name, IP: a.IP, Port: port})
 			continue
 		}
 		r.Log.V(3).Info("startRun - address for loop", "code")
 		targets = append(targets, nodeobservabilityv1alpha1.AgentNode{Name: a.TargetRef.Name, IP: a.IP, Port: port})
 	}
 
-	return targets, nil
+	t := metav1.Now()
+	instance.Status.StartTimestamp = &t
+	instance.Status.Agents = targets
+	instance.Status.FailedAgents = failedTargets
+	return nil
 }
 
 func finished(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) bool {
@@ -181,7 +186,7 @@ func httpGetCall(url string) func() error {
 			return err
 		}
 		if resp.StatusCode != 200 {
-			return NodeObservabilityError{HttpCode: resp.StatusCode, Msg: string(body)}
+			return NodeObservabilityRunError{HttpCode: resp.StatusCode, Msg: string(body)}
 		}
 		return nil
 	}
