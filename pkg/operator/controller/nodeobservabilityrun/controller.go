@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -105,24 +106,19 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 	return ctrl.Result{RequeueAfter: time.Second * 30}, err
 }
 
-func (r *NodeObservabilityRunReconciler) handleInProgress(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) (requeue bool, err error) {
-	var code int
-	var body string
+func (r *NodeObservabilityRunReconciler) handleInProgress(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) (bool, error) {
+	var errors []error
 	for _, agent := range instance.Status.Agents {
-		body, code, err = httpGetCall(fmt.Sprintf("http://%s:%d/status", agent.IP, agent.Port))
+		url := fmt.Sprintf("http://%s:%d/status", agent.IP, agent.Port)
+		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityErrorRetriable, httpGetCall(url))
 		if err != nil {
 			r.Log.Error(err, "failed to get agent status", "name", agent.Name, "IP", agent.IP)
+			errors = append(errors, err)
 			// TODO: node consistently failing, restart whole process
-			// return
 			continue
 		}
-		if code == http.StatusConflict {
-			r.Log.V(3).Info("handleInProgress - received 409 StatusConflict", "name", agent.Name, "IP", agent.IP, "body", body)
-			requeue = true
-			return
-		}
 	}
-	return
+	return false, utilerrors.NewAggregate(errors)
 }
 
 func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance *nodeobservabilityv1alpha1.NodeObservabilityRun) ([]nodeobservabilityv1alpha1.AgentNode, error) {
@@ -137,12 +133,14 @@ func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance 
 	targets := []nodeobservabilityv1alpha1.AgentNode{}
 	for _, a := range subset.Addresses {
 		r.Log.V(3).Info("startRun - address for loop", "IP", a.IP)
-		body, code, err := httpGetCall(fmt.Sprintf("http://%s:%d/pprof", a.IP, port))
-		if err != nil || code != 200 {
-			r.Log.Error(err, "failed to start profiling", "removing node from list", a.TargetRef.Name, "IP", a.IP, "http code", code)
+		url := fmt.Sprintf("http://%s:%d/pprof", a.IP, port)
+		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityErrorRetriable, httpGetCall(url))
+		if err != nil {
+			r.Log.Error(err, "failed to start profiling", "removing node from list", a.TargetRef.Name, "IP", a.IP)
+			// TODO: node consistently failing, restart whole process
 			continue
 		}
-		r.Log.V(3).Info("startRun - address for loop", "code", code, "body", body)
+		r.Log.V(3).Info("startRun - address for loop", "code")
 		targets = append(targets, nodeobservabilityv1alpha1.AgentNode{Name: a.TargetRef.Name, IP: a.IP, Port: port})
 	}
 
@@ -165,23 +163,28 @@ func inProgress(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) bool {
 	return false
 }
 
-func httpGetCall(url string) (string, int, error) {
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return "", 0, err
-	}
-	client := http.Client{Timeout: time.Second * 10}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", 0, err
-	}
-	defer resp.Body.Close()
+func httpGetCall(url string) func() error {
+	return func() error {
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return err
+		}
+		client := http.Client{Timeout: time.Second * 10}
+		resp, err := client.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", 0, err
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode != 200 {
+			return NodeObservabilityError{HttpCode: resp.StatusCode, Msg: string(body)}
+		}
+		return nil
 	}
-	return string(body), resp.StatusCode, nil
 }
 
 func (r *NodeObservabilityRunReconciler) getAgentEndpoints(ctx context.Context) (*corev1.Endpoints, error) {
