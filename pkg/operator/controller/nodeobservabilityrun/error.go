@@ -2,17 +2,17 @@ package nodeobservabilityruncontroller
 
 import "fmt"
 
-type NodeObservabilityError struct {
+type NodeObservabilityRunError struct {
 	HttpCode int
 	Msg      string
 }
 
-func (e NodeObservabilityError) Error() string {
+func (e NodeObservabilityRunError) Error() string {
 	return fmt.Sprintf("Code: %d, Error: %s", e.HttpCode, e.Msg)
 }
 
-func IsNodeObservabilityErrorRetriable(err error) bool {
-	e, ok := err.(NodeObservabilityError)
+func IsNodeObservabilityRunErrorRetriable(err error) bool {
+	e, ok := err.(NodeObservabilityRunError)
 	if !ok {
 		return false
 	}
