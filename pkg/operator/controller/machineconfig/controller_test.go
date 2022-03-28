@@ -161,7 +161,6 @@ func TestCheckProfConf(t *testing.T) {
 			reqObjs: []runtime.Object{nodemc, criomc},
 			preReq: func(r *MachineconfigReconciler) {
 				r.CtrlConfig.Spec.EnableCrioProfiling = false
-				return
 			},
 			wantErr: false,
 		},
@@ -180,7 +179,6 @@ func TestCheckProfConf(t *testing.T) {
 			reqObjs: []runtime.Object{nodemc, criomc, kubeletmc},
 			preReq: func(r *MachineconfigReconciler) {
 				r.CtrlConfig.Spec.EnableKubeletProfiling = false
-				return
 			},
 			wantErr: false,
 		},

@@ -18,9 +18,10 @@ package machineconfigcontroller
 
 import (
 	"context"
+	"testing"
+
 	"github.com/openshift/node-observability-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
-	"testing"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -68,7 +69,6 @@ func TestEnsureProfilingMCPExists(t *testing.T) {
 			preReq: func(r *MachineconfigReconciler) {
 				r.CtrlConfig.Spec.EnableCrioProfiling = false
 				r.CtrlConfig.Spec.EnableKubeletProfiling = false
-				return
 			},
 			wantErr: false,
 		},
@@ -120,7 +120,7 @@ func TestCheckMCPUpdateStatus(t *testing.T) {
 			reqObjs: []runtime.Object{mcp},
 			preReq: func(r *MachineconfigReconciler, mcp *mcv1.MachineConfigPool) {
 				mcp.Status = mcv1.MachineConfigPoolStatus{
-					MachineCount:         1,
+					MachineCount: 1,
 				}
 				r.CtrlConfig.Status = v1alpha1.MachineconfigStatus{
 					UpdateStatus: v1alpha1.ConfigUpdateStatus{
@@ -135,7 +135,7 @@ func TestCheckMCPUpdateStatus(t *testing.T) {
 			reqObjs: []runtime.Object{mcp},
 			preReq: func(r *MachineconfigReconciler, mcp *mcv1.MachineConfigPool) {
 				mcp.Status = mcv1.MachineConfigPoolStatus{
-					MachineCount:         1,
+					MachineCount: 1,
 					Conditions: []mcv1.MachineConfigPoolCondition{
 						{
 							Status: corev1.ConditionTrue,
@@ -156,7 +156,7 @@ func TestCheckMCPUpdateStatus(t *testing.T) {
 			reqObjs: []runtime.Object{mcp},
 			preReq: func(r *MachineconfigReconciler, mcp *mcv1.MachineConfigPool) {
 				mcp.Status = mcv1.MachineConfigPoolStatus{
-					MachineCount:         1,
+					MachineCount: 1,
 					Conditions: []mcv1.MachineConfigPoolCondition{
 						{
 							Status: corev1.ConditionTrue,
@@ -177,8 +177,8 @@ func TestCheckMCPUpdateStatus(t *testing.T) {
 			reqObjs: []runtime.Object{mcp},
 			preReq: func(r *MachineconfigReconciler, mcp *mcv1.MachineConfigPool) {
 				mcp.Status = mcv1.MachineConfigPoolStatus{
-					MachineCount:         1,
-					UpdatedMachineCount:  1,
+					MachineCount:        1,
+					UpdatedMachineCount: 1,
 					Conditions: []mcv1.MachineConfigPoolCondition{
 						{
 							Status: corev1.ConditionTrue,

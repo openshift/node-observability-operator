@@ -33,6 +33,7 @@ import (
 
 	"github.com/go-logr/logr"
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+
 	"github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 

@@ -30,8 +30,8 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 
-	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
 // Event is a simplified representation of the watch event received from the controller runtime client.

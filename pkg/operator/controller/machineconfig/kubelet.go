@@ -25,7 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	//ctrlruntime "sigs.k8s.io/controller-runtime"
+	ctrlruntime "sigs.k8s.io/controller-runtime"
 
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
@@ -108,11 +108,14 @@ func (r *MachineconfigReconciler) createKubeletProfileConfig(ctx context.Context
 	if err := r.Create(ctx, kubeletmc); err != nil {
 		return fmt.Errorf("failed to create kubelet profiling config %s: %w", kubeletmc.Name, err)
 	}
-	/*
-		if err := ctrlruntime.SetControllerReference(r.CtrlConfig, kubeletmc, r.Scheme); err != nil {
-			r.Log.Error(err, "failed to update owner info in profiling KubeletConfig resource")
-		}
-	*/
+
+	// TODO: cluster-scoped resource must not have a namespace-scoped owner,
+	// owner's namespace node-observability-operator. Code should be removed
+	// if node-observability/MachineConfig resource is going stay as namespaced resource
+	if err := ctrlruntime.SetControllerReference(r.CtrlConfig, kubeletmc, r.Scheme); err != nil {
+		r.Log.Error(err, "failed to update owner info in profiling KubeletConfig resource")
+	}
+
 	r.Log.Info("successfully created kubelet config for enabling profiling", "KubeletProfilingConfigName", KubeletProfilingConfigName)
 	return nil
 }
