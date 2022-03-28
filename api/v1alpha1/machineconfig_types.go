@@ -41,13 +41,17 @@ type MachineconfigStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// LastUpdate is the timestamp of previous status update
+	LastUpdate *metav1.Time `json:"lastUpdated,omitempty"`
+
 	// UpdateStatus contains of the status of the MCP update
 	UpdateStatus ConfigUpdateStatus `json:"updateStatus,omitempty"`
 }
 
 // ConfigUpdateStatus is for storing the status of the MCP update
 type ConfigUpdateStatus struct {
-	InProgress corev1.ConditionStatus `json:"InProgress,omit"`
+	// InProgress is for tracking the update of machines in profiling MCP
+	InProgress corev1.ConditionStatus `json:"InProgress,omitempty"`
 }
 
 //+kubebuilder:object:root=true

@@ -19,26 +19,27 @@ package machineconfigcontroller
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
+	utilclock "k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-logr/logr"
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
-
-	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	"github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
 // MachineconfigReconciler reconciles a Machineconfig object
 type MachineconfigReconciler struct {
 	client.Client
+	sync.RWMutex
 
 	Scheme         *runtime.Scheme
 	Log            logr.Logger
@@ -55,6 +56,10 @@ type PrevSyncData struct {
 }
 
 const (
+	finalizer = "MachineConfig"
+
+	defaultRequeueTime = 30 * time.Minute
+
 	// MCAPIVersion is the machine config API version
 	MCAPIVersion = "machineconfiguration.openshift.io/v1"
 
@@ -70,16 +75,34 @@ const (
 )
 
 var (
+	clock utilclock.Clock = utilclock.RealClock{}
+
 	// ProfilingMCSelectorLabels is for storing the labels to
 	// match with profiling MCP
 	ProfilingMCSelectorLabels = map[string]string{
 		"machineconfiguration.openshift.io/role": ProfilingMCPName,
+	}
+
+	// NodeSelectorLabels is for storing the labels to
+	// match the nodes to include in MCP
+	NodeSelectorLabels = map[string]string{
+		"node-role.kubernetes.io/worker": "",
+	}
+
+	// MachineConfigLabels is for storing the labels to
+	// add in machine config resources
+	MachineConfigLabels = map[string]string{
+		"machineconfiguration.openshift.io/role":                      ProfilingMCPName,
+		"machineconfigs.nodeobservability.olm.openshift.io/profiling": "",
 	}
 )
 
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=machineconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=machineconfigs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=machineconfigs/finalizers,verbs=update
+//+kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigs,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=kubeletconfigs,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigpools,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -102,26 +125,48 @@ func (r *MachineconfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
 			r.Log.Info("MachineConfig resource not found. Ignoring could have been deleted")
-			return ctrl.Result{}, nil
+			return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
 		}
 		// Error reading the object - requeue the request.
 		r.Log.Error(err, "failed to fetch MachineConfig")
-		return ctrl.Result{RequeueAfter: 15 * time.Second}, err
+		return ctrl.Result{RequeueAfter: 3 * time.Minute}, err
 	}
 	r.Log.Info("MachineConfig resource found", "namespace", req.NamespacedName.Namespace, "name", req.NamespacedName.Name)
 
+	if r.CtrlConfig.DeletionTimestamp != nil {
+		r.Log.Info("MachineConfig resource marked for deletetion, cleaning up")
+		return r.cleanUp(ctx)
+	}
+
+	// Set finalizers on the NodeObservability/MachineConfig resource
+	updated, err := r.withFinalizers(ctx)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to update MachineConfig with finalizers:, %w", err)
+	}
+	r.CtrlConfig = updated
+
 	if _, err := r.ensureProfilingMCPExists(ctx); err != nil {
-		r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeWarning, "CreateConfigFailed", "failed to create %s mcp", ProfilingMCPName)
-		return ctrl.Result{RequeueAfter: 15 * time.Second}, err
+		r.Log.Error(err, "profiling mcp reconciliation")
+		return ctrl.Result{RequeueAfter: defaultRequeueTime}, err
 	}
 
 	// ensure profiling config conform with the spec properties
 	if err := r.checkProfConf(ctx); err != nil {
-		r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeWarning, "CreateConfigFailed", "failed to create profiling configs", ProfilingMCPName)
-		r.Log.Error(err, "reconciling")
+		r.Log.Error(err, "profiling mc reconciliation")
 	}
 
-	return r.checkMCPUpdateStatus(ctx, req)
+	if result, err := r.checkMCPUpdateStatus(ctx); err != nil {
+		return result, err
+	}
+
+	now := metav1.NewTime(clock.Now())
+	r.CtrlConfig.Status.LastUpdate = &now
+	if err = r.Status().Update(ctx, r.CtrlConfig); err != nil {
+		r.Log.Error(err, "failed to update status")
+		return ctrl.Result{RequeueAfter: defaultRequeueTime}, err
+	}
+
+	return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -131,100 +176,67 @@ func (r *MachineconfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// ensureProfilingMCPExists is for creating the MCP required for
-// tracking profiling machine configs
-func (r *MachineconfigReconciler) ensureProfilingMCPExists(ctx context.Context) (*mcv1.MachineConfigPool, error) {
-
-	namespace := types.NamespacedName{Namespace: r.CtrlConfig.Namespace, Name: ProfilingMCPName}
-
-	mcp, exist, err := r.fetchProfilingMCP(ctx, namespace)
-	if err != nil {
-		return nil, err
-	}
-	if !exist {
-		if err := r.createProfilingMCP(ctx); err != nil {
-			return nil, err
+func (r *MachineconfigReconciler) cleanUp(ctx context.Context) (ctrl.Result, error) {
+	if hasFinalizer(r.CtrlConfig) {
+		// Remove the finalizer.
+		_, err := r.withoutFinalizers(ctx, finalizer)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to remove finalizer from MachineConfig %s: %w", r.CtrlConfig.Name, err)
 		}
-
-		mcp, exists, err := r.fetchProfilingMCP(ctx, namespace)
-		if err != nil || !exists {
-			return nil, fmt.Errorf("failed to fetch just created profiling MCP: %w", err)
-		}
-
-		r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "CreateConfig", "successfully created %s mcp", ProfilingMCPName)
-		return mcp, nil
 	}
-	return mcp, nil
+	return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
 }
 
-// fetchProfilingMCP is for fetching the profiling MCP created by this controller
-func (r *MachineconfigReconciler) fetchProfilingMCP(ctx context.Context, namespace types.NamespacedName) (*mcv1.MachineConfigPool, bool, error) {
-	mcp := &mcv1.MachineConfigPool{}
+func (r *MachineconfigReconciler) withFinalizers(ctx context.Context) (*v1alpha1.Machineconfig, error) {
+	withFinalizers := r.CtrlConfig.DeepCopy()
 
-	if err := r.Get(ctx, namespace, mcp); err != nil {
-		if errors.IsNotFound(err) {
-			return nil, false, nil
+	if !hasFinalizer(withFinalizers) {
+		withFinalizers.Finalizers = append(withFinalizers.Finalizers, finalizer)
+	}
+
+	if err := r.Update(ctx, withFinalizers); err != nil {
+		return withFinalizers, fmt.Errorf("failed to update finalizers: %w", err)
+	}
+	return withFinalizers, nil
+}
+
+func (r *MachineconfigReconciler) withoutFinalizers(ctx context.Context, finalizer string) (*v1alpha1.Machineconfig, error) {
+	withoutFinalizers := r.CtrlConfig.DeepCopy()
+
+	newFinalizers := make([]string, 0)
+	for _, item := range withoutFinalizers.Finalizers {
+		if item == finalizer {
+			continue
 		}
-		return nil, false, err
+		newFinalizers = append(newFinalizers, item)
 	}
-	return mcp, true, nil
+	if len(newFinalizers) == 0 {
+		// Sanitize for unit tests, so we don't need to distinguish empty array
+		// and nil.
+		newFinalizers = nil
+	}
+	withoutFinalizers.Finalizers = newFinalizers
+	if err := r.Update(ctx, withoutFinalizers); err != nil {
+		return withoutFinalizers, err
+	}
+	return withoutFinalizers, nil
 }
 
-// getProfilingMCP is for obtaining the tailored profiling MCP
-// required for creation
-func getProfilingMCP() *mcv1.MachineConfigPool {
-	nodeSelectorLabels := map[string]string{
-		"node-role.kubernetes.io/worker": "",
+func hasFinalizer(mc *v1alpha1.Machineconfig) bool {
+	hasFinalizer := false
+	for _, f := range mc.Finalizers {
+		if f == finalizer {
+			hasFinalizer = true
+			break
+		}
 	}
-
-	return &mcv1.MachineConfigPool{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       MCPoolKind,
-			APIVersion: MCAPIVersion,
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: ProfilingMCPName,
-		},
-		Spec: mcv1.MachineConfigPoolSpec{
-			MachineConfigSelector: &metav1.LabelSelector{
-				MatchLabels: ProfilingMCSelectorLabels,
-			},
-			NodeSelector: &metav1.LabelSelector{
-				MatchLabels: nodeSelectorLabels,
-			},
-			Configuration: mcv1.MachineConfigPoolStatusConfiguration{
-				Source: []corev1.ObjectReference{
-					{
-						APIVersion: MCAPIVersion,
-						Kind:       MCKind,
-						Name:       CrioProfilingConfigName,
-					},
-					{
-						APIVersion: MCAPIVersion,
-						Kind:       MCKind,
-						Name:       KubeletProfilingConfigName,
-					},
-				},
-			},
-		},
-	}
-}
-
-// createProfilingMCP is for creating the required profiling MCP
-func (r *MachineconfigReconciler) createProfilingMCP(ctx context.Context) error {
-	mcp := getProfilingMCP()
-
-	if err := r.Create(ctx, mcp); err != nil {
-		return fmt.Errorf("failed to create MCP for profiling machine configs: %w", err)
-	}
-
-	ctrl.SetControllerReference(r.CtrlConfig, mcp, r.Scheme)
-	r.Log.Info("successfully created MCP(%s) for profiling machine configs", ProfilingMCPName)
-	return nil
+	return hasFinalizer
 }
 
 // checkProfConf checks and ensures profiling config for defined services
 func (r *MachineconfigReconciler) checkProfConf(ctx context.Context) error {
+	r.Lock()
+	defer r.Unlock()
 
 	errored := false
 	errs := fmt.Errorf("failed to check profiling configs")
@@ -292,77 +304,49 @@ func (r *MachineconfigReconciler) checkProfConf(ctx context.Context) error {
 	return nil
 }
 
-// checkMCPUpdateStatus is for reconciling update status of all machines in profiling MCP
-func (r *MachineconfigReconciler) checkMCPUpdateStatus(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	mcp := &mcv1.MachineConfigPool{}
-	key := types.NamespacedName{Namespace: r.CtrlConfig.Namespace, Name: ProfilingMCPName}
-	if err := r.Client.Get(ctx, key, mcp); err != nil {
-		r.Log.Error(err, "failed to fetch profiling MCP: %v", err)
-		return ctrl.Result{}, err
-	}
-
-	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdating) &&
-		r.CtrlConfig.Status.UpdateStatus.InProgress == "false" {
-		r.Log.Info("config update under progress")
-		r.CtrlConfig.Status.UpdateStatus.InProgress = corev1.ConditionTrue
-		return ctrl.Result{RequeueAfter: 3 * time.Minute}, nil
-	}
-
-	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdated) &&
-		mcp.Status.UpdatedMachineCount == mcp.Status.MachineCount {
-		r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "ConfigUpdate", "config update completed on all machines")
-		r.Log.Info("config update completed on all machines")
-		r.CtrlConfig.Status.UpdateStatus.InProgress = "false"
-	} else {
-		if mcp.Status.DegradedMachineCount != 0 {
-			r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeWarning, "ConfigUpdate", "%s MCP has %d machines in degraded state",
-				ProfilingMCPName, mcp.Status.DegradedMachineCount)
-
-			if err := r.revertPrevSyncChanges(ctx); err != nil {
-				return ctrl.Result{RequeueAfter: 15 * time.Second},
-					fmt.Errorf("failed to revert changes to recover degraded machines, will reconcile in 15s")
-			}
-			return ctrl.Result{RequeueAfter: 15 * time.Second},
-				fmt.Errorf("%d machines are in degraded state, will reconcile in 15s", mcp.Status.DegradedMachineCount)
-		}
-		r.Log.Info("waiting for update to finish on all machines", "MachineConfigPool", ProfilingMCPName)
-		return ctrl.Result{RequeueAfter: 3 * time.Minute}, nil
-	}
-
-	return ctrl.Result{}, nil
-}
-
 // revertPrevSyncChanges is for restoring the cluster state to
 // as it was, before the changes made in previous reconciliation if any
 func (r *MachineconfigReconciler) revertPrevSyncChanges(ctx context.Context) error {
+	r.Lock()
+	defer r.Unlock()
+
 	if len(r.PrevSyncChange) == 0 {
-		r.Log.Info("%s MCP has machines in degarded state, no changes made by the controller")
+		r.Log.Info("profiling MCP has machines in degraded state, not because of any changes made by this controller")
 		return nil
 	}
 
-	for srv, sync := range r.PrevSyncChange {
-		if srv == "crio" {
-			if sync.action == "created" {
-				criomc, ok := sync.config.(mcv1.MachineConfig)
-				if ok {
-					return r.deleteCrioProfileConfig(ctx, &criomc)
-				}
-			}
-			if sync.action == "deleted" {
-				return r.createCrioProfileConfig(ctx)
+	if psd, ok := r.PrevSyncChange["crio"]; ok {
+		var err error
+		if psd.action == "created" {
+			criomc, ok := psd.config.(mcv1.MachineConfig)
+			if ok {
+				err = r.deleteCrioProfileConfig(ctx, &criomc)
 			}
 		}
-		if srv == "kubelet" {
-			if sync.action == "created" {
-				kubeletmc, ok := sync.config.(mcv1.KubeletConfig)
-				if ok {
-					return r.deleteKubeletProfileConfig(ctx, &kubeletmc)
-				}
-			}
-			if sync.action == "deleted" {
-				return r.createKubeletProfileConfig(ctx)
+		if psd.action == "deleted" {
+			err = r.createCrioProfileConfig(ctx)
+		}
+		if err == nil {
+			delete(r.PrevSyncChange, "crio")
+		}
+		return err
+	}
+
+	if psd, ok := r.PrevSyncChange["kubelet"]; ok {
+		var err error
+		if psd.action == "created" {
+			kubeletmc, ok := psd.config.(mcv1.KubeletConfig)
+			if ok {
+				err = r.deleteKubeletProfileConfig(ctx, &kubeletmc)
 			}
 		}
+		if psd.action == "deleted" {
+			err = r.createKubeletProfileConfig(ctx)
+		}
+		if err == nil {
+			delete(r.PrevSyncChange, "kubelet")
+		}
+		return err
 	}
 
 	return nil

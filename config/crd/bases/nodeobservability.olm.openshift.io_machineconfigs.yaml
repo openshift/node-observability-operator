@@ -48,13 +48,17 @@ spec:
           status:
             description: MachineconfigStatus defines the observed state of Machineconfig
             properties:
+              lastUpdated:
+                description: LastUpdate is the timestamp of previous status update
+                format: date-time
+                type: string
               updateStatus:
                 description: UpdateStatus contains of the status of the MCP update
                 properties:
                   InProgress:
+                    description: InProgress is for tracking the update of machines
+                      in profiling MCP
                     type: string
-                required:
-                - InProgress
                 type: object
             type: object
         type: object

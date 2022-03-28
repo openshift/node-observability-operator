@@ -25,7 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	ctrlruntime "sigs.k8s.io/controller-runtime"
+	//ctrlruntime "sigs.k8s.io/controller-runtime"
 
 	ignutil "github.com/coreos/ignition/v2/config/util"
 	igntypes "github.com/coreos/ignition/v2/config/v3_2/types"
@@ -45,29 +45,22 @@ const (
 Environment="ENABLE_PROFILE_UNIX_SOCKET=true"`
 )
 
-var (
-	// CrioProfileConfigLabels is for storing the labels of the resource
-	CrioProfileConfigLabels = map[string]string{
-		"machineconfiguration.openshift.io/role": "worker",
-	}
-)
-
 // ensureCrioProfConfigExists checks if CRI-O MachineConfig CR for
 // enabling profiling exists, if not creates the resource
 func (r *MachineconfigReconciler) ensureCrioProfConfigExists(ctx context.Context) (*mcv1.MachineConfig, bool, error) {
-	namespace := types.NamespacedName{Namespace: r.CtrlConfig.Namespace, Name: CrioProfilingConfigName}
-	criomc, exist, err := r.fetchCrioProfileConfig(ctx, namespace)
+	namespace := types.NamespacedName{Name: CrioProfilingConfigName}
+	criomc, exists, err := r.fetchCrioProfileConfig(ctx, namespace)
 	if err != nil {
 		return nil, false, err
 	}
-	if !exist {
+	if !exists {
 		if err := r.createCrioProfileConfig(ctx); err != nil {
 			return nil, false, err
 		}
 
-		criomc, exist, err = r.fetchCrioProfileConfig(ctx, namespace)
-		if err != nil || !exist {
-			return nil, false, fmt.Errorf("failed to fetch just created crio config: %w", err)
+		criomc, found, err := r.fetchCrioProfileConfig(ctx, namespace)
+		if err != nil || !found {
+			return nil, false, fmt.Errorf("failed to fetch just created crio config: %v", err)
 		}
 
 		return criomc, true, nil
@@ -78,7 +71,7 @@ func (r *MachineconfigReconciler) ensureCrioProfConfigExists(ctx context.Context
 // ensureCrioProfConfigNotExists checks if CRI-O MachineConfig CR for
 // enabling profiling exists, if exists delete the resource
 func (r *MachineconfigReconciler) ensureCrioProfConfigNotExists(ctx context.Context) (bool, error) {
-	namespace := types.NamespacedName{Namespace: r.CtrlConfig.Namespace, Name: CrioProfilingConfigName}
+	namespace := types.NamespacedName{Name: CrioProfilingConfigName}
 	criomc, exists, err := r.fetchCrioProfileConfig(ctx, namespace)
 	if err != nil {
 		return false, err
@@ -90,7 +83,7 @@ func (r *MachineconfigReconciler) ensureCrioProfConfigNotExists(ctx context.Cont
 
 		_, exists, err = r.fetchCrioProfileConfig(ctx, namespace)
 		if err != nil || exists {
-			return false, fmt.Errorf("failed to delete crio profiling config: %w", err)
+			return false, fmt.Errorf("failed to delete crio profiling config: %v", err)
 		}
 
 		return true, nil
@@ -120,21 +113,24 @@ func (r *MachineconfigReconciler) createCrioProfileConfig(ctx context.Context) e
 	}
 
 	if err := r.Create(ctx, criomc); err != nil {
-		return fmt.Errorf("failed to create crio profiling config %s/%s: %w", criomc.Namespace, criomc.Name, err)
+		return fmt.Errorf("failed to create crio profiling config %s: %w", criomc.Name, err)
 	}
-
-	ctrlruntime.SetControllerReference(r.CtrlConfig, criomc, r.Scheme)
-	r.Log.Info("successfully created CRI-O machine config(%s) for enabling profiling", CrioProfilingConfigName)
+	/*
+		if err := ctrlruntime.SetControllerReference(r.CtrlConfig, criomc, r.Scheme); err != nil {
+			r.Log.Error(err, "failed to update owner info in CRI-O profiling MC resource")
+		}
+	*/
+	r.Log.Info("successfully created CRI-O MC for enabling profiling", "CrioProfilingConfigName", CrioProfilingConfigName)
 	return nil
 }
 
 // deleteCrioProfileConfig is for deleting CRI-O MC CR
 func (r *MachineconfigReconciler) deleteCrioProfileConfig(ctx context.Context, criomc *mcv1.MachineConfig) error {
 	if err := r.Delete(ctx, criomc); err != nil {
-		return fmt.Errorf("failed to remove crio profiling config %s/%s: %w", criomc.Namespace, criomc.Name, err)
+		return fmt.Errorf("failed to remove crio profiling config %s: %w", criomc.Name, err)
 	}
 
-	r.Log.Info("successfully removed CRI-O machine config(%s) to disable profiling", CrioProfilingConfigName)
+	r.Log.Info("successfully removed CRI-O MC to disable profiling", "CrioProfilingConfigName", CrioProfilingConfigName)
 	return nil
 }
 
@@ -142,14 +138,14 @@ func (r *MachineconfigReconciler) deleteCrioProfileConfig(ctx context.Context, c
 // required for creating CRI-O MC CR
 func getCrioIgnitionConfig() igntypes.Config {
 	dropins := []igntypes.Dropin{
-		igntypes.Dropin{
+		{
 			Name:     CrioUnixSocketConfFile,
 			Contents: ignutil.StrToPtr(CriounixSocketConfData),
 		},
 	}
 
 	units := []igntypes.Unit{
-		igntypes.Unit{
+		{
 			Dropins: dropins,
 		},
 	}
@@ -193,7 +189,7 @@ func (r *MachineconfigReconciler) getCrioConfig() (*mcv1.MachineConfig, error) {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   CrioProfilingConfigName,
-			Labels: ProfilingMCSelectorLabels,
+			Labels: MachineConfigLabels,
 		},
 		Spec: mcv1.MachineConfigSpec{
 			Config: rawExt,

@@ -25,7 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	ctrlruntime "sigs.k8s.io/controller-runtime"
+	//ctrlruntime "sigs.k8s.io/controller-runtime"
 
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
@@ -39,19 +39,19 @@ const (
 // enabling profiling exists, if not creates the resource
 func (r *MachineconfigReconciler) ensureKubeletProfConfigExists(ctx context.Context) (*mcv1.KubeletConfig, bool, error) {
 
-	namespace := types.NamespacedName{Namespace: r.CtrlConfig.Namespace, Name: KubeletProfilingConfigName}
-	kubeletmc, exist, err := r.fetchKubeletProfilingConfig(ctx, namespace)
+	namespace := types.NamespacedName{Name: KubeletProfilingConfigName}
+	kubeletmc, exists, err := r.fetchKubeletProfilingConfig(ctx, namespace)
 	if err != nil {
 		return nil, false, err
 	}
-	if !exist {
+	if !exists {
 		if err := r.createKubeletProfileConfig(ctx); err != nil {
 			return nil, false, err
 		}
 
-		kubeletmc, exist, err := r.fetchKubeletProfilingConfig(ctx, namespace)
-		if err != nil || !exist {
-			return nil, false, fmt.Errorf("failed to fetch just created kubelet config: %w", err)
+		kubeletmc, found, err := r.fetchKubeletProfilingConfig(ctx, namespace)
+		if err != nil || !found {
+			return nil, false, fmt.Errorf("failed to fetch just created kubelet config: %v", err)
 		}
 
 		return kubeletmc, true, nil
@@ -63,7 +63,7 @@ func (r *MachineconfigReconciler) ensureKubeletProfConfigExists(ctx context.Cont
 // enabling profiling exists, if exists delete the resource
 func (r *MachineconfigReconciler) ensureKubeletProfConfigNotExists(ctx context.Context) (bool, error) {
 
-	namespace := types.NamespacedName{Namespace: r.CtrlConfig.Namespace, Name: KubeletProfilingConfigName}
+	namespace := types.NamespacedName{Name: KubeletProfilingConfigName}
 	kubeletmc, exists, err := r.fetchKubeletProfilingConfig(ctx, namespace)
 	if err != nil {
 		return false, err
@@ -74,9 +74,9 @@ func (r *MachineconfigReconciler) ensureKubeletProfConfigNotExists(ctx context.C
 			return false, err
 		}
 
-		_, exist, err := r.fetchKubeletProfilingConfig(ctx, namespace)
-		if err != nil || !exist {
-			return false, fmt.Errorf("failed to fetch just created kubelet config: %w", err)
+		_, found, err := r.fetchKubeletProfilingConfig(ctx, namespace)
+		if err != nil || found {
+			return false, fmt.Errorf("failed to delete kubelet config: %v", err)
 		}
 
 		return true, nil
@@ -106,21 +106,24 @@ func (r *MachineconfigReconciler) createKubeletProfileConfig(ctx context.Context
 	}
 
 	if err := r.Create(ctx, kubeletmc); err != nil {
-		return fmt.Errorf("failed to create kubelet profiling config %s/%s: %w", kubeletmc.Namespace, kubeletmc.Name, err)
+		return fmt.Errorf("failed to create kubelet profiling config %s: %w", kubeletmc.Name, err)
 	}
-
-	ctrlruntime.SetControllerReference(r.CtrlConfig, kubeletmc, r.Scheme)
-	r.Log.Info("successfully created kubelet machine config(%s) for enabling profiling", KubeletProfilingConfigName)
+	/*
+		if err := ctrlruntime.SetControllerReference(r.CtrlConfig, kubeletmc, r.Scheme); err != nil {
+			r.Log.Error(err, "failed to update owner info in profiling KubeletConfig resource")
+		}
+	*/
+	r.Log.Info("successfully created kubelet config for enabling profiling", "KubeletProfilingConfigName", KubeletProfilingConfigName)
 	return nil
 }
 
 // deleteKubeletProfileConfig is for deleting kubelet MC CR
 func (r *MachineconfigReconciler) deleteKubeletProfileConfig(ctx context.Context, kubeletmc *mcv1.KubeletConfig) error {
 	if err := r.Delete(ctx, kubeletmc); err != nil {
-		return fmt.Errorf("failed to remove kubelet profiling config %s/%s: %w", kubeletmc.Namespace, kubeletmc.Name, err)
+		return fmt.Errorf("failed to remove kubelet profiling config %s: %w", kubeletmc.Name, err)
 	}
 
-	r.Log.Info("successfully removed kubelet machine config(%s) to disable profiling", KubeletProfilingConfigName)
+	r.Log.Info("successfully removed kubelet config to disable profiling", "KubeletProfilingConfigName", KubeletProfilingConfigName)
 	return nil
 }
 
@@ -147,7 +150,7 @@ func (r *MachineconfigReconciler) getKubeletConfig() (*mcv1.KubeletConfig, error
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   KubeletProfilingConfigName,
-			Labels: ProfilingMCSelectorLabels,
+			Labels: MachineConfigLabels,
 		},
 		Spec: mcv1.KubeletConfigSpec{
 			KubeletConfig: rawExt,

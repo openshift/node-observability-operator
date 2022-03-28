@@ -31,6 +31,7 @@ import (
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 
 	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
 // Event is a simplified representation of the watch event received from the controller runtime client.
@@ -53,7 +54,9 @@ func init() {
 	if err := securityv1.AddToScheme(Scheme); err != nil {
 		panic(err)
 	}
-
+	if err := mcv1.AddToScheme(Scheme); err != nil {
+		panic(err)
+	}
 }
 
 // NewEvent returns an event instance created from the controller runtime's watch event.
@@ -98,6 +101,19 @@ func NewEvent(we watch.Event) Event {
 		te.ObjType = "pod"
 		te.Name = obj.Name
 		te.Namespace = obj.Namespace
+	case *mcv1.MachineConfigPool:
+		te.ObjType = "machinceconfigpool"
+		te.Name = obj.Name
+	case *mcv1.MachineConfig:
+		te.ObjType = "machineconfig"
+		te.Name = obj.Name
+	case *mcv1.KubeletConfig:
+		te.ObjType = "kubeletconfig"
+		te.Name = obj.Name
+	case *v1alpha1.Machineconfig:
+		te.ObjType = "machineconfig"
+		te.Namespace = obj.Namespace
+		te.Name = obj.Name
 	}
 	return te
 }

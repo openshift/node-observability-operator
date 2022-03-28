@@ -18,9 +18,6 @@ package test
 
 import (
 	runtime "k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-
-	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
 const (
@@ -36,13 +33,3 @@ var (
 	TrueVar = true
 	Scheme  = runtime.NewScheme()
 )
-
-func init() {
-	if err := clientgoscheme.AddToScheme(Scheme); err != nil {
-		panic(err)
-	}
-	if err := v1alpha1.AddToScheme(Scheme); err != nil {
-		panic(err)
-	}
-
-}
