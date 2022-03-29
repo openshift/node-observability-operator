@@ -1,6 +1,9 @@
 package nodeobservabilityruncontroller
 
-import "fmt"
+import (
+	"fmt"
+	"net/http"
+)
 
 type NodeObservabilityRunError struct {
 	HttpCode int
@@ -16,7 +19,7 @@ func IsNodeObservabilityRunErrorRetriable(err error) bool {
 	if !ok {
 		return false
 	}
-	if e.HttpCode == 500 {
+	if e.HttpCode == http.StatusInternalServerError {
 		return true
 	}
 	return false
