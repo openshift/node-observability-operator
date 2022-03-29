@@ -57,7 +57,12 @@ type NodeObservabilityRunReconciler struct {
 
 // Reconcile manages NodeObservabilityRuns
 func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
-	r.Log.V(3).Info("Reconcile", "Instance", req.NamespacedName.String())
+	r.Log, err = logr.FromContext(ctx)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	r.Log.V(3).Info("Beginning Reconciliation")
+
 	instance := &nodeobservabilityv1alpha1.NodeObservabilityRun{}
 	err = r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
@@ -70,19 +75,20 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 	}
 
 	if finished(instance) {
-		r.Log.V(3).Info("Finished", "Instance", req.NamespacedName.String())
+		r.Log.V(3).Info("Run for this instance has been completed already")
 		return
 	}
 
 	defer func() {
 		errUpdate := r.Status().Update(ctx, instance, &client.UpdateOptions{})
 		if errUpdate != nil {
+			r.Log.Error(err, "failed to update status")
 			err = utilerrors.NewAggregate([]error{err, errUpdate})
 		}
 	}()
 
 	if inProgress(instance) {
-		r.Log.V(3).Info("In Progress", "Instance", req.NamespacedName.String())
+		r.Log.V(3).Info("Run is in progress")
 		var requeue bool
 		requeue, err = r.handleInProgress(instance)
 		if requeue {
@@ -108,9 +114,13 @@ func (r *NodeObservabilityRunReconciler) handleInProgress(instance *nodeobservab
 		url := fmt.Sprintf("http://%s:%d/status", agent.IP, agent.Port)
 		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityRunErrorRetriable, httpGetCall(url))
 		if err != nil {
+			if e, ok := err.(NodeObservabilityRunError); ok && e.HttpCode == http.StatusConflict {
+				r.Log.V(3).Info("Received 407:StatusConflict, job still running")
+				return true, nil
+			}
 			r.Log.Error(err, "failed to get agent status", "name", agent.Name, "IP", agent.IP)
 			errors = append(errors, err)
-			// TODO: node consistently failing, restart whole process
+			handleFailingAgent(instance, agent)
 			continue
 		}
 	}
@@ -118,7 +128,6 @@ func (r *NodeObservabilityRunReconciler) handleInProgress(instance *nodeobservab
 }
 
 func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance *nodeobservabilityv1alpha1.NodeObservabilityRun) error {
-	r.Log.V(3).Info("startRun", "instance", instance.Name)
 	endps, err := r.getAgentEndpoints(ctx)
 	if err != nil {
 		return err
@@ -133,7 +142,7 @@ func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance 
 	}
 
 	for _, a := range subset.Addresses {
-		r.Log.V(3).Info("startRun - address for loop", "IP", a.IP)
+		r.Log.V(3).Info("Initiating new run for node", "IP", a.IP, "port", port)
 		url := fmt.Sprintf("http://%s:%d/pprof", a.IP, port)
 		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityRunErrorRetriable, httpGetCall(url))
 		if err != nil {
@@ -141,7 +150,6 @@ func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance 
 			failedTargets = append(failedTargets, nodeobservabilityv1alpha1.AgentNode{Name: a.TargetRef.Name, IP: a.IP, Port: port})
 			continue
 		}
-		r.Log.V(3).Info("startRun - address for loop", "code")
 		targets = append(targets, nodeobservabilityv1alpha1.AgentNode{Name: a.TargetRef.Name, IP: a.IP, Port: port})
 	}
 
@@ -185,11 +193,23 @@ func httpGetCall(url string) func() error {
 		if err != nil {
 			return err
 		}
-		if resp.StatusCode != 200 {
+		if resp.StatusCode != http.StatusOK {
 			return NodeObservabilityRunError{HttpCode: resp.StatusCode, Msg: string(body)}
 		}
 		return nil
 	}
+}
+
+func handleFailingAgent(instance *nodeobservabilityv1alpha1.NodeObservabilityRun, old nodeobservabilityv1alpha1.AgentNode) {
+	newLen := len(instance.Status.Agents) - 1
+	newAgents := make([]nodeobservabilityv1alpha1.AgentNode, newLen)
+	for i, a := range instance.Status.Agents {
+		if a.Name != old.Name {
+			newAgents[i] = a
+		}
+	}
+	instance.Status.Agents = newAgents
+	instance.Status.FailedAgents = append(instance.Status.FailedAgents, old)
 }
 
 func (r *NodeObservabilityRunReconciler) getAgentEndpoints(ctx context.Context) (*corev1.Endpoints, error) {
