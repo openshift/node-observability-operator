@@ -64,7 +64,7 @@ You can install the NodeObservability Operator by building and pushing the Opera
    make index-image-build index-image-push
    ```
 
-4. You may need to link the registry secret to the pod of `node-observability-operator` created in the `openshift-marketplace` namespace if the image is not made public ([Doc link](https://docs.openshift.com/container-platform/4.10/openshift_images/managing_images/using-image-pull-secrets.html#images-allow-pods-to-reference-images-from-secure-registries_using-image-pull-secrets)). If you are using `podman` then these are the instructions:
+4. You may need to link the registry secret to the pod of `node-observability-operator` created in the `openshift-marketplace` namespace if the image is not made public ([Doc link](https://docs.openshift.com/container-platform/4.11/openshift_images/managing_images/using-image-pull-secrets.html#images-allow-pods-to-reference-images-from-secure-registries_using-image-pull-secrets)). If you are using `podman` then these are the instructions:
 
     a. Create a secret with authentication details of your image registry:
     ```sh
@@ -75,7 +75,7 @@ You can install the NodeObservability Operator by building and pushing the Opera
     oc -n openshift-marketplace secrets link default nodeobs-olm-secret --for=pull
     ````
 
-6. Create the `CatalogSource` object:
+5. Create the `CatalogSource` object:
    ```sh
    cat <<EOF | oc apply -f -
    apiVersion: operators.coreos.com/v1alpha1
@@ -89,12 +89,12 @@ You can install the NodeObservability Operator by building and pushing the Opera
    EOF
    ```
 
-7. Create the operator namespace:
+6. Create the operator namespace:
     ```sh
     oc create namespace node-observability-operator
     ```
 
-8. Create the `OperatorGroup` object to scope the operator to `node-observability-operator` namespace:
+7. Create the `OperatorGroup` object to scope the operator to `node-observability-operator` namespace:
     ```sh
     cat <<EOF | oc apply -f -
     apiVersion: operators.coreos.com/v1
@@ -108,7 +108,7 @@ You can install the NodeObservability Operator by building and pushing the Opera
     EOF
     ```
 
-9. Create the `Subscription` object:
+8. Create the `Subscription` object:
     ```sh
     cat <<EOF | oc apply -f -
     apiVersion: operators.coreos.com/v1alpha1
@@ -125,3 +125,4 @@ You can install the NodeObservability Operator by building and pushing the Opera
     ```
 
 **Note**: The steps starting from the 7th can be replaced with the following actions in the web console: Navigate to  `Operators` -> `OperatorHub`, search for the `Node Observability Operator`,  and install it in the `node-observability-operator` namespace.
+
