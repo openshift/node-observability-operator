@@ -142,7 +142,7 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 	return ds
 }
 
-// labelsForiNodeObservability returns the labels for selecting the resources
+// labelsForNodeObservability returns the labels for selecting the resources
 // belonging to the given node observability CR name.
 func labelsForNodeObservability(name string) map[string]string {
 	return map[string]string{"app": "nodeobservability", "nodeobs_cr": name}
