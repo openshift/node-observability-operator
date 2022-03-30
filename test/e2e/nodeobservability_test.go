@@ -58,13 +58,13 @@ func init() {
 	if err := clientgoscheme.AddToScheme(Scheme); err != nil {
 		panic(err)
 	}
-	if err := operatorv1alpha1.AddToScheme(Scheme); err != nil {
-		panic(err)
-	}
 	if err := appsv1.AddToScheme(Scheme); err != nil {
 		panic(err)
 	}
 	if err := securityv1.AddToScheme(Scheme); err != nil {
+		panic(err)
+	}
+	if err := operatorv1alpha1.AddToScheme(Scheme); err != nil {
 		panic(err)
 	}
 
