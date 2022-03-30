@@ -6,20 +6,21 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.7.0
   creationTimestamp: null
-  name: machineconfigs.nodeobservability.olm.openshift.io
+  name: nodeobservabilitymachineconfigs.nodeobservability.olm.openshift.io
 spec:
   group: nodeobservability.olm.openshift.io
   names:
-    kind: Machineconfig
-    listKind: MachineconfigList
-    plural: machineconfigs
-    singular: machineconfig
-  scope: Namespaced
+    kind: NodeObservabilityMachineConfig
+    listKind: NodeObservabilityMachineConfigList
+    plural: nodeobservabilitymachineconfigs
+    singular: nodeobservabilitymachineconfig
+  scope: Cluster
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Machineconfig is the Schema for the machineconfigs API
+        description: NodeObservabilityMachineConfig is the Schema for the nodeobservabilitymachineconfigs
+          API
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -34,7 +35,8 @@ spec:
           metadata:
             type: object
           spec:
-            description: MachineconfigSpec defines the desired state of Machineconfig
+            description: NodeObservabilityMachineConfigSpec defines the desired state
+              of NodeObservabilityMachineConfig
             properties:
               enableCrioProfiling:
                 description: EnableCrioProfiling is for enabling profiling of CRI-O
@@ -46,10 +48,11 @@ spec:
                 type: boolean
             type: object
           status:
-            description: MachineconfigStatus defines the observed state of Machineconfig
+            description: NodeObservabilityMachineConfigStatus defines the observed
+              state of NodeObservabilityMachineConfig
             properties:
               lastUpdated:
-                description: LastUpdate is the timestamp of previous status update
+                description: lastUpdated is the timestamp of previous status update
                 format: date-time
                 type: string
               updateStatus:

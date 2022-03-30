@@ -21,14 +21,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// Important: Run "make" to regenerate code after modifying this file
 
-// MachineconfigSpec defines the desired state of Machineconfig
-type MachineconfigSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
+// NodeObservabilityMachineConfigSpec defines the desired state of NodeObservabilityMachineConfig
+type NodeObservabilityMachineConfigSpec struct {
 	// EnableCrioProfiling is for enabling profiling of CRI-O service
 	EnableCrioProfiling bool `json:"enableCrioProfiling,omitempty"`
 
@@ -36,13 +33,10 @@ type MachineconfigSpec struct {
 	EnableKubeletProfiling bool `json:"enableKubeletProfiling,omitempty"`
 }
 
-// MachineconfigStatus defines the observed state of Machineconfig
-type MachineconfigStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// LastUpdate is the timestamp of previous status update
-	LastUpdate *metav1.Time `json:"lastUpdated,omitempty"`
+// NodeObservabilityMachineConfigStatus defines the observed state of NodeObservabilityMachineConfig
+type NodeObservabilityMachineConfigStatus struct {
+	// lastUpdated is the timestamp of previous status update
+	LastUpdated *metav1.Time `json:"lastUpdated,omitempty"`
 
 	// UpdateStatus contains of the status of the MCP update
 	UpdateStatus ConfigUpdateStatus `json:"updateStatus,omitempty"`
@@ -56,25 +50,26 @@ type ConfigUpdateStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:resource:scope=Cluster
 
-// Machineconfig is the Schema for the machineconfigs API
-type Machineconfig struct {
+// NodeObservabilityMachineConfig is the Schema for the nodeobservabilitymachineconfigs API
+type NodeObservabilityMachineConfig struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   MachineconfigSpec   `json:"spec,omitempty"`
-	Status MachineconfigStatus `json:"status,omitempty"`
+	Spec   NodeObservabilityMachineConfigSpec   `json:"spec,omitempty"`
+	Status NodeObservabilityMachineConfigStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// MachineconfigList contains a list of Machineconfig
-type MachineconfigList struct {
+// NodeObservabilityMachineConfigList contains a list of NodeObservabilityMachineConfig
+type NodeObservabilityMachineConfigList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Machineconfig `json:"items"`
+	Items           []NodeObservabilityMachineConfig `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Machineconfig{}, &MachineconfigList{})
+	SchemeBuilder.Register(&NodeObservabilityMachineConfig{}, &NodeObservabilityMachineConfigList{})
 }

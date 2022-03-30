@@ -39,7 +39,7 @@ func TestEnsureProfilingMCPExists(t *testing.T) {
 	nodeObsMC := testNodeObsMC()
 	mcp := getProfilingMCP()
 
-	r := &MachineconfigReconciler{
+	r := &MachineConfigReconciler{
 		Scheme:         test.Scheme,
 		Log:            zap.New(zap.UseDevMode(true)),
 		CtrlConfig:     nodeObsMC,
@@ -50,7 +50,7 @@ func TestEnsureProfilingMCPExists(t *testing.T) {
 	tests := []struct {
 		name    string
 		reqObjs []runtime.Object
-		preReq  func(*MachineconfigReconciler)
+		preReq  func(*MachineConfigReconciler)
 		wantErr bool
 	}{
 		{
@@ -66,7 +66,7 @@ func TestEnsureProfilingMCPExists(t *testing.T) {
 		{
 			name:    "remove profiling MCP",
 			reqObjs: []runtime.Object{nodeObsMC, mcp},
-			preReq: func(r *MachineconfigReconciler) {
+			preReq: func(r *MachineConfigReconciler) {
 				r.CtrlConfig.Spec.EnableCrioProfiling = false
 				r.CtrlConfig.Spec.EnableKubeletProfiling = false
 			},
@@ -96,7 +96,7 @@ func TestCheckMCPUpdateStatus(t *testing.T) {
 	nodeObsMC := testNodeObsMC()
 	mcp := getProfilingMCP()
 
-	r := &MachineconfigReconciler{
+	r := &MachineConfigReconciler{
 		Scheme:         test.Scheme,
 		Log:            zap.New(zap.UseDevMode(true)),
 		CtrlConfig:     nodeObsMC,
@@ -107,7 +107,7 @@ func TestCheckMCPUpdateStatus(t *testing.T) {
 	tests := []struct {
 		name    string
 		reqObjs []runtime.Object
-		preReq  func(*MachineconfigReconciler, *mcv1.MachineConfigPool)
+		preReq  func(*MachineConfigReconciler, *mcv1.MachineConfigPool)
 		wantErr bool
 	}{
 		{
@@ -118,11 +118,11 @@ func TestCheckMCPUpdateStatus(t *testing.T) {
 		{
 			name:    "no machine configs are updated",
 			reqObjs: []runtime.Object{mcp},
-			preReq: func(r *MachineconfigReconciler, mcp *mcv1.MachineConfigPool) {
+			preReq: func(r *MachineConfigReconciler, mcp *mcv1.MachineConfigPool) {
 				mcp.Status = mcv1.MachineConfigPoolStatus{
 					MachineCount: 1,
 				}
-				r.CtrlConfig.Status = v1alpha1.MachineconfigStatus{
+				r.CtrlConfig.Status = v1alpha1.NodeObservabilityMachineConfigStatus{
 					UpdateStatus: v1alpha1.ConfigUpdateStatus{
 						InProgress: corev1.ConditionFalse,
 					},
@@ -133,7 +133,7 @@ func TestCheckMCPUpdateStatus(t *testing.T) {
 		{
 			name:    "machine configs update in progress",
 			reqObjs: []runtime.Object{mcp},
-			preReq: func(r *MachineconfigReconciler, mcp *mcv1.MachineConfigPool) {
+			preReq: func(r *MachineConfigReconciler, mcp *mcv1.MachineConfigPool) {
 				mcp.Status = mcv1.MachineConfigPoolStatus{
 					MachineCount: 1,
 					Conditions: []mcv1.MachineConfigPoolCondition{
@@ -143,7 +143,7 @@ func TestCheckMCPUpdateStatus(t *testing.T) {
 						},
 					},
 				}
-				r.CtrlConfig.Status = v1alpha1.MachineconfigStatus{
+				r.CtrlConfig.Status = v1alpha1.NodeObservabilityMachineConfigStatus{
 					UpdateStatus: v1alpha1.ConfigUpdateStatus{
 						InProgress: corev1.ConditionFalse,
 					},
@@ -154,7 +154,7 @@ func TestCheckMCPUpdateStatus(t *testing.T) {
 		{
 			name:    "machine configs update not completed on all machines",
 			reqObjs: []runtime.Object{mcp},
-			preReq: func(r *MachineconfigReconciler, mcp *mcv1.MachineConfigPool) {
+			preReq: func(r *MachineConfigReconciler, mcp *mcv1.MachineConfigPool) {
 				mcp.Status = mcv1.MachineConfigPoolStatus{
 					MachineCount: 1,
 					Conditions: []mcv1.MachineConfigPoolCondition{
@@ -164,7 +164,7 @@ func TestCheckMCPUpdateStatus(t *testing.T) {
 						},
 					},
 				}
-				r.CtrlConfig.Status = v1alpha1.MachineconfigStatus{
+				r.CtrlConfig.Status = v1alpha1.NodeObservabilityMachineConfigStatus{
 					UpdateStatus: v1alpha1.ConfigUpdateStatus{
 						InProgress: corev1.ConditionFalse,
 					},
@@ -175,7 +175,7 @@ func TestCheckMCPUpdateStatus(t *testing.T) {
 		{
 			name:    "machine configs update completed",
 			reqObjs: []runtime.Object{mcp},
-			preReq: func(r *MachineconfigReconciler, mcp *mcv1.MachineConfigPool) {
+			preReq: func(r *MachineConfigReconciler, mcp *mcv1.MachineConfigPool) {
 				mcp.Status = mcv1.MachineConfigPoolStatus{
 					MachineCount:        1,
 					UpdatedMachineCount: 1,
@@ -186,7 +186,7 @@ func TestCheckMCPUpdateStatus(t *testing.T) {
 						},
 					},
 				}
-				r.CtrlConfig.Status = v1alpha1.MachineconfigStatus{
+				r.CtrlConfig.Status = v1alpha1.NodeObservabilityMachineConfigStatus{
 					UpdateStatus: v1alpha1.ConfigUpdateStatus{
 						InProgress: corev1.ConditionFalse,
 					},
@@ -197,7 +197,7 @@ func TestCheckMCPUpdateStatus(t *testing.T) {
 		{
 			name:    "machine configs update, machines in degraded state",
 			reqObjs: []runtime.Object{mcp},
-			preReq: func(r *MachineconfigReconciler, mcp *mcv1.MachineConfigPool) {
+			preReq: func(r *MachineConfigReconciler, mcp *mcv1.MachineConfigPool) {
 				mcp.Status = mcv1.MachineConfigPoolStatus{
 					MachineCount:         1,
 					DegradedMachineCount: 1,
@@ -208,7 +208,7 @@ func TestCheckMCPUpdateStatus(t *testing.T) {
 						},
 					},
 				}
-				r.CtrlConfig.Status = v1alpha1.MachineconfigStatus{
+				r.CtrlConfig.Status = v1alpha1.NodeObservabilityMachineConfigStatus{
 					UpdateStatus: v1alpha1.ConfigUpdateStatus{
 						InProgress: corev1.ConditionFalse,
 					},

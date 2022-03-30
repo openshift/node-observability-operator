@@ -2,5 +2,5 @@
 resources:
 - nodeobservability_v1alpha1_nodeobservability.yaml
 - nodeobservability_v1alpha1_nodeobservabilityrun.yaml
-- nodeobservability_v1alpha1_machineconfig.yaml
+- nodeobservability_v1alpha1_nodeobservabilitymachineconfig.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

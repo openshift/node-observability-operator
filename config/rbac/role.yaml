@@ -89,32 +89,6 @@ rules:
 - apiGroups:
   - nodeobservability.olm.openshift.io
   resources:
-  - machineconfigs
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - nodeobservability.olm.openshift.io
-  resources:
-  - machineconfigs/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - nodeobservability.olm.openshift.io
-  resources:
-  - machineconfigs/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - nodeobservability.olm.openshift.io
-  resources:
   - nodeobservabilities
   verbs:
   - create
@@ -134,6 +108,32 @@ rules:
   - nodeobservability.olm.openshift.io
   resources:
   - nodeobservabilities/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - nodeobservability.olm.openshift.io
+  resources:
+  - nodeobservabilitymachineconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - nodeobservability.olm.openshift.io
+  resources:
+  - nodeobservabilitymachineconfigs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - nodeobservability.olm.openshift.io
+  resources:
+  - nodeobservabilitymachineconfigs/status
   verbs:
   - get
   - patch

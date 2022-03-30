@@ -42,26 +42,39 @@ const (
 func testReconcileRequest() ctrl.Request {
 	return ctrl.Request{
 		NamespacedName: types.NamespacedName{
-			//Namespace: TestOperatorNameSpace,
-			Name: TestControllerResourceName,
+			Name:      TestControllerResourceName,
+			Namespace: TestOperatorNameSpace,
 		},
 	}
 }
 
-func testNodeObsMC() *v1alpha1.Machineconfig {
-	return &v1alpha1.Machineconfig{
+func testNamespace() *corev1.Namespace {
+	return &corev1.Namespace{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "Machineconfig",
+			Kind:       "Namespace",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: TestOperatorNameSpace,
+		},
+	}
+}
+
+func testNodeObsMC() *v1alpha1.NodeObservabilityMachineConfig {
+	return &v1alpha1.NodeObservabilityMachineConfig{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "NodeObservabilityMachineConfig",
 			APIVersion: "nodeobservability.olm.openshift.io/v1alpha1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: TestControllerResourceName,
+			Name:      TestControllerResourceName,
+			Namespace: TestOperatorNameSpace,
 		},
-		Spec: v1alpha1.MachineconfigSpec{
+		Spec: v1alpha1.NodeObservabilityMachineConfigSpec{
 			EnableCrioProfiling:    true,
 			EnableKubeletProfiling: true,
 		},
-		Status: v1alpha1.MachineconfigStatus{
+		Status: v1alpha1.NodeObservabilityMachineConfigStatus{
 			UpdateStatus: v1alpha1.ConfigUpdateStatus{
 				InProgress: corev1.ConditionFalse,
 			},
@@ -69,7 +82,7 @@ func testNodeObsMC() *v1alpha1.Machineconfig {
 	}
 }
 
-func testNodeObsMCToBeDeleted() *v1alpha1.Machineconfig {
+func testNodeObsMCToBeDeleted() *v1alpha1.NodeObservabilityMachineConfig {
 	mc := testNodeObsMC()
 	mc.Finalizers = append(mc.Finalizers, finalizer)
 	mc.DeletionTimestamp = &metav1.Time{
@@ -82,7 +95,7 @@ func TestReconcile(t *testing.T) {
 
 	var ctx context.Context
 
-	r := &MachineconfigReconciler{
+	r := &MachineConfigReconciler{
 		Scheme:         test.Scheme,
 		Log:            zap.New(zap.UseDevMode(true)),
 		EventRecorder:  record.NewFakeRecorder(100),
@@ -97,17 +110,17 @@ func TestReconcile(t *testing.T) {
 	}{
 		{
 			name:    "controller resource does not exist",
-			reqObjs: []runtime.Object{},
+			reqObjs: []runtime.Object{testNamespace()},
 			wantErr: false,
 		},
 		{
 			name:    "controller resource exists",
-			reqObjs: []runtime.Object{testNodeObsMC()},
+			reqObjs: []runtime.Object{testNamespace(), testNodeObsMC()},
 			wantErr: false,
 		},
 		{
 			name:    "controller resource marked for deletion",
-			reqObjs: []runtime.Object{testNodeObsMCToBeDeleted()},
+			reqObjs: []runtime.Object{testNamespace(), testNodeObsMCToBeDeleted()},
 			wantErr: false,
 		},
 	}
@@ -129,7 +142,7 @@ func TestCheckProfConf(t *testing.T) {
 	var ctx context.Context
 	nodemc := testNodeObsMC()
 
-	r := &MachineconfigReconciler{
+	r := &MachineConfigReconciler{
 		CtrlConfig:     nodemc,
 		Scheme:         test.Scheme,
 		Log:            zap.New(zap.UseDevMode(true)),
@@ -143,7 +156,7 @@ func TestCheckProfConf(t *testing.T) {
 	tests := []struct {
 		name    string
 		reqObjs []runtime.Object
-		preReq  func(*MachineconfigReconciler)
+		preReq  func(*MachineConfigReconciler)
 		wantErr bool
 	}{
 		{
@@ -159,7 +172,7 @@ func TestCheckProfConf(t *testing.T) {
 		{
 			name:    "crio profiling disabled",
 			reqObjs: []runtime.Object{nodemc, criomc},
-			preReq: func(r *MachineconfigReconciler) {
+			preReq: func(r *MachineConfigReconciler) {
 				r.CtrlConfig.Spec.EnableCrioProfiling = false
 			},
 			wantErr: false,
@@ -177,7 +190,7 @@ func TestCheckProfConf(t *testing.T) {
 		{
 			name:    "kubelet profiling disabled",
 			reqObjs: []runtime.Object{nodemc, criomc, kubeletmc},
-			preReq: func(r *MachineconfigReconciler) {
+			preReq: func(r *MachineConfigReconciler) {
 				r.CtrlConfig.Spec.EnableKubeletProfiling = false
 			},
 			wantErr: false,
@@ -204,7 +217,7 @@ func TestRevertPrevSyncChanges(t *testing.T) {
 
 	var ctx context.Context
 
-	r := &MachineconfigReconciler{
+	r := &MachineConfigReconciler{
 		Scheme:        test.Scheme,
 		Log:           zap.New(zap.UseDevMode(true)),
 		EventRecorder: record.NewFakeRecorder(100),

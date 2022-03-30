@@ -37,7 +37,7 @@ const (
 
 // ensureKubeletProfConfigExists checks if Kubelet config CR for
 // enabling profiling exists, if not creates the resource
-func (r *MachineconfigReconciler) ensureKubeletProfConfigExists(ctx context.Context) (*mcv1.KubeletConfig, bool, error) {
+func (r *MachineConfigReconciler) ensureKubeletProfConfigExists(ctx context.Context) (*mcv1.KubeletConfig, bool, error) {
 
 	namespace := types.NamespacedName{Name: KubeletProfilingConfigName}
 	kubeletmc, exists, err := r.fetchKubeletProfilingConfig(ctx, namespace)
@@ -61,7 +61,7 @@ func (r *MachineconfigReconciler) ensureKubeletProfConfigExists(ctx context.Cont
 
 // ensurekubeletProfConfigNotExists checks if Kubelet config CR for
 // enabling profiling exists, if exists delete the resource
-func (r *MachineconfigReconciler) ensureKubeletProfConfigNotExists(ctx context.Context) (bool, error) {
+func (r *MachineConfigReconciler) ensureKubeletProfConfigNotExists(ctx context.Context) (bool, error) {
 
 	namespace := types.NamespacedName{Name: KubeletProfilingConfigName}
 	kubeletmc, exists, err := r.fetchKubeletProfilingConfig(ctx, namespace)
@@ -76,7 +76,7 @@ func (r *MachineconfigReconciler) ensureKubeletProfConfigNotExists(ctx context.C
 
 		_, found, err := r.fetchKubeletProfilingConfig(ctx, namespace)
 		if err != nil || found {
-			return false, fmt.Errorf("failed to delete kubelet config: %v", err)
+			return false, fmt.Errorf("failed to ensure kubelet config was indeed removed: %v", err)
 		}
 
 		return true, nil
@@ -86,7 +86,7 @@ func (r *MachineconfigReconciler) ensureKubeletProfConfigNotExists(ctx context.C
 
 // fetchKubeletProfilingConfig is for fetching the kubelet MC CR created
 // by this controller for enabling profiling
-func (r *MachineconfigReconciler) fetchKubeletProfilingConfig(ctx context.Context, namespace types.NamespacedName) (*mcv1.KubeletConfig, bool, error) {
+func (r *MachineConfigReconciler) fetchKubeletProfilingConfig(ctx context.Context, namespace types.NamespacedName) (*mcv1.KubeletConfig, bool, error) {
 	kubeletmc := &mcv1.KubeletConfig{}
 
 	if err := r.Get(ctx, namespace, kubeletmc); err != nil {
@@ -99,7 +99,7 @@ func (r *MachineconfigReconciler) fetchKubeletProfilingConfig(ctx context.Contex
 }
 
 // createKubeletProfileConfig is for creating kubelet MC CR
-func (r *MachineconfigReconciler) createKubeletProfileConfig(ctx context.Context) error {
+func (r *MachineConfigReconciler) createKubeletProfileConfig(ctx context.Context) error {
 	kubeletmc, err := r.getKubeletConfig()
 	if err != nil {
 		return err
@@ -109,9 +109,6 @@ func (r *MachineconfigReconciler) createKubeletProfileConfig(ctx context.Context
 		return fmt.Errorf("failed to create kubelet profiling config %s: %w", kubeletmc.Name, err)
 	}
 
-	// TODO: cluster-scoped resource must not have a namespace-scoped owner,
-	// owner's namespace node-observability-operator. Code should be removed
-	// if node-observability/MachineConfig resource is going stay as namespaced resource
 	if err := ctrlruntime.SetControllerReference(r.CtrlConfig, kubeletmc, r.Scheme); err != nil {
 		r.Log.Error(err, "failed to update owner info in profiling KubeletConfig resource")
 	}
@@ -121,7 +118,7 @@ func (r *MachineconfigReconciler) createKubeletProfileConfig(ctx context.Context
 }
 
 // deleteKubeletProfileConfig is for deleting kubelet MC CR
-func (r *MachineconfigReconciler) deleteKubeletProfileConfig(ctx context.Context, kubeletmc *mcv1.KubeletConfig) error {
+func (r *MachineConfigReconciler) deleteKubeletProfileConfig(ctx context.Context, kubeletmc *mcv1.KubeletConfig) error {
 	if err := r.Delete(ctx, kubeletmc); err != nil {
 		return fmt.Errorf("failed to remove kubelet profiling config %s: %w", kubeletmc.Name, err)
 	}
@@ -131,7 +128,7 @@ func (r *MachineconfigReconciler) deleteKubeletProfileConfig(ctx context.Context
 }
 
 // getKubeletConfig returns the kubelet MC CR data required for creating it
-func (r *MachineconfigReconciler) getKubeletConfig() (*mcv1.KubeletConfig, error) {
+func (r *MachineConfigReconciler) getKubeletConfig() (*mcv1.KubeletConfig, error) {
 
 	config := map[string]bool{
 		"enableProfilingHandler": true,

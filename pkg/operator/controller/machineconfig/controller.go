@@ -26,10 +26,11 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	utilclock "k8s.io/apimachinery/pkg/util/clock"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/go-logr/logr"
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
@@ -37,14 +38,14 @@ import (
 	"github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
-// MachineconfigReconciler reconciles a Machineconfig object
-type MachineconfigReconciler struct {
+// MachineConfigReconciler reconciles a NodeObservabilityMachineConfig object
+type MachineConfigReconciler struct {
 	client.Client
 	sync.RWMutex
 
 	Scheme         *runtime.Scheme
 	Log            logr.Logger
-	CtrlConfig     *v1alpha1.Machineconfig
+	CtrlConfig     *v1alpha1.NodeObservabilityMachineConfig
 	EventRecorder  record.EventRecorder
 	PrevSyncChange map[string]PrevSyncData
 }
@@ -76,8 +77,6 @@ const (
 )
 
 var (
-	clock utilclock.Clock = utilclock.RealClock{}
-
 	// ProfilingMCSelectorLabels is for storing the labels to
 	// match with profiling MCP
 	ProfilingMCSelectorLabels = map[string]string{
@@ -98,41 +97,40 @@ var (
 	}
 )
 
-//+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=machineconfigs,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=machineconfigs/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=machineconfigs/finalizers,verbs=update
+//+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilitymachineconfigs,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilitymachineconfigs/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilitymachineconfigs/finalizers,verbs=update
 //+kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=kubeletconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigpools,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the Machineconfig object Gagainst the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.0/pkg/reconcile
-func (r *MachineconfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Log.Info("Reconciling MachineConfig of Nodeobservability operator")
+func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+
+	r.Log = log.FromContext(ctx)
+
+	r.Log.V(3).Info("Reconciling MachineConfig of Nodeobservability operator")
 
 	// Fetch the nodeobservability.olm.openshift.io/machineconfig CR
-	r.CtrlConfig = &v1alpha1.Machineconfig{}
+	r.CtrlConfig = &v1alpha1.NodeObservabilityMachineConfig{}
 	err := r.Get(ctx, req.NamespacedName, r.CtrlConfig)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
-			r.Log.Info("MachineConfig resource not found. Ignoring could have been deleted")
+			r.Log.Info("MachineConfig resource not found. Ignoring could have been deleted", "name", req.NamespacedName.Name)
 			return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
 		}
 		// Error reading the object - requeue the request.
 		r.Log.Error(err, "failed to fetch MachineConfig")
 		return ctrl.Result{RequeueAfter: 3 * time.Minute}, err
 	}
-	r.Log.Info("MachineConfig resource found", "namespace", req.NamespacedName.Namespace, "name", req.NamespacedName.Name)
+	r.Log.V(3).Info("MachineConfig resource found")
 
 	if r.CtrlConfig.DeletionTimestamp != nil {
 		r.Log.Info("MachineConfig resource marked for deletetion, cleaning up")
@@ -142,7 +140,7 @@ func (r *MachineconfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// Set finalizers on the NodeObservability/MachineConfig resource
 	updated, err := r.withFinalizers(ctx)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to update MachineConfig with finalizers:, %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to update MachineConfig with finalizers: %w", err)
 	}
 	r.CtrlConfig = updated
 
@@ -160,10 +158,10 @@ func (r *MachineconfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return result, err
 	}
 
-	now := metav1.NewTime(clock.Now())
-	r.CtrlConfig.Status.LastUpdate = &now
+	now := metav1.Now()
+	r.CtrlConfig.Status.LastUpdated = &now
 	if err = r.Status().Update(ctx, r.CtrlConfig); err != nil {
-		r.Log.Error(err, "failed to update status")
+		r.Log.Error(err, "failed to update nodeobservabilitymachineconfig status")
 		return ctrl.Result{RequeueAfter: defaultRequeueTime}, err
 	}
 
@@ -171,13 +169,13 @@ func (r *MachineconfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *MachineconfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *MachineConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.Machineconfig{}).
+		For(&v1alpha1.NodeObservabilityMachineConfig{}).
 		Complete(r)
 }
 
-func (r *MachineconfigReconciler) cleanUp(ctx context.Context) (ctrl.Result, error) {
+func (r *MachineConfigReconciler) cleanUp(ctx context.Context) (ctrl.Result, error) {
 	if hasFinalizer(r.CtrlConfig) {
 		// Remove the finalizer.
 		_, err := r.withoutFinalizers(ctx, finalizer)
@@ -188,7 +186,7 @@ func (r *MachineconfigReconciler) cleanUp(ctx context.Context) (ctrl.Result, err
 	return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
 }
 
-func (r *MachineconfigReconciler) withFinalizers(ctx context.Context) (*v1alpha1.Machineconfig, error) {
+func (r *MachineConfigReconciler) withFinalizers(ctx context.Context) (*v1alpha1.NodeObservabilityMachineConfig, error) {
 	withFinalizers := r.CtrlConfig.DeepCopy()
 
 	if !hasFinalizer(withFinalizers) {
@@ -201,7 +199,7 @@ func (r *MachineconfigReconciler) withFinalizers(ctx context.Context) (*v1alpha1
 	return withFinalizers, nil
 }
 
-func (r *MachineconfigReconciler) withoutFinalizers(ctx context.Context, finalizer string) (*v1alpha1.Machineconfig, error) {
+func (r *MachineConfigReconciler) withoutFinalizers(ctx context.Context, finalizer string) (*v1alpha1.NodeObservabilityMachineConfig, error) {
 	withoutFinalizers := r.CtrlConfig.DeepCopy()
 
 	newFinalizers := make([]string, 0)
@@ -223,7 +221,7 @@ func (r *MachineconfigReconciler) withoutFinalizers(ctx context.Context, finaliz
 	return withoutFinalizers, nil
 }
 
-func hasFinalizer(mc *v1alpha1.Machineconfig) bool {
+func hasFinalizer(mc *v1alpha1.NodeObservabilityMachineConfig) bool {
 	hasFinalizer := false
 	for _, f := range mc.Finalizers {
 		if f == finalizer {
@@ -235,18 +233,16 @@ func hasFinalizer(mc *v1alpha1.Machineconfig) bool {
 }
 
 // checkProfConf checks and ensures profiling config for defined services
-func (r *MachineconfigReconciler) checkProfConf(ctx context.Context) error {
+func (r *MachineConfigReconciler) checkProfConf(ctx context.Context) error {
 	r.Lock()
 	defer r.Unlock()
 
-	errored := false
-	errs := fmt.Errorf("failed to check profiling configs")
+	var errors []error
 	if r.CtrlConfig.Spec.EnableCrioProfiling {
 		criomc, created, err := r.ensureCrioProfConfigExists(ctx)
 		if err != nil {
-			errored = true
 			r.Log.Error(err, "failed to enable crio profiling")
-			errs = fmt.Errorf("%w: %s", errs, err)
+			errors = append(errors, err)
 		}
 		if created {
 			r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "CreateConfig", "successfully created crio machine config")
@@ -258,9 +254,8 @@ func (r *MachineconfigReconciler) checkProfConf(ctx context.Context) error {
 	} else {
 		deleted, err := r.ensureCrioProfConfigNotExists(ctx)
 		if err != nil {
-			errored = true
 			r.Log.Error(err, "failed to disable crio profiling")
-			errs = fmt.Errorf("%w: %s", errs, err)
+			errors = append(errors, err)
 		}
 		if deleted {
 			r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "DeleteConfig", "successfully deleted crio machine config")
@@ -273,9 +268,8 @@ func (r *MachineconfigReconciler) checkProfConf(ctx context.Context) error {
 	if r.CtrlConfig.Spec.EnableKubeletProfiling {
 		kubeletmc, created, err := r.ensureKubeletProfConfigExists(ctx)
 		if err != nil {
-			errored = true
 			r.Log.Error(err, "failed to enable kubelet profiling")
-			errs = fmt.Errorf("%w: %s", errs, err)
+			errors = append(errors, err)
 		}
 		if created {
 			r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "CreateConfig", "successfully created kubelet config")
@@ -287,9 +281,8 @@ func (r *MachineconfigReconciler) checkProfConf(ctx context.Context) error {
 	} else {
 		deleted, err := r.ensureKubeletProfConfigNotExists(ctx)
 		if err != nil {
-			errored = true
 			r.Log.Error(err, "failed to disable kubelet profiling")
-			errs = fmt.Errorf("%w: %s", errs, err)
+			errors = append(errors, err)
 		}
 		if deleted {
 			r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "DeleteConfig", "successfully deleted kubelet config")
@@ -299,15 +292,12 @@ func (r *MachineconfigReconciler) checkProfConf(ctx context.Context) error {
 		}
 	}
 
-	if errored {
-		return errs
-	}
-	return nil
+	return utilerrors.NewAggregate(errors)
 }
 
 // revertPrevSyncChanges is for restoring the cluster state to
 // as it was, before the changes made in previous reconciliation if any
-func (r *MachineconfigReconciler) revertPrevSyncChanges(ctx context.Context) error {
+func (r *MachineConfigReconciler) revertPrevSyncChanges(ctx context.Context) error {
 	r.Lock()
 	defer r.Unlock()
 

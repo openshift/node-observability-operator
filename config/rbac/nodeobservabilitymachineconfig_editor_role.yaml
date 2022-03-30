@@ -1,13 +1,13 @@
-# permissions for end users to edit machineconfigs.
+# permissions for end users to edit nodeobservabilitymachineconfigs.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: machineconfig-editor-role
+  name: nodeobservabilitymachineconfig-editor-role
 rules:
 - apiGroups:
   - nodeobservability.olm.openshift.io
   resources:
-  - machineconfigs
+  - nodeobservabilitymachineconfigs
   verbs:
   - create
   - delete
@@ -19,6 +19,6 @@ rules:
 - apiGroups:
   - nodeobservability.olm.openshift.io
   resources:
-  - machineconfigs/status
+  - nodeobservabilitymachineconfigs/status
   verbs:
   - get

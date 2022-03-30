@@ -47,7 +47,7 @@ Environment="ENABLE_PROFILE_UNIX_SOCKET=true"`
 
 // ensureCrioProfConfigExists checks if CRI-O MachineConfig CR for
 // enabling profiling exists, if not creates the resource
-func (r *MachineconfigReconciler) ensureCrioProfConfigExists(ctx context.Context) (*mcv1.MachineConfig, bool, error) {
+func (r *MachineConfigReconciler) ensureCrioProfConfigExists(ctx context.Context) (*mcv1.MachineConfig, bool, error) {
 	namespace := types.NamespacedName{Name: CrioProfilingConfigName}
 	criomc, exists, err := r.fetchCrioProfileConfig(ctx, namespace)
 	if err != nil {
@@ -70,7 +70,7 @@ func (r *MachineconfigReconciler) ensureCrioProfConfigExists(ctx context.Context
 
 // ensureCrioProfConfigNotExists checks if CRI-O MachineConfig CR for
 // enabling profiling exists, if exists delete the resource
-func (r *MachineconfigReconciler) ensureCrioProfConfigNotExists(ctx context.Context) (bool, error) {
+func (r *MachineConfigReconciler) ensureCrioProfConfigNotExists(ctx context.Context) (bool, error) {
 	namespace := types.NamespacedName{Name: CrioProfilingConfigName}
 	criomc, exists, err := r.fetchCrioProfileConfig(ctx, namespace)
 	if err != nil {
@@ -83,7 +83,7 @@ func (r *MachineconfigReconciler) ensureCrioProfConfigNotExists(ctx context.Cont
 
 		_, exists, err = r.fetchCrioProfileConfig(ctx, namespace)
 		if err != nil || exists {
-			return false, fmt.Errorf("failed to delete crio profiling config: %v", err)
+			return false, fmt.Errorf("failed to ensure crio profiling config was indeed deleted: %v", err)
 		}
 
 		return true, nil
@@ -93,7 +93,7 @@ func (r *MachineconfigReconciler) ensureCrioProfConfigNotExists(ctx context.Cont
 
 // fetchCrioProfileConfig is for fetching the CRI-O MC CR created
 // by this controller for enabling profiling
-func (r *MachineconfigReconciler) fetchCrioProfileConfig(ctx context.Context, namespace types.NamespacedName) (*mcv1.MachineConfig, bool, error) {
+func (r *MachineConfigReconciler) fetchCrioProfileConfig(ctx context.Context, namespace types.NamespacedName) (*mcv1.MachineConfig, bool, error) {
 	criomc := &mcv1.MachineConfig{}
 
 	if err := r.Get(ctx, namespace, criomc); err != nil {
@@ -106,7 +106,7 @@ func (r *MachineconfigReconciler) fetchCrioProfileConfig(ctx context.Context, na
 }
 
 // createCrioProfileConfig is for creating CRI-O MC CR
-func (r *MachineconfigReconciler) createCrioProfileConfig(ctx context.Context) error {
+func (r *MachineConfigReconciler) createCrioProfileConfig(ctx context.Context) error {
 	criomc, err := r.getCrioConfig()
 	if err != nil {
 		return err
@@ -116,9 +116,6 @@ func (r *MachineconfigReconciler) createCrioProfileConfig(ctx context.Context) e
 		return fmt.Errorf("failed to create crio profiling config %s: %w", criomc.Name, err)
 	}
 
-	// TODO: cluster-scoped resource must not have a namespace-scoped owner,
-	// owner's namespace node-observability-operator. Code should be removed
-	// if node-observability/MachineConfig resource is going stay as namespaced resource
 	if err := ctrlruntime.SetControllerReference(r.CtrlConfig, criomc, r.Scheme); err != nil {
 		r.Log.Error(err, "failed to update owner info in CRI-O profiling MC resource")
 	}
@@ -128,7 +125,7 @@ func (r *MachineconfigReconciler) createCrioProfileConfig(ctx context.Context) e
 }
 
 // deleteCrioProfileConfig is for deleting CRI-O MC CR
-func (r *MachineconfigReconciler) deleteCrioProfileConfig(ctx context.Context, criomc *mcv1.MachineConfig) error {
+func (r *MachineConfigReconciler) deleteCrioProfileConfig(ctx context.Context, criomc *mcv1.MachineConfig) error {
 	if err := r.Delete(ctx, criomc); err != nil {
 		return fmt.Errorf("failed to remove crio profiling config %s: %w", criomc.Name, err)
 	}
@@ -177,7 +174,7 @@ func convertIgnConfToRawExt(config igntypes.Config) (k8sruntime.RawExtension, er
 }
 
 // getCrioConfig returns the CRI-O MC CR data required for creating it
-func (r *MachineconfigReconciler) getCrioConfig() (*mcv1.MachineConfig, error) {
+func (r *MachineConfigReconciler) getCrioConfig() (*mcv1.MachineConfig, error) {
 	config := getCrioIgnitionConfig()
 
 	rawExt, err := convertIgnConfToRawExt(config)

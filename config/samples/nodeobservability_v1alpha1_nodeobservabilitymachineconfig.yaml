@@ -1,7 +1,7 @@
 apiVersion: nodeobservability.olm.openshift.io/v1alpha1
-kind: Machineconfig
+kind: NodeObservabilityMachineConfig
 metadata:
-  name: machineconfig-sample
+  name: nodeobservabilitymachineconfig-sample
 spec:
   enableCrioProfiling: true
   enableKubeletProfiling: true

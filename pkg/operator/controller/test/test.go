@@ -110,9 +110,8 @@ func NewEvent(we watch.Event) Event {
 	case *mcv1.KubeletConfig:
 		te.ObjType = "kubeletconfig"
 		te.Name = obj.Name
-	case *v1alpha1.Machineconfig:
-		te.ObjType = "machineconfig"
-		te.Namespace = obj.Namespace
+	case *v1alpha1.NodeObservabilityMachineConfig:
+		te.ObjType = "nodeobservabilitymachineconfig"
 		te.Name = obj.Name
 	}
 	return te

@@ -4,7 +4,7 @@
 resources:
 - bases/nodeobservability.olm.openshift.io_nodeobservabilities.yaml
 - bases/nodeobservability.olm.openshift.io_nodeobservabilityruns.yaml
-- bases/nodeobservability.olm.openshift.io_machineconfigs.yaml
+- bases/nodeobservability.olm.openshift.io_nodeobservabilitymachineconfigs.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:
@@ -12,14 +12,14 @@ patchesStrategicMerge:
 # patches here are for enabling the conversion webhook for each CRD
 #- patches/webhook_in_nodeobservabilities.yaml
 #- patches/webhook_in_nodeobservabilityruns.yaml
-#- patches/webhook_in_machineconfigs.yaml
+#- patches/webhook_in_nodeobservabilitymachineconfigs.yaml
 #+kubebuilder:scaffold:crdkustomizewebhookpatch
 
 # [CERTMANAGER] To enable cert-manager, uncomment all the sections with [CERTMANAGER] prefix.
 # patches here are for enabling the CA injection for each CRD
 #- patches/cainjection_in_nodeobservabilities.yaml
 #- patches/cainjection_in_nodeobservabilityruns.yaml
-#- patches/cainjection_in_machineconfigs.yaml
+#- patches/cainjection_in_nodeobservabilitymachineconfigs.yaml
 #+kubebuilder:scaffold:crdkustomizecainjectionpatch
 
 # the following config is for teaching kustomize how to do kustomization for CRDs.

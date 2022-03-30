@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+
 	nodeobservabilityv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 	machineconfigcontroller "github.com/openshift/node-observability-operator/pkg/operator/controller/machineconfig"
 	nodeobservabilitycontroller "github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservability"
@@ -109,14 +110,14 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "NodeObservabilityRun")
 		os.Exit(1)
 	}
-	if err = (&machineconfigcontroller.MachineconfigReconciler{
+	if err = (&machineconfigcontroller.MachineConfigReconciler{
 		Client:         mgr.GetClient(),
 		Scheme:         mgr.GetScheme(),
-		Log:            ctrl.Log.WithName("controller").WithName("MachineConfig"),
-		EventRecorder:  mgr.GetEventRecorderFor("node-observability"),
+		Log:            ctrl.Log.WithName("controller").WithName("NodeObservabilityMachineConfig"),
+		EventRecorder:  mgr.GetEventRecorderFor("node-observability-operator"),
 		PrevSyncChange: make(map[string]machineconfigcontroller.PrevSyncData),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Machineconfig")
+		setupLog.Error(err, "unable to create controller", "controller", "NodeObservabilityMachineConfig")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

@@ -32,7 +32,7 @@ import (
 
 // ensureProfilingMCPExists is for creating the MCP required for
 // tracking profiling machine configs
-func (r *MachineconfigReconciler) ensureProfilingMCPExists(ctx context.Context) (*mcv1.MachineConfigPool, error) {
+func (r *MachineConfigReconciler) ensureProfilingMCPExists(ctx context.Context) (*mcv1.MachineConfigPool, error) {
 
 	namespace := types.NamespacedName{Name: ProfilingMCPName}
 
@@ -67,7 +67,7 @@ func (r *MachineconfigReconciler) ensureProfilingMCPExists(ctx context.Context) 
 }
 
 // fetchProfilingMCP is for fetching the profiling MCP created by this controller
-func (r *MachineconfigReconciler) fetchProfilingMCP(ctx context.Context, namespace types.NamespacedName) (*mcv1.MachineConfigPool, bool, error) {
+func (r *MachineConfigReconciler) fetchProfilingMCP(ctx context.Context, namespace types.NamespacedName) (*mcv1.MachineConfigPool, bool, error) {
 	mcp := &mcv1.MachineConfigPool{}
 
 	if err := r.Get(ctx, namespace, mcp); err != nil {
@@ -108,7 +108,7 @@ func getProfilingMCP() *mcv1.MachineConfigPool {
 					},
 					{
 						APIVersion: MCAPIVersion,
-						Kind:       MCKind,
+						Kind:       "KubeletConfig",
 						Name:       KubeletProfilingConfigName,
 					},
 				},
@@ -118,23 +118,23 @@ func getProfilingMCP() *mcv1.MachineConfigPool {
 }
 
 // createProfilingMCP is for creating the required profiling MCP
-func (r *MachineconfigReconciler) createProfilingMCP(ctx context.Context) error {
+func (r *MachineConfigReconciler) createProfilingMCP(ctx context.Context) error {
 	mcp := getProfilingMCP()
 
 	if err := r.Create(ctx, mcp); err != nil {
 		return fmt.Errorf("failed to create MCP for profiling machine configs: %w", err)
 	}
-	/*
-		if err := ctrl.SetControllerReference(r.CtrlConfig, mcp, r.Scheme); err != nil {
-			r.Log.Error(err, "failed to update owner info in profiling MCP resource")
-		}
-	*/
+
+	if err := ctrl.SetControllerReference(r.CtrlConfig, mcp, r.Scheme); err != nil {
+		r.Log.Error(err, "failed to update owner info in profiling MCP resource")
+	}
+
 	r.Log.Info("successfully created MCP for profiling machine configs", "ProfilingMCPName", ProfilingMCPName)
 	return nil
 }
 
 // deleteProfilingMCP is for deleting MCP created for profiling MC CRs
-func (r *MachineconfigReconciler) deleteProfilingMCP(ctx context.Context, mcp *mcv1.MachineConfigPool) error {
+func (r *MachineConfigReconciler) deleteProfilingMCP(ctx context.Context, mcp *mcv1.MachineConfigPool) error {
 	if err := r.Delete(ctx, mcp); err != nil {
 		return fmt.Errorf("failed to remove profiling MCP CR %s : %w", ProfilingMCPName, err)
 	}
@@ -144,7 +144,7 @@ func (r *MachineconfigReconciler) deleteProfilingMCP(ctx context.Context, mcp *m
 }
 
 // checkMCPUpdateStatus is for reconciling update status of all machines in profiling MCP
-func (r *MachineconfigReconciler) checkMCPUpdateStatus(ctx context.Context) (ctrl.Result, error) {
+func (r *MachineConfigReconciler) checkMCPUpdateStatus(ctx context.Context) (ctrl.Result, error) {
 	mcp := &mcv1.MachineConfigPool{}
 	key := types.NamespacedName{Name: ProfilingMCPName}
 	if err := r.Get(ctx, key, mcp); err != nil {
@@ -158,7 +158,7 @@ func (r *MachineconfigReconciler) checkMCPUpdateStatus(ctx context.Context) (ctr
 	r.Lock()
 	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdating) &&
 		r.CtrlConfig.Status.UpdateStatus.InProgress == corev1.ConditionFalse {
-		r.Log.Info("config update under progress")
+		r.Log.Info("machine config update under progress")
 		r.CtrlConfig.Status.UpdateStatus.InProgress = corev1.ConditionTrue
 		r.Unlock()
 		return ctrl.Result{RequeueAfter: 3 * time.Minute}, nil
@@ -167,7 +167,7 @@ func (r *MachineconfigReconciler) checkMCPUpdateStatus(ctx context.Context) (ctr
 	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdated) {
 		if mcp.Status.UpdatedMachineCount == mcp.Status.MachineCount {
 			r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "ConfigUpdate", "config update completed on all machines")
-			r.Log.Info("config update completed on all machines")
+			r.Log.Info("machine config update completed on all machines")
 			r.CtrlConfig.Status.UpdateStatus.InProgress = corev1.ConditionFalse
 			r.Unlock()
 			return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
@@ -187,7 +187,7 @@ func (r *MachineconfigReconciler) checkMCPUpdateStatus(ctx context.Context) (ctr
 			}
 			r.CtrlConfig.Status.UpdateStatus.InProgress = corev1.ConditionTrue
 			r.Unlock()
-			r.Log.Info("waiting for update to finish on all machines", "MachineConfigPool", ProfilingMCPName)
+			r.Log.Info("waiting for machine config update to complete on all machines", "MachineConfigPool", ProfilingMCPName)
 			return ctrl.Result{RequeueAfter: 3 * time.Minute}, nil
 		}
 	}
