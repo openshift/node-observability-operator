@@ -45,9 +45,13 @@ type NodeObservabilityRunStatus struct {
 	// It is represented in RFC3339 form and is in UTC.
 	FinishedTimestamp *metav1.Time `json:"finishedTimestamp,omitempty"`
 
-	// Agents represents the list of Nodes that are included in this Run
-	// agents are Pods, and as such, not all are always ready/available
+	// Agents represents the list of Nodes that are included in this Run.
+	// Agents are Pods, and as such, not all are always ready/available
 	Agents []AgentNode `json:"agents,omitempty"`
+
+	// FailedAgents represents the list of Nodes that could not be included in this Run
+	// This could be due to Node/Pod/Network failure
+	FailedAgents []AgentNode `json:"failedAgents,omitempty"`
 
 	// Conditions contain details for aspects of the current state of this API Resource.
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
