@@ -2,7 +2,7 @@
 
 The NodeObservability Operator allows you to deploy and manage [NodeObservability Agent](https://github.com/openshift/node-observability-agent) on worker nodes. The agent is deployed through DaemonSets on all or selected nodes. It also triggers the crio and kubelet profile data to the nodes hostPath for later retrieval.
 
-**Note**: This Operator is in the early stages of implementation, and will be changing.
+**Note**: This Operator is in the early stages of implementation and keeps changing.
 
 ## Deploying the `NodeObservability` Operator
 
@@ -36,47 +36,52 @@ You can install the NodeObservability Operator by building and pushing the Opera
    ```
 
 
-### Installing the `Node Observability` Operator using a custom index image on OperatorHub
-**Note**: The below procedure works best with `podman` as container engine
-    
-1. Build and push the operator image to the registry:
+### Installing the `Node Observability` Operator using a custom index image on the OperatorHub
+**Note**: It is recommended to use `podman` as a container engine.
+
+**Prerequisites**
+* Openshift Container Platform cluster (CodeReady Containers for development).
+
+
+**Procedure**
+
+1. Build and push the Operator image to the registry:
     ```sh
-    export IMG=${REGISTRY}/${REPOSITORY}/node-observability-operator:${VERSION}
-    make container-build container-push
+    $ export IMG=${REGISTRY}/${REPOSITORY}/node-observability-operator:${VERSION}
+    $ make container-build container-push
     ```
 
 2. Build and push the bundle image to the registry:
-  
-    a. In the `bundle/manifests/node-observability-operator_clusterserviceversion.yaml`
-        add the operator image created in Step 1 as follows:
+
+    a. Add the created Operator image in the `node-observability-operator_clusterserviceversion.yaml` file:
     ```sh
-    sed -i "s|quay.io/openshift/origin-node-observability-operator:latest|${IMG}|g" bundle/manifests/node-observability-operator_clusterserviceversion.yaml
+    $ sed -i "s|quay.io/openshift/origin-node-observability-operator:latest|${IMG}|g" bundle/manifests/node-observability-operator_clusterserviceversion.yaml
     ```
-    b. Build the image
+    b. Build the image:
     ```sh
-    export BUNDLE_IMG=${REGISTRY}/${REPOSITORY}/node-observability-operator-bundle:${VERSION}
-    make bundle-build bundle-push
+    $ export BUNDLE_IMG=${REGISTRY}/${REPOSITORY}/node-observability-operator-bundle:${VERSION}
+    $ make bundle-build bundle-push
     ```
 
 3. Build and push the index image to the registry:
    ```sh
-   export INDEX_IMG=${REGISTRY}/${REPOSITORY}/node-observability-operator-bundle-index:${VERSION}
-   make index-image-build index-image-push
+   $ export INDEX_IMG=${REGISTRY}/${REPOSITORY}/node-observability-operator-bundle-index:${VERSION}
+   $ make index-image-build index-image-push
    ```
 
-4. You may need to link the registry secret to the pod of `node-observability-operator` created in the `openshift-marketplace` namespace if the image is not made public ([Doc link](https://docs.openshift.com/container-platform/4.10/openshift_images/managing_images/using-image-pull-secrets.html#images-allow-pods-to-reference-images-from-secure-registries_using-image-pull-secrets)). If you are using `podman` then these are the instructions:
+4. (Optional) If the image is not made public, then you have to link the registry secret to the pod of the `node-observability-operator` created in the `openshift-marketplace` namespace:
 
     a. Create a secret with authentication details of your image registry:
     ```sh
-    oc -n openshift-marketplace create secret generic nodeobs-olm-secret  --type=kubernetes.io/dockercfg  --from-file=.dockercfg=${XDG_RUNTIME_DIR}/containers/auth.json
+    $ oc -n openshift-marketplace create secret generic nodeobs-olm-secret  --type=kubernetes.io/dockercfg  --from-file=.dockercfg=${XDG_RUNTIME_DIR}/containers/auth.json
     ```
-    b. Link the secret to `default` service account:
+    b. Link the secret to the `default` service account:
     ```sh
-    oc -n openshift-marketplace secrets link default nodeobs-olm-secret --for=pull
+    $ oc -n openshift-marketplace secrets link default nodeobs-olm-secret --for=pull
     ````
 
-6. Create the `CatalogSource` object:
-   ```sh
+5. Create the `CatalogSource` object:
+   ```
    cat <<EOF | oc apply -f -
    apiVersion: operators.coreos.com/v1alpha1
    kind: CatalogSource
@@ -89,13 +94,15 @@ You can install the NodeObservability Operator by building and pushing the Opera
    EOF
    ```
 
-7. Create the operator namespace:
+6. Create the Operator namespace:
     ```sh
-    oc create namespace node-observability-operator
+    $ oc create namespace node-observability-operator
     ```
 
-8. Create the `OperatorGroup` object to scope the operator to `node-observability-operator` namespace:
-    ```sh
+**From the CLI**
+
+1. Create the `OperatorGroup` object to scope the Operator to `node-observability-operator` namespace:
+    ```
     cat <<EOF | oc apply -f -
     apiVersion: operators.coreos.com/v1
     kind: OperatorGroup
@@ -108,8 +115,8 @@ You can install the NodeObservability Operator by building and pushing the Opera
     EOF
     ```
 
-9. Create the `Subscription` object:
-    ```sh
+2. Create the `Subscription` object:
+    ```
     cat <<EOF | oc apply -f -
     apiVersion: operators.coreos.com/v1alpha1
     kind: Subscription
@@ -123,5 +130,28 @@ You can install the NodeObservability Operator by building and pushing the Opera
       sourceNamespace: openshift-marketplace
     EOF
     ```
+**From the UI**
 
-**Note**: The steps starting from the 7th can be replaced with the following actions in the web console: Navigate to  `Operators` -> `OperatorHub`, search for the `Node Observability Operator`,  and install it in the `node-observability-operator` namespace.
+To install the Node Observability Operator from the web console, follow these steps:
+
+1. Log in to the OpenShift Container Platform web console.
+
+2. Navigate to **Operators → OperatorHub**.
+
+3. Type **Node Observability Operator** into the filter box and select it.
+
+4. Click **Install**.
+
+5. On the Install Operator page, select A specific namespace on the cluster. Select **node-observability-operator** from the drop-down menu.
+
+
+Once finished, the Node Observability Operator will be listed in the Installed Operators section of the web console.
+
+**Verification**
+
+* Use the following commands to verify that the Node Observability Operator has been installed.
+```sh
+$ oc get catalogsource -n openshift-marketplace
+$ oc get operatorgroup -n node-observability-operator
+$ oc get subscription -n node-observability-operator
+```
