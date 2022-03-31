@@ -319,6 +319,11 @@ func (in *NodeObservabilityRunStatus) DeepCopyInto(out *NodeObservabilityRunStat
 		*out = make([]AgentNode, len(*in))
 		copy(*out, *in)
 	}
+	if in.FailedAgents != nil {
+		in, out := &in.FailedAgents, &out.FailedAgents
+		*out = make([]AgentNode, len(*in))
+		copy(*out, *in)
+	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
 		*out = make([]v1.Condition, len(*in))

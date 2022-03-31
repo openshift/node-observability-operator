@@ -58,6 +58,7 @@ type NodeObservabilityReconciler struct {
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilities/finalizers,verbs=update
 //+kubebuilder:rbac:groups=apps,namespace=node-observability-operator,resources=daemonsets,verbs=list;get;create;watch;
 //+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=secrets,verbs=list;get;create;watch;delete;
+//+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=services,verbs=list;get;create;watch;delete;
 //+kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=list;get;create;watch;delete;
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=list;get;watch
 //+kubebuilder:rbac:groups=core,resources=nodes,verbs=list;get;
@@ -136,6 +137,15 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	}
 	r.Log.Info(fmt.Sprintf("ServiceAccount : %s", sa.Name))
 
+	// ensure service
+	haveSvc, svc, err := r.ensureService(ctx, nodeObs)
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("failed to ensure service : %w", err)
+	} else if !haveSvc {
+		return reconcile.Result{}, fmt.Errorf("failed to get service")
+	}
+	r.Log.Info(fmt.Sprintf("Service : %s", svc.Name))
+
 	// check clusterrole
 	haveCR, cr, err := r.ensureClusterRole(ctx, nodeObs)
 	if err != nil {
@@ -202,6 +212,7 @@ func (r *NodeObservabilityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&operatorv1alpha1.NodeObservability{}).
 		Owns(&appsv1.DaemonSet{}).
+		Owns(&corev1.Service{}).
 		Complete(r)
 }
 

@@ -60,7 +60,7 @@ spec:
             properties:
               agents:
                 description: Agents represents the list of Nodes that are included
-                  in this Run agents are Pods, and as such, not all are always ready/available
+                  in this Run. Agents are Pods, and as such, not all are always ready/available
                 items:
                   properties:
                     ip:
@@ -141,6 +141,21 @@ spec:
                   - reason
                   - status
                   - type
+                  type: object
+                type: array
+              failedAgents:
+                description: FailedAgents represents the list of Nodes that could
+                  not be included in this Run This could be due to Node/Pod/Network
+                  failure
+                items:
+                  properties:
+                    ip:
+                      type: string
+                    name:
+                      type: string
+                    port:
+                      format: int32
+                      type: integer
                   type: object
                 type: array
               finishedTimestamp:
