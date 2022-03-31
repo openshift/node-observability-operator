@@ -30,7 +30,6 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/go-logr/logr"
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
@@ -109,16 +108,17 @@ var (
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.0/pkg/reconcile
-func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
 
-	r.Log = log.FromContext(ctx)
+	if r.Log, err = logr.FromContext(ctx); err != nil {
+		return
+	}
 
 	r.Log.V(3).Info("Reconciling MachineConfig of Nodeobservability operator")
 
 	// Fetch the nodeobservability.olm.openshift.io/machineconfig CR
 	r.CtrlConfig = &v1alpha1.NodeObservabilityMachineConfig{}
-	err := r.Get(ctx, req.NamespacedName, r.CtrlConfig)
-	if err != nil {
+	if err = r.Get(ctx, req.NamespacedName, r.CtrlConfig); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
@@ -178,8 +178,7 @@ func (r *MachineConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *MachineConfigReconciler) cleanUp(ctx context.Context) (ctrl.Result, error) {
 	if hasFinalizer(r.CtrlConfig) {
 		// Remove the finalizer.
-		_, err := r.withoutFinalizers(ctx, finalizer)
-		if err != nil {
+		if _, err := r.withoutFinalizers(ctx, finalizer); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to remove finalizer from MachineConfig %s: %w", r.CtrlConfig.Name, err)
 		}
 	}

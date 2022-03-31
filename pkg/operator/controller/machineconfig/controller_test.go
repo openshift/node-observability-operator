@@ -19,7 +19,6 @@ package machineconfigcontroller
 import (
 	"context"
 	"testing"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,6 +27,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/openshift/node-observability-operator/api/v1alpha1"
@@ -39,11 +39,19 @@ const (
 	TestControllerResourceName = "machineconfig-test"
 )
 
+func testReconciler() *MachineConfigReconciler {
+	return &MachineConfigReconciler{
+		Scheme:         test.Scheme,
+		Log:            zap.New(zap.UseDevMode(true)),
+		EventRecorder:  record.NewFakeRecorder(100),
+		PrevSyncChange: make(map[string]PrevSyncData),
+	}
+}
+
 func testReconcileRequest() ctrl.Request {
 	return ctrl.Request{
 		NamespacedName: types.NamespacedName{
-			Name:      TestControllerResourceName,
-			Namespace: TestOperatorNameSpace,
+			Name: TestControllerResourceName,
 		},
 	}
 }
@@ -67,8 +75,7 @@ func testNodeObsMC() *v1alpha1.NodeObservabilityMachineConfig {
 			APIVersion: "nodeobservability.olm.openshift.io/v1alpha1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      TestControllerResourceName,
-			Namespace: TestOperatorNameSpace,
+			Name: TestControllerResourceName,
 		},
 		Spec: v1alpha1.NodeObservabilityMachineConfigSpec{
 			EnableCrioProfiling:    true,
@@ -85,22 +92,15 @@ func testNodeObsMC() *v1alpha1.NodeObservabilityMachineConfig {
 func testNodeObsMCToBeDeleted() *v1alpha1.NodeObservabilityMachineConfig {
 	mc := testNodeObsMC()
 	mc.Finalizers = append(mc.Finalizers, finalizer)
-	mc.DeletionTimestamp = &metav1.Time{
-		Time: time.Now(),
-	}
+	now := metav1.Now()
+	mc.DeletionTimestamp = &now
 	return mc
 }
 
 func TestReconcile(t *testing.T) {
 
-	var ctx context.Context
-
-	r := &MachineConfigReconciler{
-		Scheme:         test.Scheme,
-		Log:            zap.New(zap.UseDevMode(true)),
-		EventRecorder:  record.NewFakeRecorder(100),
-		PrevSyncChange: make(map[string]PrevSyncData),
-	}
+	ctx := log.IntoContext(context.TODO(), zap.New(zap.UseDevMode(true)))
+	r := testReconciler()
 	request := testReconcileRequest()
 
 	tests := []struct {
@@ -110,17 +110,17 @@ func TestReconcile(t *testing.T) {
 	}{
 		{
 			name:    "controller resource does not exist",
-			reqObjs: []runtime.Object{testNamespace()},
+			reqObjs: []runtime.Object{},
 			wantErr: false,
 		},
 		{
 			name:    "controller resource exists",
-			reqObjs: []runtime.Object{testNamespace(), testNodeObsMC()},
+			reqObjs: []runtime.Object{testNodeObsMC()},
 			wantErr: false,
 		},
 		{
 			name:    "controller resource marked for deletion",
-			reqObjs: []runtime.Object{testNamespace(), testNodeObsMCToBeDeleted()},
+			reqObjs: []runtime.Object{testNodeObsMCToBeDeleted()},
 			wantErr: false,
 		},
 	}
@@ -139,17 +139,9 @@ func TestReconcile(t *testing.T) {
 
 func TestCheckProfConf(t *testing.T) {
 
-	var ctx context.Context
 	nodemc := testNodeObsMC()
-
-	r := &MachineConfigReconciler{
-		CtrlConfig:     nodemc,
-		Scheme:         test.Scheme,
-		Log:            zap.New(zap.UseDevMode(true)),
-		EventRecorder:  record.NewFakeRecorder(100),
-		PrevSyncChange: make(map[string]PrevSyncData),
-	}
-
+	r := testReconciler()
+	r.CtrlConfig = nodemc
 	criomc, _ := r.getCrioConfig()
 	kubeletmc, _ := r.getKubeletConfig()
 
@@ -206,7 +198,7 @@ func TestCheckProfConf(t *testing.T) {
 			c := fake.NewClientBuilder().WithScheme(test.Scheme).WithRuntimeObjects(tt.reqObjs...).Build()
 			r.Client = c
 
-			if err := r.checkProfConf(ctx); (err != nil) != tt.wantErr {
+			if err := r.checkProfConf(context.TODO()); (err != nil) != tt.wantErr {
 				t.Errorf("checkProfConf() err = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -215,14 +207,9 @@ func TestCheckProfConf(t *testing.T) {
 
 func TestRevertPrevSyncChanges(t *testing.T) {
 
-	var ctx context.Context
-
-	r := &MachineConfigReconciler{
-		Scheme:        test.Scheme,
-		Log:           zap.New(zap.UseDevMode(true)),
-		EventRecorder: record.NewFakeRecorder(100),
-	}
-
+	nodemc := testNodeObsMC()
+	r := testReconciler()
+	r.CtrlConfig = nodemc
 	criomc, _ := r.getCrioConfig()
 	kubeletmc, _ := r.getKubeletConfig()
 
@@ -234,13 +221,13 @@ func TestRevertPrevSyncChanges(t *testing.T) {
 	}{
 		{
 			name:         "no changes to revert",
-			reqObjs:      []runtime.Object{},
+			reqObjs:      []runtime.Object{nodemc},
 			prevSyncData: map[string]PrevSyncData{},
 			wantErr:      false,
 		},
 		{
 			name:    "revert crio create",
-			reqObjs: []runtime.Object{criomc},
+			reqObjs: []runtime.Object{nodemc, criomc},
 			prevSyncData: map[string]PrevSyncData{
 				"crio": {
 					action: "created",
@@ -251,7 +238,7 @@ func TestRevertPrevSyncChanges(t *testing.T) {
 		},
 		{
 			name:    "revert crio delete",
-			reqObjs: []runtime.Object{},
+			reqObjs: []runtime.Object{nodemc},
 			prevSyncData: map[string]PrevSyncData{
 				"crio": {
 					action: "deleted",
@@ -261,7 +248,7 @@ func TestRevertPrevSyncChanges(t *testing.T) {
 		},
 		{
 			name:    "revert kubelet create",
-			reqObjs: []runtime.Object{kubeletmc},
+			reqObjs: []runtime.Object{nodemc, kubeletmc},
 			prevSyncData: map[string]PrevSyncData{
 				"kubelet": {
 					action: "created",
@@ -272,7 +259,7 @@ func TestRevertPrevSyncChanges(t *testing.T) {
 		},
 		{
 			name:    "revert kubelet delete",
-			reqObjs: []runtime.Object{},
+			reqObjs: []runtime.Object{nodemc},
 			prevSyncData: map[string]PrevSyncData{
 				"kubelet": {
 					action: "deleted",
@@ -289,7 +276,7 @@ func TestRevertPrevSyncChanges(t *testing.T) {
 
 			r.PrevSyncChange = tt.prevSyncData
 
-			if err := r.revertPrevSyncChanges(ctx); (err != nil) != tt.wantErr {
+			if err := r.revertPrevSyncChanges(context.TODO()); (err != nil) != tt.wantErr {
 				t.Errorf("revertPrevSyncChanges() err = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

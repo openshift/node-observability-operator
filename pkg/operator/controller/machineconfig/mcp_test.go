@@ -20,32 +20,24 @@ import (
 	"context"
 	"testing"
 
-	"github.com/openshift/node-observability-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 
+	"github.com/openshift/node-observability-operator/api/v1alpha1"
+
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+
 	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
 func TestEnsureProfilingMCPExists(t *testing.T) {
 
-	var ctx context.Context
-
 	nodeObsMC := testNodeObsMC()
 	mcp := getProfilingMCP()
-
-	r := &MachineConfigReconciler{
-		Scheme:         test.Scheme,
-		Log:            zap.New(zap.UseDevMode(true)),
-		CtrlConfig:     nodeObsMC,
-		EventRecorder:  record.NewFakeRecorder(100),
-		PrevSyncChange: make(map[string]PrevSyncData),
-	}
+	r := testReconciler()
+	r.CtrlConfig = nodeObsMC
 
 	tests := []struct {
 		name    string
@@ -83,7 +75,7 @@ func TestEnsureProfilingMCPExists(t *testing.T) {
 		r.Client = c
 
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := r.ensureProfilingMCPExists(ctx); (err != nil) != tt.wantErr {
+			if _, err := r.ensureProfilingMCPExists(context.TODO()); (err != nil) != tt.wantErr {
 				t.Errorf("ensureProfilingMCPExists() err = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -91,18 +83,11 @@ func TestEnsureProfilingMCPExists(t *testing.T) {
 }
 
 func TestCheckMCPUpdateStatus(t *testing.T) {
-	var ctx context.Context
 
 	nodeObsMC := testNodeObsMC()
 	mcp := getProfilingMCP()
-
-	r := &MachineConfigReconciler{
-		Scheme:         test.Scheme,
-		Log:            zap.New(zap.UseDevMode(true)),
-		CtrlConfig:     nodeObsMC,
-		EventRecorder:  record.NewFakeRecorder(100),
-		PrevSyncChange: make(map[string]PrevSyncData),
-	}
+	r := testReconciler()
+	r.CtrlConfig = nodeObsMC
 
 	tests := []struct {
 		name    string
@@ -227,7 +212,7 @@ func TestCheckMCPUpdateStatus(t *testing.T) {
 		r.Client = c
 
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := r.checkMCPUpdateStatus(ctx); (err != nil) != tt.wantErr {
+			if _, err := r.checkMCPUpdateStatus(context.TODO()); (err != nil) != tt.wantErr {
 				t.Errorf("checkMCPUpdateStatus() err = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
