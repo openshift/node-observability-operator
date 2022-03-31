@@ -35,7 +35,6 @@ import (
 )
 
 const (
-	TestOperatorNameSpace      = "node-observability-operator"
 	TestControllerResourceName = "machineconfig-test"
 )
 
@@ -52,18 +51,6 @@ func testReconcileRequest() ctrl.Request {
 	return ctrl.Request{
 		NamespacedName: types.NamespacedName{
 			Name: TestControllerResourceName,
-		},
-	}
-}
-
-func testNamespace() *corev1.Namespace {
-	return &corev1.Namespace{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Namespace",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: TestOperatorNameSpace,
 		},
 	}
 }
