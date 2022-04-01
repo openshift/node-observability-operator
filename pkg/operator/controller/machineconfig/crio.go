@@ -34,14 +34,17 @@ import (
 
 const (
 	// CrioProfilingConfigName is the name CRI-O MachineConfig CR
-	CrioProfilingConfigName = "99-crio-profiling"
+	CrioProfilingConfigName = "10-crio-profiling"
 
 	// CrioUnixSocketConfFile is the name of the CRI-O config file
 	CrioUnixSocketConfFile = "10-mco-profile-unix-socket.conf"
 
-	// CriounixSocketConfData contains the configuration required
+	// CrioServiceFile is the name of the CRI-O systemd service unit
+	CrioServiceFile = "crio.service"
+
+	// CrioUnixSocketConfData contains the configuration required
 	// for enabling CRI-O profiling
-	CriounixSocketConfData = `[Service]
+	CrioUnixSocketConfData = `[Service]
 Environment="ENABLE_PROFILE_UNIX_SOCKET=true"`
 )
 
@@ -140,13 +143,14 @@ func getCrioIgnitionConfig() igntypes.Config {
 	dropins := []igntypes.Dropin{
 		{
 			Name:     CrioUnixSocketConfFile,
-			Contents: ignutil.StrToPtr(CriounixSocketConfData),
+			Contents: ignutil.StrToPtr(CrioUnixSocketConfData),
 		},
 	}
 
 	units := []igntypes.Unit{
 		{
 			Dropins: dropins,
+			Name:    CrioServiceFile,
 		},
 	}
 

@@ -108,8 +108,8 @@ func getProfilingMCP() *mcv1.MachineConfigPool {
 					},
 					{
 						APIVersion: MCAPIVersion,
-						Kind:       "KubeletConfig",
-						Name:       KubeletProfilingConfigName,
+						Kind:       MCKind,
+						Name:       KubeletGeneratedConfigName,
 					},
 				},
 			},
