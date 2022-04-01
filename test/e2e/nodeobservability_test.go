@@ -58,13 +58,13 @@ func init() {
 	if err := clientgoscheme.AddToScheme(Scheme); err != nil {
 		panic(err)
 	}
-	if err := operatorv1alpha1.AddToScheme(Scheme); err != nil {
-		panic(err)
-	}
 	if err := appsv1.AddToScheme(Scheme); err != nil {
 		panic(err)
 	}
 	if err := securityv1.AddToScheme(Scheme); err != nil {
+		panic(err)
+	}
+	if err := operatorv1alpha1.AddToScheme(Scheme); err != nil {
 		panic(err)
 	}
 
@@ -74,8 +74,7 @@ func initKubeClient() error {
 	if err != nil {
 		return fmt.Errorf("failed to get kube config: %w", err)
 	}
-
-	kubeClient, err = client.New(kubeConfig, client.Options{})
+	kubeClient, err = client.New(kubeConfig, client.Options{Scheme: Scheme})
 	if err != nil {
 		return fmt.Errorf("failed to create kube client: %w", err)
 	}
@@ -281,6 +280,11 @@ func ensureOperandClusterRole() error {
 			APIGroups: []string{""},
 			Resources: []string{"secrets"},
 			Verbs:     []string{"create", "get", "list", "watch"},
+		},
+		{
+			APIGroups: []string{""},
+			Resources: []string{"services"},
+			Verbs:     []string{"create", "delete", "get", "list", "watch"},
 		},
 		{
 			APIGroups: []string{""},
