@@ -83,6 +83,7 @@ linters:
     - typecheck
     - unused
     - varcheck
+    - gosec
   fast: false
 
 linters-settings:

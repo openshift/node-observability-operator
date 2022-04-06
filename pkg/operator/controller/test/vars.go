@@ -26,7 +26,8 @@ const (
 	TestNamespace     = ""
 	OperandName       = "node-observability-operator"
 	OperatorNamespace = "node-observability-operator"
-	SecretName        = "node-observability-secret"
+	// #nosec G101 -- this is not the secret value actually used
+	SecretName = "node-observability-secret"
 )
 
 var (
