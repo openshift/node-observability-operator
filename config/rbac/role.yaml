@@ -10,6 +10,14 @@ rules:
   - /debug/*
   verbs:
   - get
+- nonResourceURLs:
+  - /node-observability-pprof
+  verbs:
+  - get
+- nonResourceURLs:
+  - /node-observability-status
+  verbs:
+  - get
 - apiGroups:
   - ""
   resources:
@@ -18,6 +26,18 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
 - apiGroups:
   - ""
   resources:
