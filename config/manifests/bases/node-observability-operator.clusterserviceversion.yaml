@@ -15,6 +15,12 @@ spec:
       kind: NodeObservability
       name: nodeobservabilities.nodeobservability.olm.openshift.io
       version: v1alpha1
+    - description: NodeObservabilityMachineConfig is the Schema for the nodeobservabilitymachineconfigs
+        API
+      displayName: Node Observability Machine Config
+      kind: NodeObservabilityMachineConfig
+      name: nodeobservabilitymachineconfigs.nodeobservability.olm.openshift.io
+      version: v1alpha1
     - description: NodeObservabilityRun is the Schema for the nodeobservabilityruns
         API
       displayName: Node Observability Run
