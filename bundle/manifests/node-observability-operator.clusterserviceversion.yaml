@@ -278,7 +278,7 @@ spec:
           - create
         serviceAccountName: node-observability-operator-controller-manager
       deployments:
-        name: node-observability-operator-controller-manager
+      - name: node-observability-operator-controller-manager
         spec:
           replicas: 1
           selector:
