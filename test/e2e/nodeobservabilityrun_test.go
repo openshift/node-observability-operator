@@ -46,7 +46,7 @@ import (
 
 const (
 	nodeobservability = "nodeobservability-sample"
-	image             = "registry.build01.ci.openshift.org/ci-op-p5w65rq6/release:latest"
+	image             = "registry.ci.openshift.org/ocp/4.11:node-observability-agent"
 )
 
 func TestNodeObservabilityRun(t *testing.T) {
