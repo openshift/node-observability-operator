@@ -3,4 +3,5 @@ kind: NodeObservabilityRun
 metadata:
   name: nodeobservabilityrun-sample
 spec:
-  # TODO(user): Add fields here
+  nodeObservabilityRef:
+    name: nodeobservability-sample
