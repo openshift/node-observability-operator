@@ -44,7 +44,8 @@ import (
 )
 
 const (
-	agentName         = "node-observability-agent"
+	agentName = "node-observability-agent"
+	// #nosec G101: Potential hardcoded credentials; path to token, not the content itself
 	defaultTokenFile  = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	defaultCACertFile = "/var/run/secrets/openshift.io/certs/service-ca.crt"
 )
