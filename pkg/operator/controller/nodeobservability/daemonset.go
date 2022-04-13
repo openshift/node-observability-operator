@@ -14,13 +14,49 @@ import (
 )
 
 const (
-	podName          = "node-observability-agent"
-	socketName       = "socket"
-	path             = "/var/run/crio/crio.sock"
-	mountPath        = "/var/run/crio/crio.sock"
-	defaultScheduler = "default-scheduler"
-	daemonSetName    = "node-observability-ds"
+	podName                        = "node-observability-agent"
+	socketName                     = "socket"
+	caName                         = "kubeletCA"
+	path                           = "/var/run/crio/crio.sock"
+	socketMountPath                = "/var/run/crio/crio.sock"
+	caMountPath                    = "/var/run/secrets/kubernetes.io/serviceaccount/kubelet-serving-ca.crt"
+	defaultScheduler               = "default-scheduler"
+	daemonSetName                  = "node-observability-ds"
+	srcKubeletCAConfigMapName      = "kubelet-serving-ca"
+	srcKubeletCAConfigMapNameSpace = "openshift-kube-apiserver"
 )
+
+func (r *NodeObservabilityReconciler) createConfigMap(nodeObs *v1alpha1.NodeObservability) (bool, error) {
+	kubeletCACM := &corev1.ConfigMap{}
+	kubeletCACMName := types.NamespacedName{
+		Name:      srcKubeletCAConfigMapName,
+		Namespace: srcKubeletCAConfigMapNameSpace,
+	}
+	if err := r.Get(context.TODO(), kubeletCACMName, kubeletCACM); err != nil {
+		if errors.IsNotFound(err) {
+			return false, fmt.Errorf("unable to find configMap %v: %w", kubeletCACMName, err)
+		}
+		return false, fmt.Errorf("error getting configMap %v, %w", kubeletCACMName, err)
+	}
+
+	configMap := kubeletCACM.DeepCopy()
+	configMap.Namespace = nodeObs.Namespace
+	configMap.Name = nodeObs.Name
+	configMap.ResourceVersion = ""
+	configMap.OwnerReferences = []metav1.OwnerReference{
+		{
+			Name:       nodeObs.Name,
+			Kind:       nodeObs.Kind,
+			UID:        nodeObs.UID,
+			APIVersion: nodeObs.APIVersion,
+		},
+	}
+	if err := r.Create(context.TODO(), configMap); err != nil {
+		return false, fmt.Errorf("failed to create configMap %s/%s: %w", configMap.Namespace, configMap.Name, err)
+	}
+	r.Log.Info("created ConfigMap", "ConfigMap.Namespace", configMap.Namespace, "ConfigMap.Name", configMap.Name)
+	return true, nil
+}
 
 // ensureDaemonSet ensures that the daemonset exists
 // Returns a Boolean value indicating whether it exists, a pointer to the
@@ -30,9 +66,16 @@ func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeO
 	desired := r.desiredDaemonSet(nodeObs, sa)
 	exist, current, err := r.currentDaemonSet(ctx, nameSpace)
 	if err != nil {
-		return false, nil, fmt.Errorf("failed to get DaemonSet: %v", err)
+		return false, nil, fmt.Errorf("failed to get DaemonSet: %w", err)
 	}
 	if !exist {
+		cmExists, err := r.createConfigMap(nodeObs)
+		if err != nil {
+			return false, nil, fmt.Errorf("failed to create the configMap for kubelet-serving-ca: %w", err)
+		}
+		if !cmExists {
+			return false, nil, fmt.Errorf("failed to get the configMap for kubelet-serving-ca: %w", err)
+		}
 		if err := r.createDaemonSet(ctx, desired); err != nil {
 			return false, nil, err
 		}
@@ -114,31 +157,49 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 								},
 							},
 						}},
-						VolumeMounts: []corev1.VolumeMount{{
-							MountPath: mountPath,
-							Name:      socketName,
-							ReadOnly:  false,
-						}},
+						VolumeMounts: []corev1.VolumeMount{
+							{
+								MountPath: socketMountPath,
+								Name:      socketName,
+								ReadOnly:  false,
+							},
+							{
+								MountPath: caMountPath,
+								Name:      caName,
+								ReadOnly:  true,
+							},
+						},
 					}},
 					DNSPolicy:                     corev1.DNSClusterFirst,
 					RestartPolicy:                 corev1.RestartPolicyAlways,
 					SchedulerName:                 defaultScheduler,
 					ServiceAccountName:            sa.Name,
 					TerminationGracePeriodSeconds: &tgp,
-					Volumes: []corev1.Volume{{
-						Name: socketName,
-						VolumeSource: corev1.VolumeSource{
-							HostPath: &corev1.HostPathVolumeSource{
-								Path: path,
-								Type: &vst,
+					Volumes: []corev1.Volume{
+						{
+							Name: socketName,
+							VolumeSource: corev1.VolumeSource{
+								HostPath: &corev1.HostPathVolumeSource{
+									Path: path,
+									Type: &vst,
+								},
 							},
 						},
-					}},
+						{
+							Name: caName,
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: nodeObs.Name,
+									},
+								},
+							},
+						},
+					},
 					NodeSelector: nodeObs.Spec.Labels,
 				},
 			},
-		},
-	}
+		}}
 	return ds
 }
 

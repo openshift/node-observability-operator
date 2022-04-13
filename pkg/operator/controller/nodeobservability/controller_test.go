@@ -175,20 +175,20 @@ func TestReconcile(t *testing.T) {
 	}{
 		{
 			name:            "Bootstrapping",
-			existingObjects: []runtime.Object{testNodeObservability()},
+			existingObjects: []runtime.Object{testNodeObservability(), makeKubeletCACM()},
 			inputRequest:    testRequest(),
 			expectedResult:  reconcile.Result{},
 			expectedEvents:  []test.Event{},
 		},
 		{
 			name:            "Deleted",
-			existingObjects: []runtime.Object{},
+			existingObjects: []runtime.Object{makeKubeletCACM()},
 			inputRequest:    testRequest(),
 			expectedResult:  reconcile.Result{},
 		},
 		{
 			name:            "Deleting",
-			existingObjects: []runtime.Object{testNodeObservabilityToBeDeleted()},
+			existingObjects: []runtime.Object{testNodeObservabilityToBeDeleted(), makeKubeletCACM()},
 			inputRequest:    testRequest(),
 			expectedResult:  reconcile.Result{},
 		},
