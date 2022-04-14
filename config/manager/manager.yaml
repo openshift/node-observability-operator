@@ -50,5 +50,15 @@ spec:
           requests:
             cpu: 10m
             memory: 64Mi
+        volumeMounts:
+        - name: ca-bundle
+          mountPath: /var/run/secrets/openshift.io/certs
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
+      volumes:
+      - name: ca-bundle
+        configMap:
+          name: openshift-service-ca.crt
+          items:
+          - key: service-ca.crt
+            path: service-ca.crt
