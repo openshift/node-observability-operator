@@ -29,6 +29,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -92,8 +93,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	tmpCli, err := client.New(mgr.GetConfig(), client.Options{
+		Scheme: scheme,
+		Opts: client.WarningHandlerOptions{
+			SuppressWarnings:   false,
+			AllowDuplicateLogs: false,
+		},
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to create a client")
+		os.Exit(1)
+	}
+
 	if err = (&nodeobservabilitycontroller.NodeObservabilityReconciler{
-		Client: mgr.GetClient(),
+		// Client: mgr.GetClient(),
+		Client: tmpCli,
 		Scheme: mgr.GetScheme(),
 		Log:    ctrl.Log.WithName("controller").WithName("NodeObservability"),
 	}).SetupWithManager(mgr); err != nil {

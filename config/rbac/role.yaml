@@ -25,7 +25,6 @@ rules:
   verbs:
   - get
   - list
-  - watch
 - apiGroups:
   - ""
   resources:
@@ -220,6 +219,17 @@ rules:
   - create
   - get
   - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - update
   - watch
 - apiGroups:
   - ""

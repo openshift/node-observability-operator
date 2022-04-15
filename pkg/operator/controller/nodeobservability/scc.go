@@ -95,7 +95,7 @@ func (r *NodeObservabilityReconciler) desiredSecurityContextConstraints(nodeObs 
 		SupplementalGroups: securityv1.SupplementalGroupsStrategyOptions{
 			Type: securityv1.SupplementalGroupsStrategyRunAsAny,
 		},
-		Volumes: []securityv1.FSType{securityv1.FSTypeHostPath, securityv1.FSTypeSecret},
+		Volumes: []securityv1.FSType{securityv1.FSTypeHostPath, securityv1.FSTypeSecret, securityv1.FSTypeConfigMap},
 	}
 	return scc
 }

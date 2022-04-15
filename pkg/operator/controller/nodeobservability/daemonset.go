@@ -16,14 +16,14 @@ import (
 const (
 	podName                        = "node-observability-agent"
 	socketName                     = "socket"
-	caName                         = "kubeletCA"
+	caName                         = "kubelet-ca"
 	path                           = "/var/run/crio/crio.sock"
 	socketMountPath                = "/var/run/crio/crio.sock"
-	caMountPath                    = "/var/run/secrets/kubernetes.io/serviceaccount/kubelet-serving-ca.crt"
+	caMountPath                    = "/var/run/secrets/kubernetes.io/serviceaccount/kubelet-serving-ca/"
 	defaultScheduler               = "default-scheduler"
 	daemonSetName                  = "node-observability-ds"
 	srcKubeletCAConfigMapName      = "kubelet-serving-ca"
-	srcKubeletCAConfigMapNameSpace = "openshift-kube-apiserver"
+	srcKubeletCAConfigMapNameSpace = "openshift-config-managed"
 )
 
 func (r *NodeObservabilityReconciler) createConfigMap(nodeObs *v1alpha1.NodeObservability) (bool, error) {
@@ -34,9 +34,9 @@ func (r *NodeObservabilityReconciler) createConfigMap(nodeObs *v1alpha1.NodeObse
 	}
 	if err := r.Get(context.TODO(), kubeletCACMName, kubeletCACM); err != nil {
 		if errors.IsNotFound(err) {
-			return false, fmt.Errorf("unable to find configMap %v: %w", kubeletCACMName, err)
+			return false, fmt.Errorf("YYYYunable to find configMap %v: %w", kubeletCACMName, err)
 		}
-		return false, fmt.Errorf("error getting configMap %v, %w", kubeletCACMName, err)
+		return false, fmt.Errorf("ZZZZZerror getting configMap %v, %w", kubeletCACMName, err)
 	}
 
 	configMap := kubeletCACM.DeepCopy()
@@ -46,9 +46,9 @@ func (r *NodeObservabilityReconciler) createConfigMap(nodeObs *v1alpha1.NodeObse
 	configMap.OwnerReferences = []metav1.OwnerReference{
 		{
 			Name:       nodeObs.Name,
-			Kind:       nodeObs.Kind,
+			Kind:       "NodeObservability",
 			UID:        nodeObs.UID,
-			APIVersion: nodeObs.APIVersion,
+			APIVersion: "nodeobservability.olm.openshift.io/v1alpha1",
 		},
 	}
 	if err := r.Create(context.TODO(), configMap); err != nil {
@@ -123,9 +123,9 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					Name:       nodeObs.Name,
-					Kind:       nodeObs.Kind,
+					Kind:       "NodeObservability",
 					UID:        nodeObs.UID,
-					APIVersion: nodeObs.APIVersion,
+					APIVersion: "nodeobservability.olm.openshift.io/v1alpha1",
 				},
 			},
 		},
@@ -139,11 +139,15 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
-						Image:                    nodeObs.Spec.Image,
-						ImagePullPolicy:          corev1.PullIfNotPresent,
-						Name:                     podName,
-						Command:                  []string{"node-observability-agent"},
-						Args:                     []string{"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token", "--storage=/run"},
+						Image:           nodeObs.Spec.Image,
+						ImagePullPolicy: corev1.PullIfNotPresent,
+						Name:            podName,
+						Command:         []string{"node-observability-agent"},
+						Args: []string{
+							"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
+							"--storage=/run",
+							"--caCertFile=" + caMountPath + "ca-bundle.crt",
+						},
 						Resources:                corev1.ResourceRequirements{},
 						TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 						SecurityContext: &corev1.SecurityContext{
