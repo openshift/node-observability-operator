@@ -18,9 +18,12 @@ package nodeobservabilityruncontroller
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -39,6 +42,11 @@ import (
 
 const (
 	pollingPeriod = time.Second * 5
+	authHeader    = "Authorization"
+)
+
+var (
+	transport = http.DefaultTransport
 )
 
 // NodeObservabilityRunReconciler reconciles a NodeObservabilityRun object
@@ -48,6 +56,8 @@ type NodeObservabilityRunReconciler struct {
 	Scheme    *runtime.Scheme
 	Namespace string
 	AgentName string
+	AuthToken []byte
+	CACert    *x509.CertPool
 }
 
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilityruns,verbs=get;list;watch;create;update;patch;delete
@@ -111,8 +121,9 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 func (r *NodeObservabilityRunReconciler) handleInProgress(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) (bool, error) {
 	var errors []error
 	for _, agent := range instance.Status.Agents {
-		url := fmt.Sprintf("http://%s:%d/status", agent.IP, agent.Port)
-		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityRunErrorRetriable, httpGetCall(url))
+		podHostname := strings.ReplaceAll(agent.IP, ".", "-")
+		url := fmt.Sprintf("https://%s.%s.%s.svc:%d/node-observability-status", podHostname, r.AgentName, r.Namespace, agent.Port)
+		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityRunErrorRetriable, r.httpGetCall(url))
 		if err != nil {
 			if e, ok := err.(NodeObservabilityRunError); ok && e.HttpCode == http.StatusConflict {
 				r.Log.V(3).Info("Received 407:StatusConflict, job still running")
@@ -142,9 +153,10 @@ func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance 
 	}
 
 	for _, a := range subset.Addresses {
-		r.Log.V(3).Info("Initiating new run for node", "IP", a.IP, "port", port)
-		url := fmt.Sprintf("http://%s:%d/pprof", a.IP, port)
-		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityRunErrorRetriable, httpGetCall(url))
+		podHostname := strings.ReplaceAll(a.IP, ".", "-")
+		url := fmt.Sprintf("https://%s.%s.%s.svc:%d/node-observability-pprof", podHostname, r.AgentName, r.Namespace, port)
+		r.Log.V(3).Info("Initiating new run for node", "IP", a.IP, "port", port, "URL", url)
+		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityRunErrorRetriable, r.httpGetCall(url))
 		if err != nil {
 			r.Log.Error(err, "failed to start profiling", "removing node from list", a.TargetRef.Name, "IP", a.IP)
 			failedTargets = append(failedTargets, nodeobservabilityv1alpha1.AgentNode{Name: a.TargetRef.Name, IP: a.IP, Port: port})
@@ -176,13 +188,17 @@ func inProgress(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) bool {
 	return false
 }
 
-func httpGetCall(url string) func() error {
+func (r *NodeObservabilityRunReconciler) httpGetCall(url string) func() error {
 	return func() error {
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
 			return err
 		}
-		client := http.Client{Timeout: time.Second * 10}
+		req.Header.Set(authHeader, fmt.Sprintf("Bearer %s", string(r.AuthToken)))
+		client := http.Client{
+			Timeout:   time.Second * 10,
+			Transport: transport,
+		}
 		resp, err := client.Do(req)
 		if err != nil {
 			return err
@@ -228,6 +244,14 @@ func (r *NodeObservabilityRunReconciler) getAgentEndpoints(ctx context.Context) 
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *NodeObservabilityRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.TLSClientConfig = &tls.Config{
+		RootCAs:                  r.CACert,
+		MinVersion:               tls.VersionTLS12,
+		PreferServerCipherSuites: true,
+	}
+	transport = t
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&nodeobservabilityv1alpha1.NodeObservabilityRun{}).
 		Complete(r)

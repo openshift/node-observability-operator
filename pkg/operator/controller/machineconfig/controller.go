@@ -57,7 +57,7 @@ type PrevSyncData struct {
 }
 
 const (
-	finalizer = "MachineConfig"
+	finalizer = "NodeObservabilityMachineConfig"
 
 	defaultRequeueTime = 30 * time.Minute
 
@@ -72,7 +72,7 @@ const (
 
 	// ProfilingMCPName is the name of MCP created for
 	// CRI-O, Kubelet... machine configs by this controller
-	ProfilingMCPName = "profiling"
+	ProfilingMCPName = "nodeobservability"
 )
 
 var (

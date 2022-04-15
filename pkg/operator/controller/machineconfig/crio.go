@@ -34,7 +34,7 @@ import (
 
 const (
 	// CrioProfilingConfigName is the name CRI-O MachineConfig CR
-	CrioProfilingConfigName = "10-crio-profiling"
+	CrioProfilingConfigName = "10-crio-nodeobservability"
 
 	// CrioUnixSocketConfFile is the name of the CRI-O config file
 	CrioUnixSocketConfFile = "10-mco-profile-unix-socket.conf"

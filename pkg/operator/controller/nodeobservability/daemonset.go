@@ -24,6 +24,8 @@ const (
 	daemonSetName                  = "node-observability-ds"
 	srcKubeletCAConfigMapName      = "kubelet-serving-ca"
 	srcKubeletCAConfigMapNameSpace = "openshift-config-managed"
+	certsName        = "certs"
+	certsMountPath   = "/var/run/secrets/openshift.io/certs"
 )
 
 func (r *NodeObservabilityReconciler) createConfigMap(nodeObs *v1alpha1.NodeObservability) (bool, error) {
@@ -138,42 +140,63 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 					Labels: ls,
 				},
 				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{{
-						Image:           nodeObs.Spec.Image,
-						ImagePullPolicy: corev1.PullIfNotPresent,
-						Name:            podName,
-						Command:         []string{"node-observability-agent"},
-						Args: []string{
+					Containers: []corev1.Container{
+						{
+							Image:                    nodeObs.Spec.Image,
+							ImagePullPolicy:          corev1.PullIfNotPresent,
+							Name:                     podName,
+							Command:                  []string{"node-observability-agent"},
+							Args: []string{
 							"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
 							"--storage=/run",
 							"--caCertFile=" + caMountPath + "ca-bundle.crt",
-						},
-						Resources:                corev1.ResourceRequirements{},
-						TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
-						SecurityContext: &corev1.SecurityContext{
-							Privileged: &privileged,
-						},
-						Env: []corev1.EnvVar{{
-							Name: "NODE_IP",
-							ValueFrom: &corev1.EnvVarSource{
-								FieldRef: &corev1.ObjectFieldSelector{
-									FieldPath: "status.hostIP",
+							},
+							Resources:                corev1.ResourceRequirements{},
+							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+							SecurityContext: &corev1.SecurityContext{
+								Privileged: &privileged,
+							},
+							Env: []corev1.EnvVar{{
+								Name: "NODE_IP",
+								ValueFrom: &corev1.EnvVarSource{
+									FieldRef: &corev1.ObjectFieldSelector{
+										FieldPath: "status.hostIP",
+									},
+								},
+							}},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									MountPath: socketMountPath,
+									Name:      socketName,
+									ReadOnly:  false,
+								},
+								{
+									MountPath: caMountPath,
+									Name:      caName,
+									ReadOnly:  true,
 								},
 							},
-						}},
-						VolumeMounts: []corev1.VolumeMount{
-							{
-								MountPath: socketMountPath,
-								Name:      socketName,
-								ReadOnly:  false,
+						},
+						{
+							Name:  "kube-rbac-proxy",
+							Image: "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0",
+							Args: []string{
+								"--secure-listen-address=0.0.0.0:8443",
+								"--upstream=http://127.0.0.1:9000/",
+								fmt.Sprintf("--tls-cert-file=%s/tls.crt", certsMountPath),
+								fmt.Sprintf("--tls-private-key-file=%s/tls.key", certsMountPath),
+								"--logtostderr=true",
+								"--v=2",
 							},
-							{
-								MountPath: caMountPath,
-								Name:      caName,
-								ReadOnly:  true,
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      certsName,
+									MountPath: certsMountPath,
+									ReadOnly:  true,
+								},
 							},
 						},
-					}},
+					},
 					DNSPolicy:                     corev1.DNSClusterFirst,
 					RestartPolicy:                 corev1.RestartPolicyAlways,
 					SchedulerName:                 defaultScheduler,
@@ -199,11 +222,20 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 								},
 							},
 						},
+						{
+							Name: certsName,
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: secretName,
+								},
+							},
+						},
 					},
 					NodeSelector: nodeObs.Spec.Labels,
 				},
 			},
-		}}
+		},
+	}
 	return ds
 }
 
@@ -212,3 +244,4 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 func labelsForNodeObservability(name string) map[string]string {
 	return map[string]string{"app": "nodeobservability", "nodeobs_cr": name}
 }
+

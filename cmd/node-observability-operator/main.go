@@ -17,7 +17,10 @@ limitations under the License.
 package main
 
 import (
+	"crypto/x509"
 	"flag"
+	"fmt"
+	"io/ioutil"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -43,6 +46,9 @@ import (
 
 const (
 	agentName = "node-observability-agent"
+	// #nosec G101: Potential hardcoded credentials; path to token, not the content itself
+	defaultTokenFile  = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	defaultCACertFile = "/var/run/secrets/openshift.io/certs/service-ca.crt"
 )
 
 var (
@@ -65,11 +71,15 @@ func main() {
 	var probeAddr string
 	var operatorNamespace string
 	var operandImage string
+	var tokenFile string
+	var caCertFile string
 
 	flag.StringVar(&operatorNamespace, "operator-namespace", "node-observability-operator", "The node observability operator namespace.")
 	flag.StringVar(&operandImage, "operand-image", "quay.io/openshift/node-observability-operator:latest", "The operand container image to use.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.StringVar(&tokenFile, "token-file", defaultTokenFile, "The path of the service account token.")
+	flag.StringVar(&caCertFile, "ca-cert-file", defaultCACertFile, "The path of the CA cert of the Agents' signing key pair.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager. "+"Enabling this will ensure there is only one active controller manager.")
 	opts := zap.Options{
 		Development: true,
@@ -78,6 +88,17 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	token, err := ioutil.ReadFile(tokenFile)
+	if err != nil {
+		setupLog.Error(err, "unable to read serviceaccount token")
+		os.Exit(1)
+	}
+	ca, err := readCACert(caCertFile)
+	if err != nil {
+		setupLog.Error(err, "unable to read CA cert")
+		os.Exit(1)
+	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
@@ -120,6 +141,8 @@ func main() {
 		Log:       ctrl.Log.WithName("controller").WithName("NodeObservabilityRun"),
 		Namespace: operatorNamespace,
 		AgentName: agentName,
+		AuthToken: token,
+		CACert:    ca,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "NodeObservabilityRun")
 		os.Exit(1)
@@ -150,4 +173,20 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+func readCACert(caCertFile string) (*x509.CertPool, error) {
+	content, err := ioutil.ReadFile(caCertFile)
+	if err != nil {
+		return nil, err
+	}
+	if len(content) <= 0 {
+		return nil, fmt.Errorf("%s is empty", caCertFile)
+	}
+	caCertPool := x509.NewCertPool()
+	if !caCertPool.AppendCertsFromPEM(content) {
+		return nil, fmt.Errorf("unable to add certificates into caCertPool: %v", err)
+
+	}
+	return caCertPool, nil
 }
