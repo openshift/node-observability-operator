@@ -24,8 +24,8 @@ const (
 	daemonSetName                  = "node-observability-ds"
 	srcKubeletCAConfigMapName      = "kubelet-serving-ca"
 	srcKubeletCAConfigMapNameSpace = "openshift-config-managed"
-	certsName        = "certs"
-	certsMountPath   = "/var/run/secrets/openshift.io/certs"
+	certsName                      = "certs"
+	certsMountPath                 = "/var/run/secrets/openshift.io/certs"
 )
 
 func (r *NodeObservabilityReconciler) createConfigMap(nodeObs *v1alpha1.NodeObservability) (bool, error) {
@@ -142,14 +142,14 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Image:                    nodeObs.Spec.Image,
-							ImagePullPolicy:          corev1.PullIfNotPresent,
-							Name:                     podName,
-							Command:                  []string{"node-observability-agent"},
+							Image:           nodeObs.Spec.Image,
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							Name:            podName,
+							Command:         []string{"node-observability-agent"},
 							Args: []string{
-							"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
-							"--storage=/run",
-							"--caCertFile=" + caMountPath + "ca-bundle.crt",
+								"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
+								"--storage=/run",
+								"--caCertFile=" + caMountPath + "ca-bundle.crt",
 							},
 							Resources:                corev1.ResourceRequirements{},
 							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
@@ -244,4 +244,3 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 func labelsForNodeObservability(name string) map[string]string {
 	return map[string]string{"app": "nodeobservability", "nodeobs_cr": name}
 }
-
