@@ -36,8 +36,7 @@ import (
 )
 
 const (
-	terminating = "Terminating"
-	finalizer   = "NodeObservability"
+	finalizer = "NodeObservability"
 )
 
 var (
@@ -177,36 +176,39 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	}
 	r.Log.Info(fmt.Sprintf("DaemonSet : %s", ds.Name))
 
-	// check the pods that are deployed against the daemonset count
 	podList := &corev1.PodList{}
 	listOpts := []client.ListOption{
 		client.InNamespace(nodeObs.Namespace),
 		client.MatchingLabels(labelsForNodeObservability(nodeObs.Name)),
 	}
+
+	// list pods to ensure that the agents get deployed
 	if err = r.List(ctx, podList, listOpts...); err != nil {
 		r.Log.Error(err, "Failed to list pods", "NodeObservability.Namespace", nodeObs.Namespace, "NodeObservability.Name", nodeObs.Name)
-		return ctrl.Result{}, err
+		return reconcile.Result{}, err
 	}
-
 	count := 0
-
 	for x, pod := range podList.Items {
-		r.Log.Info(fmt.Sprintf("Pod phase status %d %s", x, pod.Status.Phase))
-		if pod.Status.Phase != corev1.PodFailed && pod.Status.Phase != terminating {
+		r.Log.Info(fmt.Sprintf("Pod item : %d phase status : %s", x, pod.Status.Phase))
+		if pod.Status.Phase == corev1.PodRunning {
 			count++
 		}
 	}
+	// ignore when testing
+	if count == 0 && !r.Err.Enabled {
+		return reconcile.Result{}, fmt.Errorf("agent pods are not deployed correctly with status 'Running'")
+	}
+	r.Log.Info(fmt.Sprintf("Agent pods deployed : count %d", len(podList.Items)))
 
-	r.Log.Info("Updating status")
 	nodeObs.Status.Count = len(podList.Items)
 	now := metav1.NewTime(clock.Now())
 	nodeObs.Status.LastUpdate = &now
 	err = r.Status().Update(ctx, nodeObs)
 	if err != nil {
-		r.Log.Error(err, "Failed to update status")
-		return ctrl.Result{}, err
+		r.Log.Error(err, "failed to update status")
+		return reconcile.Result{}, err
 	}
-	r.Log.Info(fmt.Sprintf("Status updated : %d", count))
+	r.Log.Info(fmt.Sprintf("Status updated count : %d lastUpdated : %v", len(podList.Items), now))
 
 	return ctrl.Result{}, nil
 }

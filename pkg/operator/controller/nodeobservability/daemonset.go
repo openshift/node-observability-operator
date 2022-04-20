@@ -70,7 +70,7 @@ func (r *NodeObservabilityReconciler) createDaemonSet(ctx context.Context, ds *a
 // desiredDaemonSet returns a DaemonSet object
 func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObservability, sa *corev1.ServiceAccount) *appsv1.DaemonSet {
 
-	ls := labelsForNodeObservability(daemonSetName)
+	ls := labelsForNodeObservability(nodeObs.Name)
 	tgp := int64(30)
 	vst := corev1.HostPathSocket
 	privileged := true
