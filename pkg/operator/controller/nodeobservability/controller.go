@@ -49,6 +49,7 @@ type NodeObservabilityReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
+	// CAKubeClient client.Client
 	// Used to inject errors for testing
 	Err ErrTestObject
 }
