@@ -79,6 +79,14 @@ spec:
           - /debug/*
           verbs:
           - get
+        - nonResourceURLs:
+          - /node-observability-pprof
+          verbs:
+          - get
+        - nonResourceURLs:
+          - /node-observability-status
+          verbs:
+          - get
         - apiGroups:
           - ""
           resources:
@@ -87,6 +95,18 @@ spec:
           - get
           - list
           - watch
+        - apiGroups:
+          - authentication.k8s.io
+          resources:
+          - tokenreviews
+          verbs:
+          - create
+        - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - subjectaccessreviews
+          verbs:
+          - create
         - apiGroups:
           - ""
           resources:
@@ -311,7 +331,8 @@ spec:
                 - --leader-elect
                 command:
                 - /manager
-                image: quay.io/openshift/node-observability-operator:v0.0.1
+                image: registry.ci.openshift.org/ocp/4.11:node-observability-operator
+                imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -334,10 +355,20 @@ spec:
                     memory: 64Mi
                 securityContext:
                   allowPrivilegeEscalation: false
+                volumeMounts:
+                - mountPath: /var/run/secrets/openshift.io/certs
+                  name: ca-bundle
               securityContext:
                 runAsNonRoot: true
               serviceAccountName: node-observability-operator-controller-manager
               terminationGracePeriodSeconds: 10
+              volumes:
+              - configMap:
+                  items:
+                  - key: service-ca.crt
+                    path: service-ca.crt
+                  name: openshift-service-ca.crt
+                name: ca-bundle
       permissions:
       - rules:
         - apiGroups:

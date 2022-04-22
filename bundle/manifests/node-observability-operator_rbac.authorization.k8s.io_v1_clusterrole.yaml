@@ -8,6 +8,34 @@ rules:
   - /debug/*
   verbs:
   - get
+- nonResourceURLs:
+  - /node-observability-pprof
+  verbs:
+  - get
+- nonResourceURLs:
+  - /node-observability-status
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - endpoints
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
 - apiGroups:
   - ""
   resources:
@@ -41,6 +69,42 @@ rules:
   - list
   - watch
 - apiGroups:
+  - machineconfiguration.openshift.io
+  resources:
+  - kubeletconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - machineconfiguration.openshift.io
+  resources:
+  - machineconfigpools
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - machineconfiguration.openshift.io
+  resources:
+  - machineconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - nodeobservability.olm.openshift.io
   resources:
   - nodeobservabilities
@@ -62,6 +126,32 @@ rules:
   - nodeobservability.olm.openshift.io
   resources:
   - nodeobservabilities/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - nodeobservability.olm.openshift.io
+  resources:
+  - nodeobservabilitymachineconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - nodeobservability.olm.openshift.io
+  resources:
+  - nodeobservabilitymachineconfigs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - nodeobservability.olm.openshift.io
+  resources:
+  - nodeobservabilitymachineconfigs/status
   verbs:
   - get
   - patch
@@ -142,6 +232,16 @@ rules:
   - ""
   resources:
   - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services
   verbs:
   - create
   - delete

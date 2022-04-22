@@ -4,6 +4,4 @@ metadata:
   name: nodeobservability-sample
 spec:
   labels:
-  #image: "quay.io/prometheus/busybox"
-  #image: "registry.access.redhat.com/ubi8/ubi-minimal:8.5-218"
-  image: "quay.io/luzuccar/node-observability-agent:latest"
+  image: "registry.ci.openshift.org/ocp/4.11:node-observability-agent"

@@ -25,7 +25,8 @@ spec:
         - /manager
         args:
         - --leader-elect
-        image: controller:latest
+        image: registry.ci.openshift.org/ocp/4.11:node-observability-operator
+        imagePullPolicy: Always
         name: manager
         securityContext:
           allowPrivilegeEscalation: false

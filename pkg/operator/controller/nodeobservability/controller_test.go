@@ -51,10 +51,12 @@ func TestReconcile(t *testing.T) {
 	// used to simulate errors for all objects
 	ErrRuns := []ErrTestObject{
 		{
+			Enabled:  true,
 			Set:      nil,
 			NotFound: nil,
 		},
 		{
+			Enabled: true,
 			Set: map[string]bool{
 				sccObj: true,
 			},
@@ -63,6 +65,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			Enabled: true,
 			Set: map[string]bool{
 				saObj: true,
 			},
@@ -71,6 +74,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			Enabled: true,
 			Set: map[string]bool{
 				crObj: true,
 			},
@@ -79,6 +83,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			Enabled: true,
 			Set: map[string]bool{
 				crbObj: true,
 			},
@@ -87,6 +92,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			Enabled: true,
 			Set: map[string]bool{
 				dsObj: true,
 			},
@@ -95,6 +101,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			Enabled: true,
 			Set: map[string]bool{
 				sccObj: true,
 			},
@@ -103,6 +110,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			Enabled: true,
 			Set: map[string]bool{
 				saObj: true,
 			},
@@ -111,6 +119,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			Enabled: true,
 			Set: map[string]bool{
 				crObj: true,
 			},
@@ -119,6 +128,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			Enabled: true,
 			Set: map[string]bool{
 				crbObj: true,
 			},
@@ -127,6 +137,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			Enabled: true,
 			Set: map[string]bool{
 				dsObj: true,
 			},
@@ -273,7 +284,7 @@ func TestReconcile(t *testing.T) {
 	}
 }
 
-// // testRquest - used to create request
+// testRquest - used to create request
 func testRequest() ctrl.Request {
 	return ctrl.Request{
 		NamespacedName: types.NamespacedName{

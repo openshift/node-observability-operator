@@ -22,7 +22,7 @@ func waitForOperatorDeploymentStatusCondition(t *testing.T, cl client.Client, co
 			Namespace: "node-observability-operator",
 		}
 		if err := cl.Get(context.TODO(), depNamespacedName, dep); err != nil {
-			t.Logf("failed to get deployment %s: %v", depNamespacedName.Name, err)
+			t.Logf("waiting to get deployment %s: %v", depNamespacedName.Name, err)
 			return false, nil
 		}
 
@@ -46,4 +46,19 @@ func conditionsMatchExpected(expected, actual map[string]string) bool {
 		}
 	}
 	return reflect.DeepEqual(expected, filtered)
+}
+func waitForDaemonsetStatus(t *testing.T, cl client.Client) error {
+	t.Helper()
+	return wait.PollImmediate(1*time.Second, 1*time.Minute, func() (bool, error) {
+		ds := &appsv1.DaemonSet{}
+		dsNamespacedName := types.NamespacedName{
+			Name:      "node-observability-ds",
+			Namespace: "node-observability-operator",
+		}
+		if err := cl.Get(context.TODO(), dsNamespacedName, ds); err != nil {
+			t.Logf("waiting to get Daemonset %s: %v", dsNamespacedName.Name, err)
+			return false, nil
+		}
+		return true, nil
+	})
 }
