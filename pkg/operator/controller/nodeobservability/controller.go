@@ -30,7 +30,6 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
@@ -102,9 +101,9 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	if nodeObs.DeletionTimestamp != nil {
 		r.Log.Info("NodeObservability resource is going to be deleted. Taking action")
 		if err := r.ensureNodeObservabilityDeleted(ctx, nodeObs); err != nil {
-			return reconcile.Result{}, fmt.Errorf("failed to ensure nodeobservability deletion: %w", err)
+			return ctrl.Result{}, fmt.Errorf("failed to ensure nodeobservability deletion: %w", err)
 		}
-		return reconcile.Result{}, nil
+		return ctrl.Result{}, nil
 
 	}
 	r.Log.Info(fmt.Sprintf("NodeObservability resource found : Namespace %s : Name %s ", req.NamespacedName.Namespace, nodeObs.Name))
@@ -112,7 +111,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	// Set finalizers on the NodeObservability resource
 	updated, err := r.withFinalizers(nodeObs)
 	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("failed to update NodeObservability with finalizers:, %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to update NodeObservability with finalizers:, %w", err)
 	}
 	nodeObs = updated
 
@@ -125,54 +124,54 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	// ensure scc
 	haveSCC, scc, err := r.ensureSecurityContextConstraints(ctx, nodeObs)
 	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("failed to ensure securitycontectconstraints : %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to ensure securitycontectconstraints : %w", err)
 	} else if !haveSCC {
-		return reconcile.Result{}, fmt.Errorf("failed to get securitycontextconstraints")
+		return ctrl.Result{}, fmt.Errorf("failed to get securitycontextconstraints")
 	}
 	r.Log.Info(fmt.Sprintf("SecurityContextConstraints : %s", scc.Name))
 
 	// ensure serviceaccount
 	haveSA, sa, err := r.ensureServiceAccount(ctx, nodeObs)
 	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("failed to ensure serviceaccount : %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to ensure serviceaccount : %w", err)
 	} else if !haveSA {
-		return reconcile.Result{}, fmt.Errorf("failed to get serviceaccount")
+		return ctrl.Result{}, fmt.Errorf("failed to get serviceaccount")
 	}
 	r.Log.Info(fmt.Sprintf("ServiceAccount : %s", sa.Name))
 
 	// ensure service
 	haveSvc, svc, err := r.ensureService(ctx, nodeObs)
 	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("failed to ensure service : %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to ensure service : %w", err)
 	} else if !haveSvc {
-		return reconcile.Result{}, fmt.Errorf("failed to get service")
+		return ctrl.Result{}, fmt.Errorf("failed to get service")
 	}
 	r.Log.Info(fmt.Sprintf("Service : %s", svc.Name))
 
 	// check clusterrole
 	haveCR, cr, err := r.ensureClusterRole(ctx, nodeObs)
 	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("failed to ensure clusterrole : %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to ensure clusterrole : %w", err)
 	} else if !haveCR {
-		return reconcile.Result{}, fmt.Errorf("failed to get clusterrole")
+		return ctrl.Result{}, fmt.Errorf("failed to get clusterrole")
 	}
 	r.Log.Info(fmt.Sprintf("ClusterRole : %s", cr.Name))
 
 	// check clusterolebinding with serviceaccount
 	haveCRB, crb, err := r.ensureClusterRoleBinding(ctx, nodeObs, sa.Name)
 	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("failed to ensure clusterrolebinding : %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to ensure clusterrolebinding : %w", err)
 	} else if !haveCRB {
-		return reconcile.Result{}, fmt.Errorf("failed to get clusterrolebinding")
+		return ctrl.Result{}, fmt.Errorf("failed to get clusterrolebinding")
 	}
 	r.Log.Info(fmt.Sprintf("ClusterRoleBinding : %s", crb.Name))
 
 	// check daemonset
 	haveDS, ds, err := r.ensureDaemonSet(ctx, nodeObs, sa)
 	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("failed to ensure daemonset : %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to ensure daemonset : %w", err)
 	} else if !haveDS {
-		return reconcile.Result{}, fmt.Errorf("failed to get daemonset")
+		return ctrl.Result{}, fmt.Errorf("failed to get daemonset")
 	}
 	r.Log.Info(fmt.Sprintf("DaemonSet : %s", ds.Name))
 
@@ -185,7 +184,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	// list pods to ensure that the agents get deployed
 	if err = r.List(ctx, podList, listOpts...); err != nil {
 		r.Log.Error(err, "Failed to list pods", "NodeObservability.Namespace", nodeObs.Namespace, "NodeObservability.Name", nodeObs.Name)
-		return reconcile.Result{}, err
+		return ctrl.Result{}, err
 	}
 	count := 0
 	for x, pod := range podList.Items {
@@ -196,7 +195,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	}
 	// ignore when testing
 	if count == 0 && !r.Err.Enabled {
-		return reconcile.Result{}, fmt.Errorf("agent pods are not deployed correctly with status 'Running'")
+		return ctrl.Result{}, fmt.Errorf("agent pods are not deployed correctly with status 'Running'")
 	}
 	r.Log.Info(fmt.Sprintf("Agent pods deployed : count %d", len(podList.Items)))
 
@@ -206,7 +205,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	err = r.Status().Update(ctx, nodeObs)
 	if err != nil {
 		r.Log.Error(err, "failed to update status")
-		return reconcile.Result{}, err
+		return ctrl.Result{}, err
 	}
 	r.Log.Info(fmt.Sprintf("Status updated count : %d lastUpdated : %v", len(podList.Items), now))
 
