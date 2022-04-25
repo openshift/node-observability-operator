@@ -70,7 +70,7 @@ func (r *NodeObservabilityReconciler) createService(ctx context.Context, svc *co
 
 // desiredService returns a service object
 func (r *NodeObservabilityReconciler) desiredService(nodeObs *v1alpha1.NodeObservability) *corev1.Service {
-	ls := labelsForNodeObservability(daemonSetName)
+	ls := labelsForNodeObservability(nodeObs.Name)
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:   nodeObs.Namespace,

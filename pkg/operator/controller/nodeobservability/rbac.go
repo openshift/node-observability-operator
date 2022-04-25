@@ -24,7 +24,8 @@ const (
 	nodes                        = "nodes"
 	nodesProxy                   = "nodes/proxy"
 	pods                         = "pods"
-	url                          = "/debug/*"
+	urlStatus                    = "/node-observability-status"
+	urlPprof                     = "/node-observability-pprof"
 	secGroup                     = "security.openshift.io"
 	authnGroup                   = "authentication.k8s.io"
 	authzGroup                   = "authorization.k8s.io"
@@ -101,7 +102,7 @@ func (r *NodeObservabilityReconciler) desiredClusterRole(nodeObs *v1alpha1.NodeO
 			},
 			{
 				Verbs:           []string{get},
-				NonResourceURLs: []string{url},
+				NonResourceURLs: []string{urlStatus, urlPprof},
 			},
 			{
 				APIGroups: []string{authnGroup},
