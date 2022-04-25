@@ -14,13 +14,12 @@ import (
 )
 
 const (
-	podName         = "node-observability-agent"
-	socketName      = "socket"
-	caName          = "kubelet-ca"
-	path            = "/var/run/crio/crio.sock"
-	socketMountPath = "/var/run/crio/crio.sock"
-	// caMountPath                    = "/var/run/secrets/kubernetes.io/serviceaccount/kubelet-serving-ca/"
-	caMountPath                    = "/etc/kubernetes/kubelet-ca.crt"
+	podName                        = "node-observability-agent"
+	socketName                     = "socket"
+	caName                         = "kubelet-ca"
+	path                           = "/var/run/crio/crio.sock"
+	socketMountPath                = "/var/run/crio/crio.sock"
+	caMountPath                    = "/var/run/secrets/kubernetes.io/serviceaccount/kubelet-serving-ca/"
 	defaultScheduler               = "default-scheduler"
 	daemonSetName                  = "node-observability-ds"
 	srcKubeletCAConfigMapName      = "kubelet-serving-ca"
@@ -29,37 +28,37 @@ const (
 	certsMountPath                 = "/var/run/secrets/openshift.io/certs"
 )
 
-// func (r *NodeObservabilityReconciler) createConfigMap(nodeObs *v1alpha1.NodeObservability) (bool, error) {
-// 	kubeletCACM := &corev1.ConfigMap{}
-// 	kubeletCACMName := types.NamespacedName{
-// 		Name:      srcKubeletCAConfigMapName,
-// 		Namespace: srcKubeletCAConfigMapNameSpace,
-// 	}
-// 	if err := r.Get(context.TODO(), kubeletCACMName, kubeletCACM); err != nil {
-// 		if errors.IsNotFound(err) {
-// 			return false, fmt.Errorf("YYYYunable to find configMap %v: %w", kubeletCACMName, err)
-// 		}
-// 		return false, fmt.Errorf("ZZZZZerror getting configMap %v, %w", kubeletCACMName, err)
-// 	}
+func (r *NodeObservabilityReconciler) createConfigMap(nodeObs *v1alpha1.NodeObservability) (bool, error) {
+	kubeletCACM := &corev1.ConfigMap{}
+	kubeletCACMName := types.NamespacedName{
+		Name:      srcKubeletCAConfigMapName,
+		Namespace: srcKubeletCAConfigMapNameSpace,
+	}
+	if err := r.Get(context.TODO(), kubeletCACMName, kubeletCACM); err != nil {
+		if errors.IsNotFound(err) {
+			return false, fmt.Errorf("YYYYunable to find configMap %v: %w", kubeletCACMName, err)
+		}
+		return false, fmt.Errorf("ZZZZZerror getting configMap %v, %w", kubeletCACMName, err)
+	}
 
-// 	configMap := kubeletCACM.DeepCopy()
-// 	configMap.Namespace = nodeObs.Namespace
-// 	configMap.Name = nodeObs.Name
-// 	configMap.ResourceVersion = ""
-// 	configMap.OwnerReferences = []metav1.OwnerReference{
-// 		{
-// 			Name:       nodeObs.Name,
-// 			Kind:       "NodeObservability",
-// 			UID:        nodeObs.UID,
-// 			APIVersion: "nodeobservability.olm.openshift.io/v1alpha1",
-// 		},
-// 	}
-// 	if err := r.Create(context.TODO(), configMap); err != nil {
-// 		return false, fmt.Errorf("failed to create configMap %s/%s: %w", configMap.Namespace, configMap.Name, err)
-// 	}
-// 	r.Log.Info("created ConfigMap", "ConfigMap.Namespace", configMap.Namespace, "ConfigMap.Name", configMap.Name)
-// 	return true, nil
-// }
+	configMap := kubeletCACM.DeepCopy()
+	configMap.Namespace = nodeObs.Namespace
+	configMap.Name = nodeObs.Name
+	configMap.ResourceVersion = ""
+	configMap.OwnerReferences = []metav1.OwnerReference{
+		{
+			Name:       nodeObs.Name,
+			Kind:       "NodeObservability",
+			UID:        nodeObs.UID,
+			APIVersion: "nodeobservability.olm.openshift.io/v1alpha1",
+		},
+	}
+	if err := r.Create(context.TODO(), configMap); err != nil {
+		return false, fmt.Errorf("failed to create configMap %s/%s: %w", configMap.Namespace, configMap.Name, err)
+	}
+	r.Log.Info("created ConfigMap", "ConfigMap.Namespace", configMap.Namespace, "ConfigMap.Name", configMap.Name)
+	return true, nil
+}
 
 // ensureDaemonSet ensures that the daemonset exists
 // Returns a Boolean value indicating whether it exists, a pointer to the
@@ -72,13 +71,13 @@ func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeO
 		return false, nil, fmt.Errorf("failed to get DaemonSet: %w", err)
 	}
 	if !exist {
-		// cmExists, err := r.createConfigMap(nodeObs)
-		// if err != nil {
-		// 	return false, nil, fmt.Errorf("failed to create the configMap for kubelet-serving-ca: %w", err)
-		// }
-		// if !cmExists {
-		// 	return false, nil, fmt.Errorf("failed to get the configMap for kubelet-serving-ca: %w", err)
-		// }
+		cmExists, err := r.createConfigMap(nodeObs)
+		if err != nil {
+			return false, nil, fmt.Errorf("failed to create the configMap for kubelet-serving-ca: %w", err)
+		}
+		if !cmExists {
+			return false, nil, fmt.Errorf("failed to get the configMap for kubelet-serving-ca: %w", err)
+		}
 		if err := r.createDaemonSet(ctx, desired); err != nil {
 			return false, nil, err
 		}
@@ -117,7 +116,6 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 	ls := labelsForNodeObservability(nodeObs.Name)
 	tgp := int64(30)
 	vst := corev1.HostPathSocket
-	hpf := corev1.HostPathFile
 	privileged := true
 
 	ds := &appsv1.DaemonSet{
@@ -127,9 +125,9 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					Name:       nodeObs.Name,
-					Kind:       nodeObs.Kind,
+					Kind:       "NodeObservability",
 					UID:        nodeObs.UID,
-					APIVersion: nodeObs.APIVersion,
+					APIVersion: "nodeobservability.olm.openshift.io/v1alpha1",
 				},
 			},
 		},
@@ -151,7 +149,7 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 							Args: []string{
 								"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
 								"--storage=/run",
-								"--caCertFile=/etc/kubernetes/kubelet-ca.crt",
+								"--caCertFile=" + caMountPath + "ca-bundle.crt",
 							},
 							Resources:                corev1.ResourceRequirements{},
 							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
@@ -217,22 +215,13 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 						{
 							Name: caName,
 							VolumeSource: corev1.VolumeSource{
-								HostPath: &corev1.HostPathVolumeSource{
-									Path: caMountPath,
-									Type: &hpf,
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: nodeObs.Name,
+									},
 								},
 							},
 						},
-						// {
-						// 	Name: caName,
-						// 	VolumeSource: corev1.VolumeSource{
-						// 		ConfigMap: &corev1.ConfigMapVolumeSource{
-						// 			LocalObjectReference: corev1.LocalObjectReference{
-						// 				Name: nodeObs.Name,
-						// 			},
-						// 		},
-						// 	},
-						// },
 						{
 							Name: certsName,
 							VolumeSource: corev1.VolumeSource{

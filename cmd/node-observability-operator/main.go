@@ -26,15 +26,13 @@ import (
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	securityv1 "github.com/openshift/api/security/v1"
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	ctrl "sigs.k8s.io/controller-runtime"
-
-	// "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -59,9 +57,7 @@ var (
 )
 
 func init() {
-	// utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(corev1.AddToScheme(scheme))
-	utilruntime.Must(appsv1.AddToScheme(scheme))
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(nodeobservabilityv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(securityv1.AddToScheme(scheme))
 	utilruntime.Must(rbacv1.AddToScheme(scheme))
@@ -118,15 +114,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	// tmpCli, err := client.New(mgr.GetConfig(), client.Options{})
-	// if err != nil {
-	// 	setupLog.Error(err, "unable to create a client")
-	// 	os.Exit(1)
-	// }
+	tmpCli, err := client.New(mgr.GetConfig(), client.Options{
+		Scheme: scheme,
+		Opts: client.WarningHandlerOptions{
+			SuppressWarnings:   false,
+			AllowDuplicateLogs: false,
+		},
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to create a client")
+		os.Exit(1)
+	}
 
 	if err = (&nodeobservabilitycontroller.NodeObservabilityReconciler{
-		Client: mgr.GetClient(),
-		// CAKubeClient: tmpCli,
+		// Client: mgr.GetClient(),
+		Client: tmpCli,
 		Scheme: mgr.GetScheme(),
 		Log:    ctrl.Log.WithName("controller").WithName("NodeObservability"),
 	}).SetupWithManager(mgr); err != nil {
