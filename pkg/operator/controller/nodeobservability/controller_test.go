@@ -216,10 +216,11 @@ func TestReconcile(t *testing.T) {
 				tc.expectedEvents = nil
 
 				r := &NodeObservabilityReconciler{
-					Client: cl,
-					Scheme: test.Scheme,
-					Log:    zap.New(zap.UseDevMode(true)),
-					Err:    errTest,
+					Client:            cl,
+					ClusterWideClient: cl,
+					Scheme:            test.Scheme,
+					Log:               zap.New(zap.UseDevMode(true)),
+					Err:               errTest,
 				}
 				// only check for errors when the ErrorTestObject Set and NotFound maps are nill
 				tc.errExpected = (errTest.Set != nil || errTest.NotFound != nil) && tc.name == "Bootstrapping"

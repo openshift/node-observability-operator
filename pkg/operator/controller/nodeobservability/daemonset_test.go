@@ -36,8 +36,8 @@ import (
 func makeKubeletCACM() *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      srcKubeletCAConfigMapName,
-			Namespace: srcKubeletCAConfigMapNameSpace,
+			Name:      srcKbltCAConfigMapName,
+			Namespace: srcKbltCAConfigMapNameSpace,
 		},
 		Data: map[string]string{
 			"ca-bundle.crt": "empty",
@@ -101,7 +101,7 @@ func TestEnsureDaemonset(t *testing.T) {
 							Name: socketName,
 							VolumeSource: corev1.VolumeSource{
 								HostPath: &corev1.HostPathVolumeSource{
-									Path: path,
+									Path: socketPath,
 									Type: &vst,
 								},
 							},
@@ -143,9 +143,10 @@ func TestEnsureDaemonset(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cl := fake.NewClientBuilder().WithRuntimeObjects(tc.existingObjects...).Build()
 			r := &NodeObservabilityReconciler{
-				Client: cl,
-				Scheme: test.Scheme,
-				Log:    zap.New(zap.UseDevMode(true)),
+				Client:            cl,
+				ClusterWideClient: cl,
+				Scheme:            test.Scheme,
+				Log:               zap.New(zap.UseDevMode(true)),
 			}
 			nodeObs := &operatorv1alpha1.NodeObservability{
 				ObjectMeta: metav1.ObjectMeta{

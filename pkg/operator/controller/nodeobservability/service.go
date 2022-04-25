@@ -80,9 +80,9 @@ func (r *NodeObservabilityReconciler) desiredService(nodeObs *v1alpha1.NodeObser
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					Name:       nodeObs.Name,
-					Kind:       "NodeObservability",
+					Kind:       nodeObs.Kind,
 					UID:        nodeObs.UID,
-					APIVersion: "nodeobservability.olm.openshift.io/v1alpha1",
+					APIVersion: nodeObs.APIVersion,
 				},
 			},
 		},

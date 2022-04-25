@@ -45,8 +45,9 @@ var (
 // NodeObservabilityReconciler reconciles a NodeObservability object
 type NodeObservabilityReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	ClusterWideClient client.Client
+	Log               logr.Logger
+	Scheme            *runtime.Scheme
 	// Used to inject errors for testing
 	Err ErrTestObject
 }
