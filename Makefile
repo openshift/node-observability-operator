@@ -141,10 +141,10 @@ test-e2e:
 	./test/e2e
 	
 verify: lint
+	hack/verify-bundle.sh
 	hack/verify-gofmt.sh
 	hack/verify-deps.sh
 	hack/verify-generated.sh
-	hack/verify-olm.sh
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
