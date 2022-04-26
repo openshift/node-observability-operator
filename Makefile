@@ -29,7 +29,7 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
 # github.com/node-observability-operator-bundle:$VERSION and github.com/node-observability-operator-catalog:$VERSION.
-IMAGE_TAG_BASE ?= openshift.io/node-observability-operator
+IMAGE_TAG_BASE ?= quay.io/openshift/node-observability-operator
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
@@ -39,7 +39,7 @@ BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
 INDEX_IMG ?= $(IMAGE_TAG_BASE)-index:v$(VERSION)
 
 # Image version to to build/push
-IMG_VERSION ?= latest
+IMG_VERSION ?= v0.0.1
 
 # Image URL to use all building/pushing image targets
 IMG ?= $(IMAGE_TAG_BASE):$(IMG_VERSION)

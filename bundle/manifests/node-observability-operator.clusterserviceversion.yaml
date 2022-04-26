@@ -333,7 +333,7 @@ spec:
                 - --leader-elect
                 command:
                 - /manager
-                image: openshift.io/node-observability-operator:latest
+                image: quay.io/openshift/node-observability-operator:v0.0.1
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
