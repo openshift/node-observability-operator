@@ -61,16 +61,6 @@ rules:
   - list
   - watch
 - apiGroups:
-  - ""
-  resources:
-  - serviceaccounts
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - watch
-- apiGroups:
   - machineconfiguration.openshift.io
   resources:
   - kubeletconfigs
@@ -237,6 +227,16 @@ rules:
   - ""
   resources:
   - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
   verbs:
   - create
   - delete
