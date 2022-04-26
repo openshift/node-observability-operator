@@ -57,7 +57,7 @@ type NodeObservabilityReconciler struct {
 //+kubebuilder:rbac:groups=apps,namespace=node-observability-operator,resources=daemonsets,verbs=list;get;create;watch;
 //+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=secrets,verbs=list;get;create;watch;delete;
 //+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=services,verbs=list;get;create;watch;delete;
-//+kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=list;get;create;watch;delete;
+//+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=serviceaccounts,verbs=list;get;create;watch;delete;
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=list;get;watch
 //+kubebuilder:rbac:groups=core,resources=nodes,verbs=list;get;
 //+kubebuilder:rbac:groups=core,resources=nodes/proxy,verbs=list;get;

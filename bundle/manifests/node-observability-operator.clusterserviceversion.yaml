@@ -14,7 +14,7 @@ metadata:
             "expectedcount": 1,
             "image": "quay.io/prometheus/busybox",
             "labels": {
-              "app": "node-observability"
+              "node-role.kubernetes.io/worker": ""
             }
           }
         },
@@ -126,16 +126,6 @@ spec:
           resources:
           - pods
           verbs:
-          - get
-          - list
-          - watch
-        - apiGroups:
-          - ""
-          resources:
-          - serviceaccounts
-          verbs:
-          - create
-          - delete
           - get
           - list
           - watch
@@ -417,6 +407,16 @@ spec:
           - ""
           resources:
           - secrets
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - serviceaccounts
           verbs:
           - create
           - delete
