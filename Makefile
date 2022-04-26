@@ -29,7 +29,7 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
 # github.com/node-observability-operator-bundle:$VERSION and github.com/node-observability-operator-catalog:$VERSION.
-IMAGE_TAG_BASE ?= openshift.io/node-observability-operator
+IMAGE_TAG_BASE ?= quay.io/openshift/node-observability-operator
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
@@ -38,8 +38,11 @@ BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
 # INDEX_IMG defines the image:tag for the index build
 INDEX_IMG ?= $(IMAGE_TAG_BASE)-index:v$(VERSION)
 
+# Image version to to build/push
+IMG_VERSION ?= v0.0.1
+
 # Image URL to use all building/pushing image targets
-IMG ?= controller:v$(VERSION)
+IMG ?= $(IMAGE_TAG_BASE):$(IMG_VERSION)
 
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.23
@@ -80,7 +83,18 @@ E2E_TIMEOUT ?= 1h
 BUNDLE_DIR := bundle
 BUNDLE_MANIFEST_DIR := $(BUNDLE_DIR)/manifests
 
-OPERATOR_SDK_BIN=$(BIN_DIR)/operator-sdk
+OPERATOR_SDK_VERSION = v1.19.0
+
+OPERATOR_SDK_BIN = $(shell pwd)/bin/operator-sdk
+.PHONY: operator-sdk
+operator-sdk:
+ifeq ("$(wildcard $(OPERATOR_SDK_BIN))","")
+	@{ \
+	set -e ;\
+	curl -Lk  https://github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_linux_amd64 > $(OPERATOR_SDK_BIN) ;\
+	chmod u+x $(OPERATOR_SDK_BIN) ;\
+	}
+endif
 
 AUTH ?=
 
@@ -242,10 +256,10 @@ olm-manifests: manifests
 	for f in $$(\grep -l 'kind: *\(Service\|ConfigMap\|Secret\|Role\) *$$' $(BUNDLE_MANIFEST_DIR)/*.yaml); do sed -i '/namespace:/d' $${f};done
 
 .PHONY: bundle
-bundle: manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
+bundle: operator-sdk manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
 	$(OPERATOR_SDK_BIN) generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK_BIN) generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
+	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK_BIN) generate bundle -q --overwrite=false --version $(VERSION) $(BUNDLE_METADATA_OPTS)
 	$(OPERATOR_SDK_BIN) bundle validate ./bundle
 
 .PHONY: validate-bundle

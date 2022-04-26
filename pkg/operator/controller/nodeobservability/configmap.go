@@ -17,7 +17,7 @@ const (
 	srcKbltCAConfigMapNameSpace = "openshift-config-managed"
 )
 
-func (r *NodeObservabilityReconciler) createConfigMap(nodeObs *v1alpha1.NodeObservability) (bool, error) {
+func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeObs *v1alpha1.NodeObservability) (bool, error) {
 	kbltCACM := &corev1.ConfigMap{}
 	kbltCACMName := types.NamespacedName{
 		Name:      srcKbltCAConfigMapName,
@@ -25,7 +25,7 @@ func (r *NodeObservabilityReconciler) createConfigMap(nodeObs *v1alpha1.NodeObse
 	}
 	// Use the clusterWide client in order to get the configmap from openshift-config-managed namespace
 	// As the default client will only look for configmaps inside the namespace
-	if err := r.ClusterWideClient.Get(context.TODO(), kbltCACMName, kbltCACM); err != nil {
+	if err := r.ClusterWideClient.Get(ctx, kbltCACMName, kbltCACM); err != nil {
 		if errors.IsNotFound(err) {
 			return false, fmt.Errorf("unable to find configMap %v: %w", kbltCACMName, err)
 		}

@@ -38,7 +38,7 @@ func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeO
 		return false, nil, fmt.Errorf("failed to get DaemonSet: %w", err)
 	}
 	if !exist {
-		cmExists, err := r.createConfigMap(nodeObs)
+		cmExists, err := r.createConfigMap(ctx, nodeObs)
 		if err != nil {
 			return false, nil, fmt.Errorf("failed to create the configMap for kubelet-serving-ca: %w", err)
 		}
