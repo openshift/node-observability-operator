@@ -86,6 +86,7 @@ OPERATOR_SDK_VERSION = v1.19.0
 OPERATOR_SDK_BIN = $(shell pwd)/bin/operator-sdk
 .PHONY: operator-sdk
 operator-sdk:
+	mkdir -p ${BIN_DIR};
 ifeq ("$(wildcard $(OPERATOR_SDK_BIN))","")
 	@{ \
 	set -e ;\
