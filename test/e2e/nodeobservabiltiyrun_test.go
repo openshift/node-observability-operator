@@ -37,19 +37,15 @@ import (
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
-//var cfg *rest.Config
-//var k8sClient client.Client
-//var testEnv *envtest.Environment
-
 const (
 	nodeobservability = "nodeobservability-sample"
 	image             = "registry.ci.openshift.org/ocp/4.11:node-observability-agent"
+	defaultInterval   = 10 * time.Second
+	defaultTimeout    = 5 * time.Minute
 )
 
 func TestNodeObservabilityRun(t *testing.T) {
-	var (
-		err error
-	)
+	var err error
 	if err := v1alpha1.AddToScheme(Scheme); err != nil {
 		panic(err)
 	}
@@ -66,6 +62,7 @@ func TestNodeObservabilityRun(t *testing.T) {
 		t.Fatalf("Failed to create NodeObservabilityRun Resource in ns %s: %v\n", operandNamespace, err)
 	}
 }
+
 func ensureNodeObservabilityResource() *v1alpha1.NodeObservability {
 	spec := v1alpha1.NodeObservabilitySpec{
 		Labels: map[string]string{},
@@ -81,6 +78,7 @@ func ensureNodeObservabilityResource() *v1alpha1.NodeObservability {
 	}
 	return &nodeObs
 }
+
 func ensureNodeObservabilityRunResource() *v1alpha1.NodeObservabilityRun {
 	spec := v1alpha1.NodeObservabilityRunSpec{
 		NodeObservabilityRef: &v1alpha1.NodeObservabilityRef{
@@ -97,19 +95,22 @@ func ensureNodeObservabilityRunResource() *v1alpha1.NodeObservabilityRun {
 	}
 	return &nodeObs
 }
+
 func TestAgentAvailable(t *testing.T) {
-	if err := waitForDaemonsetStatus(t, kubeClient); err != nil {
+	if err := waitForDaemonsetStatus(t, kubeClient, defaultInterval, defaultTimeout); err != nil {
 		t.Errorf("Did not get expected available condition: %v", err)
 	}
 }
+
 func TestIfNodeObservabilityRunFinished(t *testing.T) {
-	if err := IfFinished(t); err != nil {
+	if err := IfFinished(t, defaultInterval, defaultTimeout); err != nil {
 		t.Errorf("Node Observability Run has failed: %v", err)
 	}
 	if err := ensureIfNoAgentsFailed(); err != nil {
 		t.Errorf("Node Observability Run has failed in ns %s: %v\n", operandNamespace, err)
 	}
 }
+
 func TestIfNodeObservabilityDestroyed(t *testing.T) {
 	nodeObsRun := ensureNodeObservabilityRunResource()
 	err := kubeClient.Delete(context.TODO(), nodeObsRun)
@@ -123,9 +124,9 @@ func TestIfNodeObservabilityDestroyed(t *testing.T) {
 	}
 }
 
-func IfFinished(t *testing.T) error {
+func IfFinished(t *testing.T, interval time.Duration, timeout time.Duration) error {
 	t.Helper()
-	return wait.PollImmediate(1*time.Second, 1*time.Minute, func() (bool, error) {
+	return wait.PollImmediate(interval, timeout, func() (bool, error) {
 		nodeObsRun := ensureNodeObservabilityRunResource()
 		err := kubeClient.Get(context.TODO(), types.NamespacedName{Name: nodeobservability, Namespace: operandNamespace}, nodeObsRun)
 		if err != nil {
@@ -137,9 +138,9 @@ func IfFinished(t *testing.T) error {
 			return true, nil
 		}
 		return false, err
-
 	})
 }
+
 func ensureIfNoAgentsFailed() error {
 	nodeObsRun := ensureNodeObservabilityRunResource()
 	err := kubeClient.Get(context.TODO(), types.NamespacedName{Name: nodeobservability, Namespace: operandNamespace}, nodeObsRun)
@@ -154,6 +155,7 @@ func ensureIfNoAgentsFailed() error {
 	}
 	return nil
 }
+
 func TestRunAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 

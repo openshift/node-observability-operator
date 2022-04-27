@@ -13,9 +13,9 @@ import (
 	//+kubebuilder:scaffold:imports
 )
 
-func waitForOperatorDeploymentStatusCondition(t *testing.T, cl client.Client, conditions ...appsv1.DeploymentCondition) error {
+func waitForOperatorDeploymentStatusCondition(t *testing.T, cl client.Client, interval time.Duration, timeout time.Duration, conditions ...appsv1.DeploymentCondition) error {
 	t.Helper()
-	return wait.PollImmediate(1*time.Second, 1*time.Minute, func() (bool, error) {
+	return wait.PollImmediate(interval, timeout, func() (bool, error) {
 		dep := &appsv1.Deployment{}
 		depNamespacedName := types.NamespacedName{
 			Name:      "node-observability-operator-controller-manager",
@@ -31,6 +31,7 @@ func waitForOperatorDeploymentStatusCondition(t *testing.T, cl client.Client, co
 		return conditionsMatchExpected(expected, current), nil
 	})
 }
+
 func deploymentConditionMap(conditions ...appsv1.DeploymentCondition) map[string]string {
 	conds := map[string]string{}
 	for _, cond := range conditions {
@@ -38,6 +39,7 @@ func deploymentConditionMap(conditions ...appsv1.DeploymentCondition) map[string
 	}
 	return conds
 }
+
 func conditionsMatchExpected(expected, actual map[string]string) bool {
 	filtered := map[string]string{}
 	for k := range actual {
@@ -47,9 +49,10 @@ func conditionsMatchExpected(expected, actual map[string]string) bool {
 	}
 	return reflect.DeepEqual(expected, filtered)
 }
-func waitForDaemonsetStatus(t *testing.T, cl client.Client) error {
+
+func waitForDaemonsetStatus(t *testing.T, cl client.Client, interval time.Duration, timeout time.Duration) error {
 	t.Helper()
-	return wait.PollImmediate(1*time.Second, 1*time.Minute, func() (bool, error) {
+	return wait.PollImmediate(interval, timeout, func() (bool, error) {
 		ds := &appsv1.DaemonSet{}
 		dsNamespacedName := types.NamespacedName{
 			Name:      "node-observability-ds",

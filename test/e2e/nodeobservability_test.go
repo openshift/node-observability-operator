@@ -64,8 +64,8 @@ func init() {
 	if err := operatorv1alpha1.AddToScheme(Scheme); err != nil {
 		panic(err)
 	}
-
 }
+
 func initKubeClient() error {
 	kubeConfig, err := config.GetConfig()
 	if err != nil {
@@ -77,18 +77,18 @@ func initKubeClient() error {
 	}
 	return nil
 }
+
 func TestOperatorAvailable(t *testing.T) {
 	expected := []appsv1.DeploymentCondition{
 		{Type: appsv1.DeploymentAvailable, Status: corev1.ConditionTrue},
 	}
-	if err := waitForOperatorDeploymentStatusCondition(t, kubeClient, expected...); err != nil {
+	if err := waitForOperatorDeploymentStatusCondition(t, kubeClient, defaultInterval, defaultTimeout, expected...); err != nil {
 		t.Errorf("Did not get expected available condition: %v", err)
 	}
 }
+
 func TestMain(m *testing.M) {
-	var (
-		err error
-	)
+	var err error
 	if err = initKubeClient(); err != nil {
 		fmt.Printf("Failed to create kube client: %v\n", err)
 		os.Exit(1)
@@ -124,6 +124,7 @@ func TestMain(m *testing.M) {
 func ensureOperandNamespace() error {
 	return kubeClient.Create(context.TODO(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: operandNamespace}})
 }
+
 func ensureAuthProxyClientClusterRole() error {
 	rules := []rbacv1.PolicyRule{
 		{
@@ -161,6 +162,7 @@ func ensureAuthProxyRoleBinding() error {
 	}
 	return kubeClient.Create(context.TODO(), &crb)
 }
+
 func ensureAuthProxyRole() error {
 	rules := []rbacv1.PolicyRule{
 		{
@@ -183,6 +185,7 @@ func ensureAuthProxyRole() error {
 	}
 	return kubeClient.Create(context.TODO(), &clusterrole)
 }
+
 func ensureLeaderElectionRoleBinding() error {
 	crb := rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -204,6 +207,7 @@ func ensureLeaderElectionRoleBinding() error {
 	}
 	return kubeClient.Create(context.TODO(), &crb)
 }
+
 func ensureLeaderElectionRole() error {
 	rules := []rbacv1.PolicyRule{
 		{
@@ -232,6 +236,7 @@ func ensureLeaderElectionRole() error {
 	}
 	return kubeClient.Create(context.TODO(), &role)
 }
+
 func ensureOperandClusterRoleBinding() error {
 	crb := rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -252,6 +257,7 @@ func ensureOperandClusterRoleBinding() error {
 	}
 	return kubeClient.Create(context.TODO(), &crb)
 }
+
 func ensureOperandClusterRole() error {
 	rules := []rbacv1.PolicyRule{
 		{
