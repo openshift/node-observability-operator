@@ -1,9 +1,9 @@
-# VERSION defines the project version for the bundle.
+# BUNDLE_VERSION defines the project version for the bundle.
 # Update this value when you upgrade the version of your project.
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
-# - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
-# - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
-VERSION ?= 0.0.1
+# - use the BUNDLE_VERSION as arg of the bundle target (e.g make bundle BUNDLE_VERSION=0.0.2)
+# - use environment variables to overwrite this value (e.g export BUNDLE_VERSION=0.0.2)
+BUNDLE_VERSION ?= 0.0.1
 
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "candidate,fast,stable")
@@ -28,15 +28,15 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 # This variable is used to construct full image tags for bundle and catalog images.
 #
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
-# github.com/node-observability-operator-bundle:$VERSION and github.com/node-observability-operator-catalog:$VERSION.
+# github.com/node-observability-operator-bundle:$BUNDLE_VERSION and github.com/node-observability-operator-catalog:$BUNDLE_VERSION.
 IMAGE_TAG_BASE ?= quay.io/openshift/node-observability-operator
 
 # BUNDLE_IMG defines the image:tag used for the bundle.
 # You can use it as an arg. (E.g make bundle-build BUNDLE_IMG=<some-registry>/<project-name-bundle>:<tag>)
-BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
+BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(BUNDLE_VERSION)
 
 # INDEX_IMG defines the image:tag for the index build
-INDEX_IMG ?= $(IMAGE_TAG_BASE)-index:v$(VERSION)
+INDEX_IMG ?= $(IMAGE_TAG_BASE)-index:v$(BUNDLE_VERSION)
 
 # Image version to to build/push
 IMG_VERSION ?= v0.0.1
@@ -74,8 +74,6 @@ MAIN_PACKAGE=$(PACKAGE)/cmd/node-observability-operator
 BIN=bin/$(lastword $(subst /, ,$(MAIN_PACKAGE)))
 BIN_DIR=$(shell pwd)/bin
 
-GOLANGCI_LINT_BIN=$(BIN_DIR)/golangci-lint
-
 GOBUILD_VERSION_ARGS = -ldflags "-X $(PACKAGE)/pkg/version.SHORTCOMMIT=$(SHORTCOMMIT) -X $(PACKAGE)/pkg/version.COMMIT=$(COMMIT)"
 
 E2E_TIMEOUT ?= 1h
@@ -88,6 +86,7 @@ OPERATOR_SDK_VERSION = v1.19.0
 OPERATOR_SDK_BIN = $(shell pwd)/bin/operator-sdk
 .PHONY: operator-sdk
 operator-sdk:
+	mkdir -p ${BIN_DIR};
 ifeq ("$(wildcard $(OPERATOR_SDK_BIN))","")
 	@{ \
 	set -e ;\
@@ -95,6 +94,14 @@ ifeq ("$(wildcard $(OPERATOR_SDK_BIN))","")
 	chmod u+x $(OPERATOR_SDK_BIN) ;\
 	}
 endif
+
+CONTROLLER_GEN ?= go run sigs.k8s.io/controller-tools/cmd/controller-gen
+
+KUSTOMIZE ?= go run sigs.k8s.io/kustomize/kustomize/v4
+
+ENVTEST ?= go run sigs.k8s.io/controller-runtime/tools/setup-envtest
+
+GOLANGCI_LINT_BIN ?= go run github.com/golangci/golangci-lint/cmd/golangci-lint
 
 AUTH ?=
 
@@ -121,11 +128,11 @@ help: ## Display this help.
 ##@ Development
 
 .PHONY: manifests
-manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
+manifests: ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 .PHONY: generate
-generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+generate: ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
 
@@ -141,10 +148,10 @@ test-e2e:
 	./test/e2e
 	
 verify: lint
+	hack/verify-bundle.sh
 	hack/verify-gofmt.sh
 	hack/verify-deps.sh
 	hack/verify-generated.sh
-	hack/verify-olm.sh
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
@@ -155,7 +162,7 @@ vet: ## Run go vet against code.
 	go vet -mod=vendor ./...
 
 .PHONY: test
-test: manifests generate fmt vet envtest ## Run tests.
+test: manifests generate fmt vet ## Run tests.
 	mkdir -p test/unit/results
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ${VERBOSE} -mod=vendor ./pkg/... -coverprofile test/unit/results/cover.out
 
@@ -189,15 +196,15 @@ ifndef ignore-not-found
 endif
 
 .PHONY: install
-install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
+install: manifests ## Install CRDs into the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/crd | oc apply -f -
 
 .PHONY: uninstall
-uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
+uninstall: manifests ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/crd | oc  delete --ignore-not-found=$(ignore-not-found) -f -
 
 .PHONY: deploy
-deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
+deploy: manifests ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default | oc apply -f -
 
@@ -205,34 +212,6 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/default | oc delete --ignore-not-found=$(ignore-not-found) -f -
 
-CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
-.PHONY: controller-gen
-controller-gen: ## Download controller-gen locally if necessary.
-	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.7.0)
-
-KUSTOMIZE = $(shell pwd)/bin/kustomize
-.PHONY: kustomize
-kustomize: ## Download kustomize locally if necessary.
-	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v3@v3.8.7)
-
-ENVTEST = $(shell pwd)/bin/setup-envtest
-.PHONY: envtest
-envtest: ## Download envtest-setup locally if necessary.
-	$(call go-get-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@latest)
-
-# go-get-tool will 'go get' any package $2 and install it to $1.
-PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
-define go-get-tool
-@[ -f $(1) ] || { \
-set -e ;\
-TMP_DIR=$$(mktemp -d) ;\
-cd $$TMP_DIR ;\
-go mod init tmp ;\
-echo "Downloading $(2)" ;\
-GOBIN=$(PROJECT_DIR)/bin go get $(2) ;\
-rm -rf $$TMP_DIR ;\
-}
-endef
 
 .SILENT: olm-manifests
 .PHONY: olm-manifests
@@ -256,14 +235,14 @@ olm-manifests: manifests
 	for f in $$(\grep -l 'kind: *\(Service\|ConfigMap\|Secret\|Role\) *$$' $(BUNDLE_MANIFEST_DIR)/*.yaml); do sed -i '/namespace:/d' $${f};done
 
 .PHONY: bundle
-bundle: operator-sdk manifests kustomize ## Generate bundle manifests and metadata, then validate generated files.
+bundle: operator-sdk manifests ## Generate bundle manifests and metadata, then validate generated files.
 	$(OPERATOR_SDK_BIN) generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK_BIN) generate bundle -q --overwrite=false --version $(VERSION) $(BUNDLE_METADATA_OPTS)
+	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK_BIN) generate bundle -q --overwrite=false --version $(BUNDLE_VERSION) $(BUNDLE_METADATA_OPTS)
 	$(OPERATOR_SDK_BIN) bundle validate ./bundle
 
 .PHONY: validate-bundle
-validate-bundle: $(OPERATOR_SDK_BIN)
+validate-bundle:
 	$(OPERATOR_SDK_BIN) bundle validate $(BUNDLE_DIR) --select-optional suite=operatorframework
 
 .PHONY: bundle-build
@@ -304,7 +283,7 @@ endif
 BUNDLE_IMGS ?= $(BUNDLE_IMG)
 
 # The image tag given to the resulting catalog image (e.g. make catalog-build CATALOG_IMG=example.com/operator-catalog:v0.2.0).
-CATALOG_IMG ?= $(IMAGE_TAG_BASE)-catalog:v$(VERSION)
+CATALOG_IMG ?= $(IMAGE_TAG_BASE)-catalog:v$(BUNDLE_VERSION)
 
 # Set CATALOG_BASE_IMG to an existing catalog image tag to add $BUNDLE_IMGS to that image.
 ifneq ($(origin CATALOG_BASE_IMG), undefined)
@@ -326,13 +305,5 @@ catalog-push: ## Push a catalog image.
 
 .PHONY: lint
 ## Checks the code with golangci-lint
-lint: $(GOLANGCI_LINT_BIN)
+lint:
 	$(GOLANGCI_LINT_BIN) run -c .golangci.yaml --deadline=30m
-
-$(GOLANGCI_LINT_BIN):
-	mkdir -p $(BIN_DIR)
-	hack/golangci-lint.sh $(GOLANGCI_LINT_BIN)
-
-$(OPERATOR_SDK_BIN):
-	mkdir -p $(BIN_DIR)
-	hack/operator-sdk.sh $(OPERATOR_SDK_BIN)
