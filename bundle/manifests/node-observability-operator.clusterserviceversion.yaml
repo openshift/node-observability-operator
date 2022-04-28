@@ -109,6 +109,15 @@ spec:
           - create
         - apiGroups:
           - ""
+          resourceNames:
+          - kubelet-serving-ca
+          resources:
+          - configmaps
+          verbs:
+          - get
+          - list
+        - apiGroups:
+          - ""
           resources:
           - nodes
           verbs:
@@ -402,6 +411,17 @@ spec:
           - create
           - get
           - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - update
           - watch
         - apiGroups:
           - ""

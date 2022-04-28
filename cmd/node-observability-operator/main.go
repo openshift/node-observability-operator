@@ -32,6 +32,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -112,11 +113,24 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+	// KubeAPI client to be used only in order to get the configmap kubelet-serving-ca
+	// from NS openshift-config-managed.
+	// The clusterWideCli is needed because ConfigMaps are namespaced resources, and in the context
+	// of a namespaced operator, the operator only looks for the namespaced resources in its own namespace
+	// see https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.1/pkg/manager#Options => Namespace
+	clusterWideCli, err := client.New(mgr.GetConfig(), client.Options{
+		Scheme: scheme,
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to create a client")
+		os.Exit(1)
+	}
 
 	if err = (&nodeobservabilitycontroller.NodeObservabilityReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Log:    ctrl.Log.WithName("controller").WithName("NodeObservability"),
+		Client:            mgr.GetClient(),
+		ClusterWideClient: clusterWideCli,
+		Scheme:            mgr.GetScheme(),
+		Log:               ctrl.Log.WithName("controller").WithName("NodeObservability"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "NodeObservability")
 		os.Exit(1)

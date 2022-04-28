@@ -14,14 +14,17 @@ import (
 )
 
 const (
-	podName          = "node-observability-agent"
-	socketName       = "socket"
-	path             = "/var/run/crio/crio.sock"
-	mountPath        = "/var/run/crio/crio.sock"
-	defaultScheduler = "default-scheduler"
-	daemonSetName    = "node-observability-ds"
-	certsName        = "certs"
-	certsMountPath   = "/var/run/secrets/openshift.io/certs"
+	podName           = "node-observability-agent"
+	socketName        = "socket"
+	socketPath        = "/var/run/crio/crio.sock"
+	socketMountPath   = "/var/run/crio/crio.sock"
+	kbltCAMountPath   = "/var/run/secrets/kubelet-serving-ca/"
+	kbltCAMountedFile = "ca-bundle.crt"
+	kbltCAName        = "kubelet-ca"
+	defaultScheduler  = "default-scheduler"
+	daemonSetName     = "node-observability-ds"
+	certsName         = "certs"
+	certsMountPath    = "/var/run/secrets/openshift.io/certs"
 )
 
 // ensureDaemonSet ensures that the daemonset exists
@@ -32,9 +35,16 @@ func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeO
 	desired := r.desiredDaemonSet(nodeObs, sa)
 	exist, current, err := r.currentDaemonSet(ctx, nameSpace)
 	if err != nil {
-		return false, nil, fmt.Errorf("failed to get DaemonSet: %v", err)
+		return false, nil, fmt.Errorf("failed to get DaemonSet: %w", err)
 	}
 	if !exist {
+		cmExists, err := r.createConfigMap(ctx, nodeObs)
+		if err != nil {
+			return false, nil, fmt.Errorf("failed to create the configMap for kubelet-serving-ca: %w", err)
+		}
+		if !cmExists {
+			return false, nil, fmt.Errorf("failed to get the configMap for kubelet-serving-ca: %w", err)
+		}
 		if err := r.createDaemonSet(ctx, desired); err != nil {
 			return false, nil, err
 		}
@@ -99,11 +109,15 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Image:                    nodeObs.Spec.Image,
-							ImagePullPolicy:          corev1.PullIfNotPresent,
-							Name:                     podName,
-							Command:                  []string{"node-observability-agent"},
-							Args:                     []string{"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token", "--storage=/run"},
+							Image:           nodeObs.Spec.Image,
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							Name:            podName,
+							Command:         []string{"node-observability-agent"},
+							Args: []string{
+								"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
+								"--storage=/run",
+								fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
+							},
 							Resources:                corev1.ResourceRequirements{},
 							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 							SecurityContext: &corev1.SecurityContext{
@@ -117,11 +131,18 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 									},
 								},
 							}},
-							VolumeMounts: []corev1.VolumeMount{{
-								MountPath: mountPath,
-								Name:      socketName,
-								ReadOnly:  false,
-							}},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									MountPath: socketMountPath,
+									Name:      socketName,
+									ReadOnly:  false,
+								},
+								{
+									MountPath: kbltCAMountPath,
+									Name:      kbltCAName,
+									ReadOnly:  true,
+								},
+							},
 						},
 						{
 							Name:  "kube-rbac-proxy",
@@ -153,8 +174,18 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 							Name: socketName,
 							VolumeSource: corev1.VolumeSource{
 								HostPath: &corev1.HostPathVolumeSource{
-									Path: path,
+									Path: socketPath,
 									Type: &vst,
+								},
+							},
+						},
+						{
+							Name: kbltCAName,
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: nodeObs.Name,
+									},
 								},
 							},
 						},
