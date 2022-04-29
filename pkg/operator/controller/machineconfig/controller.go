@@ -154,7 +154,7 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		r.Log.Error(err, "profiling mc reconciliation")
 	}
 
-	if result, err := r.checkMCPUpdateStatus(ctx); err != nil {
+	if result, err := r.CheckMCPUpdateStatus(ctx); err != nil {
 		return result, err
 	}
 

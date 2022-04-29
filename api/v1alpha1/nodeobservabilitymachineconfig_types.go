@@ -40,6 +40,9 @@ type NodeObservabilityMachineConfigStatus struct {
 
 	// UpdateStatus contains of the status of the MCP update
 	UpdateStatus ConfigUpdateStatus `json:"updateStatus,omitempty"`
+
+	// Check if the MachineConfig is ready
+	Ready bool `json:"ready,omitempty"`
 }
 
 // ConfigUpdateStatus is for storing the status of the MCP update

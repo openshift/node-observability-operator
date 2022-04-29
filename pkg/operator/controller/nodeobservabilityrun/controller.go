@@ -38,11 +38,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	nodeobservabilityv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	machineconfigcontroller "github.com/openshift/node-observability-operator/pkg/operator/controller/machineconfig"
 )
 
 const (
-	pollingPeriod = time.Second * 5
-	authHeader    = "Authorization"
+	pollingPeriod    = time.Second * 5
+	authHeader       = "Authorization"
+	ProfilingMCPName = "nodeobservability"
 )
 
 var (
@@ -52,12 +54,13 @@ var (
 // NodeObservabilityRunReconciler reconciles a NodeObservabilityRun object
 type NodeObservabilityRunReconciler struct {
 	client.Client
-	Log       logr.Logger
-	Scheme    *runtime.Scheme
-	Namespace string
-	AgentName string
-	AuthToken []byte
-	CACert    *x509.CertPool
+	Log           logr.Logger
+	MCOReconciler *machineconfigcontroller.MachineConfigReconciler
+	Scheme        *runtime.Scheme
+	Namespace     string
+	AgentName     string
+	AuthToken     []byte
+	CACert        *x509.CertPool
 }
 
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilityruns,verbs=get;list;watch;create;update;patch;delete
@@ -84,8 +87,46 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 		return
 	}
 
+	// interact with MCO only if we are executing CrioKubeletProfile runs
+	// also bypass if the runtype is e2e-test
+	if instance.Spec.RunType != nodeobservabilityv1alpha1.E2ETest && (instance.Spec.RunType == nodeobservabilityv1alpha1.CrioKubeletProfile) {
+		exists, mco, err := r.ensureMCO(ctx)
+		if err != nil {
+			return ctrl.Result{}, err
+		} else if !exists {
+			return ctrl.Result{}, fmt.Errorf("could not get NodeObservabilitymachineConfig")
+		}
+		// this will ensure we dont trigger the agent call until the mco and mcp have been updated
+		// successfully
+		result, err := r.MCOReconciler.CheckMCPUpdateStatus(ctx)
+		if err != nil {
+			r.Log.Info("waiting for NodeObservabilityMachineConfig update in NodeobeservabilityRun")
+			return result, err
+		}
+		r.Log.V(3).Info(fmt.Sprintf("NodeObservabilityMachineConfig : updated and ready : %s", mco.Name))
+	}
+
+	// this code should be included in the 'if' statement above
+	// as it is specific to CrioKubeletProfiling
+	// once new profiling features are added it can be moved
+
+	// continue once machineconfigpool has been updated successfully
 	if finished(instance) {
 		r.Log.V(3).Info("Run for this instance has been completed already")
+		// check the CR if the RestoreMCOStateAfterRun flag is set
+		if instance.Spec.RestoreMCOStateAfterRun {
+			mco := r.desiredMCO()
+			if err := r.Delete(ctx, mco); err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to remove profiling MCO CR %s : %w", instance.Name, err)
+			}
+			mcp := r.MCOReconciler.GetProfilingMCP()
+			err = r.MCOReconciler.DeleteProfilingMCP(ctx, mcp)
+			if err != nil {
+				r.Log.Error(err, "deleting machineconfigpool")
+			}
+			r.Log.Info("successfully removed profiling MCO CR", "ProfilingMCOName", mco.Name)
+			return
+		}
 		return
 	}
 

@@ -2,6 +2,7 @@ apiVersion: nodeobservability.olm.openshift.io/v1alpha1
 kind: NodeObservability
 metadata:
   name: nodeobservability-sample
+  namespace: node-observability-operator
 spec:
   labels:
   image: "registry.ci.openshift.org/ocp/4.11:node-observability-agent"

@@ -56,7 +56,7 @@ func (r *MachineConfigReconciler) ensureProfilingMCPExists(ctx context.Context) 
 	}
 
 	if !r.CtrlConfig.Spec.EnableCrioProfiling && !r.CtrlConfig.Spec.EnableKubeletProfiling && exists {
-		if err := r.deleteProfilingMCP(ctx, mcp); err != nil {
+		if err := r.DeleteProfilingMCP(ctx, mcp); err != nil {
 			return nil, err
 		}
 		r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "DeleteConfig", "successfully deleted %s mcp", ProfilingMCPName)
@@ -81,7 +81,7 @@ func (r *MachineConfigReconciler) fetchProfilingMCP(ctx context.Context, namespa
 
 // getProfilingMCP is for obtaining the tailored profiling MCP
 // required for creation
-func getProfilingMCP() *mcv1.MachineConfigPool {
+func (r *MachineConfigReconciler) GetProfilingMCP() *mcv1.MachineConfigPool {
 
 	return &mcv1.MachineConfigPool{
 		TypeMeta: metav1.TypeMeta{
@@ -119,7 +119,7 @@ func getProfilingMCP() *mcv1.MachineConfigPool {
 
 // createProfilingMCP is for creating the required profiling MCP
 func (r *MachineConfigReconciler) createProfilingMCP(ctx context.Context) error {
-	mcp := getProfilingMCP()
+	mcp := r.GetProfilingMCP()
 
 	if err := r.Create(ctx, mcp); err != nil {
 		return fmt.Errorf("failed to create MCP for profiling machine configs: %w", err)
@@ -134,7 +134,7 @@ func (r *MachineConfigReconciler) createProfilingMCP(ctx context.Context) error 
 }
 
 // deleteProfilingMCP is for deleting MCP created for profiling MC CRs
-func (r *MachineConfigReconciler) deleteProfilingMCP(ctx context.Context, mcp *mcv1.MachineConfigPool) error {
+func (r *MachineConfigReconciler) DeleteProfilingMCP(ctx context.Context, mcp *mcv1.MachineConfigPool) error {
 	if err := r.Delete(ctx, mcp); err != nil {
 		return fmt.Errorf("failed to remove profiling MCP CR %s : %w", ProfilingMCPName, err)
 	}
@@ -143,8 +143,8 @@ func (r *MachineConfigReconciler) deleteProfilingMCP(ctx context.Context, mcp *m
 	return nil
 }
 
-// checkMCPUpdateStatus is for reconciling update status of all machines in profiling MCP
-func (r *MachineConfigReconciler) checkMCPUpdateStatus(ctx context.Context) (ctrl.Result, error) {
+// CheckMCPUpdateStatus is for reconciling update status of all machines in profiling MCP
+func (r *MachineConfigReconciler) CheckMCPUpdateStatus(ctx context.Context) (ctrl.Result, error) {
 	mcp := &mcv1.MachineConfigPool{}
 	key := types.NamespacedName{Name: ProfilingMCPName}
 	if err := r.Get(ctx, key, mcp); err != nil {
