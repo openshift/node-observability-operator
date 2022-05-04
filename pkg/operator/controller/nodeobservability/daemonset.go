@@ -145,8 +145,9 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 							},
 						},
 						{
-							Name:  "kube-rbac-proxy",
-							Image: "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0",
+							Name:            "kube-rbac-proxy",
+							Image:           "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0",
+							ImagePullPolicy: corev1.PullIfNotPresent,
 							Args: []string{
 								"--secure-listen-address=0.0.0.0:8443",
 								"--upstream=http://127.0.0.1:9000/",

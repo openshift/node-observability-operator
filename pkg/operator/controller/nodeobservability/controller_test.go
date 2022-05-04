@@ -308,6 +308,7 @@ func testNodeObservability() *operatorv1alpha1.NodeObservability {
 	}
 }
 
+// testNodeObservabilityDeleted - test for deletion
 func testNodeObservabilityToBeDeleted() *operatorv1alpha1.NodeObservability {
 	nobs := testNodeObservability()
 	nobs.Finalizers = append(nobs.Finalizers, finalizer)

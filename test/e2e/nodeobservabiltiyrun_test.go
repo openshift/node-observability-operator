@@ -86,6 +86,8 @@ func ensureNodeObservabilityRunResource() *v1alpha1.NodeObservabilityRun {
 		NodeObservabilityRef: &v1alpha1.NodeObservabilityRef{
 			Name: nodeobservability,
 		},
+		RunType:                 v1alpha1.E2ETest,
+		RestoreMCOStateAfterRun: false,
 	}
 
 	nodeObs := v1alpha1.NodeObservabilityRun{
@@ -125,7 +127,7 @@ func TestIfNodeObservabilityDestroyed(t *testing.T) {
 
 func IfFinished(t *testing.T) error {
 	t.Helper()
-	return wait.PollImmediate(1*time.Second, 1*time.Minute, func() (bool, error) {
+	return wait.PollImmediate(1*time.Second, 3*time.Minute, func() (bool, error) {
 		nodeObsRun := ensureNodeObservabilityRunResource()
 		err := kubeClient.Get(context.TODO(), types.NamespacedName{Name: nodeobservability, Namespace: operandNamespace}, nodeObsRun)
 		if err != nil {

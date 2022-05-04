@@ -52,8 +52,9 @@ const (
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("node-observability")
+	scheme               = runtime.NewScheme()
+	setupLog             = ctrl.Log.WithName("node-observability")
+	nodeObsMCOReconciler *machineconfigcontroller.MachineConfigReconciler
 )
 
 func init() {
@@ -135,28 +136,34 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "NodeObservability")
 		os.Exit(1)
 	}
-	if err = (&nodeobservabilityrun.NodeObservabilityRunReconciler{
-		Client:    mgr.GetClient(),
-		Scheme:    mgr.GetScheme(),
-		Log:       ctrl.Log.WithName("controller").WithName("NodeObservabilityRun"),
-		Namespace: operatorNamespace,
-		AgentName: agentName,
-		AuthToken: token,
-		CACert:    ca,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "NodeObservabilityRun")
-		os.Exit(1)
-	}
-	if err = (&machineconfigcontroller.MachineConfigReconciler{
+
+	nodeObsMCOReconciler = &machineconfigcontroller.MachineConfigReconciler{
 		Client:         mgr.GetClient(),
 		Scheme:         mgr.GetScheme(),
 		Log:            ctrl.Log.WithName("controller").WithName("NodeObservabilityMachineConfig"),
 		EventRecorder:  mgr.GetEventRecorderFor("node-observability-operator"),
 		PrevSyncChange: make(map[string]machineconfigcontroller.PrevSyncData),
-	}).SetupWithManager(mgr); err != nil {
+	}
+
+	if err = nodeObsMCOReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "NodeObservabilityMachineConfig")
 		os.Exit(1)
 	}
+
+	if err = (&nodeobservabilityrun.NodeObservabilityRunReconciler{
+		Client:        mgr.GetClient(),
+		Scheme:        mgr.GetScheme(),
+		Log:           ctrl.Log.WithName("controller").WithName("NodeObservabilityRun"),
+		Namespace:     operatorNamespace,
+		MCOReconciler: nodeObsMCOReconciler,
+		AgentName:     agentName,
+		AuthToken:     token,
+		CACert:        ca,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "NodeObservabilityRun")
+		os.Exit(1)
+	}
+
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	securityv1 "github.com/openshift/api/security/v1"
+	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -29,8 +30,6 @@ import (
 	watch "k8s.io/apimachinery/pkg/watch"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
-
-	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 
 	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
