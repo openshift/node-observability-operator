@@ -28,6 +28,12 @@ type NodeObservabilityRunSpec struct {
 
 	// RunType identifies the runtype
 	// This setting will allow for logic to bypass machine config settings
+	// if not set to crioKubeletProfile.
+	// valid values are one of [crioKubeletProfile,eBPFProfile,E2ETest]
+	//
+	// +kubebuilder:validation:Enum=crioKubeletProfile;eBPFprofile;e2e-test;
+	// +kubebuilder:validation:Required
+	// +required
 	RunType NodeObservabilityRunType `json:"runType,omitempty"`
 
 	// RestoreMCOAfterRun - flag used to restore previous machineconfig state after run

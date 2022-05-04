@@ -52,10 +52,9 @@ func (r *NodeObservabilityRunReconciler) ensureMCO(ctx context.Context) (bool, *
 	return true, current, err
 }
 
-// currentMachineConfig check if the node observability machineconfig exists
+// currentMCO check if the node observability machineconfig exists
 func (r *NodeObservabilityRunReconciler) currentMCO(ctx context.Context, nameSpace types.NamespacedName) (bool, *v1alpha1.NodeObservabilityMachineConfig, error) {
 	mc := r.desiredMCO()
-
 	if err := r.Get(ctx, nameSpace, mc); err != nil {
 		if errors.IsNotFound(err) {
 			return false, nil, nil

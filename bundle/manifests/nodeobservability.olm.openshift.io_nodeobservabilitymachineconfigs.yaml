@@ -53,9 +53,6 @@ spec:
                 description: lastUpdated is the timestamp of previous status update
                 format: date-time
                 type: string
-              ready:
-                description: Check if the MachineConfig is ready
-                type: boolean
               updateStatus:
                 description: UpdateStatus contains of the status of the MCP update
                 properties:

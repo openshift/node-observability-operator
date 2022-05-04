@@ -55,7 +55,12 @@ spec:
                 type: boolean
               runType:
                 description: RunType identifies the runtype This setting will allow
-                  for logic to bypass machine config settings
+                  for logic to bypass machine config settings if not set to crioKubeletProfile.
+                  valid values are one of [crioKubeletProfile,eBPFProfile,E2ETest]
+                enum:
+                - crioKubeletProfile
+                - eBPFprofile
+                - e2e-test
                 type: string
             required:
             - nodeObservabilityRef
