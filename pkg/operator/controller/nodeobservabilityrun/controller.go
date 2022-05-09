@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -45,6 +44,8 @@ const (
 	pollingPeriod    = time.Second * 5
 	authHeader       = "Authorization"
 	ProfilingMCPName = "nodeobservability"
+	pprofPath        = "node-observability-pprof"
+	pprofStatus      = "node-observability-status"
 )
 
 var (
@@ -56,11 +57,12 @@ type NodeObservabilityRunReconciler struct {
 	client.Client
 	Log           logr.Logger
 	MCOReconciler *machineconfigcontroller.MachineConfigReconciler
-	Scheme        *runtime.Scheme
-	Namespace     string
-	AgentName     string
-	AuthToken     []byte
-	CACert        *x509.CertPool
+	URL
+	Scheme    *runtime.Scheme
+	Namespace string
+	AgentName string
+	AuthToken []byte
+	CACert    *x509.CertPool
 }
 
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilityruns,verbs=get;list;watch;create;update;patch;delete
@@ -162,8 +164,7 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 func (r *NodeObservabilityRunReconciler) handleInProgress(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) (bool, error) {
 	var errors []error
 	for _, agent := range instance.Status.Agents {
-		podHostname := strings.ReplaceAll(agent.IP, ".", "-")
-		url := fmt.Sprintf("https://%s.%s.%s.svc:%d/node-observability-status", podHostname, r.AgentName, r.Namespace, agent.Port)
+		url := r.format(agent.IP, r.AgentName, r.Namespace, pprofStatus, agent.Port)
 		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityRunErrorRetriable, r.httpGetCall(url))
 		if err != nil {
 			if e, ok := err.(NodeObservabilityRunError); ok && e.HttpCode == http.StatusConflict {
@@ -194,8 +195,7 @@ func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance 
 	}
 
 	for _, a := range subset.Addresses {
-		podHostname := strings.ReplaceAll(a.IP, ".", "-")
-		url := fmt.Sprintf("https://%s.%s.%s.svc:%d/node-observability-pprof", podHostname, r.AgentName, r.Namespace, port)
+		url := r.format(a.IP, r.AgentName, r.Namespace, pprofPath, port)
 		r.Log.V(3).Info("Initiating new run for node", "IP", a.IP, "port", port, "URL", url)
 		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityRunErrorRetriable, r.httpGetCall(url))
 		if err != nil {
@@ -258,15 +258,16 @@ func (r *NodeObservabilityRunReconciler) httpGetCall(url string) func() error {
 }
 
 func handleFailingAgent(instance *nodeobservabilityv1alpha1.NodeObservabilityRun, old nodeobservabilityv1alpha1.AgentNode) {
-	newLen := len(instance.Status.Agents) - 1
-	newAgents := make([]nodeobservabilityv1alpha1.AgentNode, newLen)
-	for i, a := range instance.Status.Agents {
-		if a.Name != old.Name {
-			newAgents[i] = a
+	var newAgents []nodeobservabilityv1alpha1.AgentNode
+	for _, a := range instance.Status.Agents {
+		if a.Name == old.Name {
+			instance.Status.FailedAgents = append(instance.Status.FailedAgents, old)
+		} else {
+			newAgents = append(newAgents, a)
 		}
 	}
 	instance.Status.Agents = newAgents
-	instance.Status.FailedAgents = append(instance.Status.FailedAgents, old)
+
 }
 
 func (r *NodeObservabilityRunReconciler) getAgentEndpoints(ctx context.Context) (*corev1.Endpoints, error) {
@@ -292,7 +293,7 @@ func (r *NodeObservabilityRunReconciler) SetupWithManager(mgr ctrl.Manager) erro
 		PreferServerCipherSuites: true,
 	}
 	transport = t
-
+	r.URL = &url{}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&nodeobservabilityv1alpha1.NodeObservabilityRun{}).
 		Complete(r)
