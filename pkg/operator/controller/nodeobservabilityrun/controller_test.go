@@ -12,19 +12,19 @@ import (
 	"testing"
 	"time"
 
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
 	"github.com/go-logr/logr"
-	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
-	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
 const (
@@ -362,7 +362,7 @@ func fakeHttpServer() error {
 
 func pong(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte("pong\n"))
+	_, _ = w.Write([]byte("pong\n"))
 }
 
 func readCACert(caCertFile string) (*x509.CertPool, error) {
