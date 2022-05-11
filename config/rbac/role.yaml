@@ -25,6 +25,7 @@ rules:
   verbs:
   - get
   - list
+  - patch
 - apiGroups:
   - ""
   resources:
@@ -53,27 +54,12 @@ rules:
 - apiGroups:
   - machineconfiguration.openshift.io
   resources:
-  - kubeletconfigs
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - machineconfiguration.openshift.io
-  resources:
   - machineconfigpools
   verbs:
   - create
   - delete
   - get
   - list
-  - patch
-  - update
-  - watch
 - apiGroups:
   - machineconfiguration.openshift.io
   resources:
@@ -83,9 +69,6 @@ rules:
   - delete
   - get
   - list
-  - patch
-  - update
-  - watch
 - apiGroups:
   - nodeobservability.olm.openshift.io
   resources:

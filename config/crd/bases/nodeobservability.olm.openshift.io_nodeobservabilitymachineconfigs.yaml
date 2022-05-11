@@ -38,31 +38,49 @@ spec:
             description: NodeObservabilityMachineConfigSpec defines the desired state
               of NodeObservabilityMachineConfig
             properties:
-              enableCrioProfiling:
-                description: EnableCrioProfiling is for enabling profiling of CRI-O
-                  service
-                type: boolean
-              enableKubeletProfiling:
-                description: EnableKubeletProfiling is for enabling profiling of CRI-O
-                  service
-                type: boolean
+              debug:
+                description: NodeObservabilityDebug is for holding the configurations
+                  defined for enabling debugging of services
+                properties:
+                  enableCrioProfiling:
+                    description: EnableCrioProfiling is for enabling profiling of
+                      CRI-O service
+                    type: boolean
+                type: object
             type: object
           status:
             description: NodeObservabilityMachineConfigStatus defines the observed
               state of NodeObservabilityMachineConfig
             properties:
-              lastUpdated:
-                description: lastUpdated is the timestamp of previous status update
-                format: date-time
-                type: string
-              updateStatus:
-                description: UpdateStatus contains of the status of the MCP update
-                properties:
-                  InProgress:
-                    description: InProgress is for tracking the update of machines
-                      in profiling MCP
-                    type: string
-                type: object
+              conditions:
+                description: conditions represents the latest available observations
+                  of current operator state.
+                items:
+                  description: NodeObservabilityMachineConfigCondition is for storing
+                    the status of the MCP update
+                  properties:
+                    lastUpdateTime:
+                      description: lastUpdateTime is the time last update was applied.
+                      format: date-time
+                      nullable: true
+                      type: string
+                    message:
+                      description: message provides additional information about the
+                        current condition.
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      type: string
+                    type:
+                      description: type specifies the state of the operator's reconciliation
+                        functionality.
+                      type: string
+                  required:
+                  - lastUpdateTime
+                  - status
+                  - type
+                  type: object
+                type: array
             type: object
         type: object
     served: true
