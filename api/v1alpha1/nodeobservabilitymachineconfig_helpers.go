@@ -62,9 +62,9 @@ func SetNodeObservabilityMachineConfigCondition(
 	status.Conditions = append(newConditions, condition)
 
 	for i := range status.Conditions {
-		c := status.Conditions[i]
-		if c.Type != condition.Type {
-			c.Status = ConditionFalse
+		if status.Conditions[i].Type != condition.Type &&
+			status.Conditions[i].Status != ConditionFalse {
+			(&status.Conditions[i]).Status = ConditionFalse
 		}
 	}
 }

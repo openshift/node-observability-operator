@@ -41,7 +41,7 @@ import (
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.0/pkg/reconcile
-func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
+func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 
 	if r.Log, err = logr.FromContext(ctx); err != nil {
 		return
@@ -82,11 +82,7 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
 	}
 
-	if result, err := r.monitorProgress(ctx); err != nil {
-		return result, err
-	}
-
-	return ctrl.Result{}, nil
+	return r.monitorProgress(ctx)
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -157,7 +153,7 @@ func hasFinalizer(mc *v1alpha1.NodeObservabilityMachineConfig) bool {
 func (r *MachineConfigReconciler) inspectProfilingMCReq(ctx context.Context) error {
 
 	condition := v1alpha1.IsNodeObservabilityMachineConfigConditionSetInProgress(r.CtrlConfig.Status.Conditions)
-	if condition != Null {
+	if condition != Empty {
 		r.Log.Info("previous reconcile initiated operation in progress, changes not applied",
 			"condition", condition)
 		return nil
@@ -189,7 +185,7 @@ func (r *MachineConfigReconciler) ensureProfConfEnabled(ctx context.Context) (er
 	setEnabledCondition += modCount
 
 	if setEnabledCondition > 0 {
-		cond := v1alpha1.NewNodeObservabilityMachineConfigCondition(v1alpha1.DebugEnabled, v1alpha1.ConditionInProgress, Null)
+		cond := v1alpha1.NewNodeObservabilityMachineConfigCondition(v1alpha1.DebugEnabled, v1alpha1.ConditionInProgress, Empty)
 		v1alpha1.SetNodeObservabilityMachineConfigCondition(&r.CtrlConfig.Status, *cond)
 	}
 
@@ -206,7 +202,7 @@ func (r *MachineConfigReconciler) ensureProfConfDisabled(ctx context.Context) (e
 	}
 
 	if modCount > 0 {
-		cond := v1alpha1.NewNodeObservabilityMachineConfigCondition(v1alpha1.DebugDisabled, v1alpha1.ConditionInProgress, Null)
+		cond := v1alpha1.NewNodeObservabilityMachineConfigCondition(v1alpha1.DebugDisabled, v1alpha1.ConditionInProgress, Empty)
 		v1alpha1.SetNodeObservabilityMachineConfigCondition(&r.CtrlConfig.Status, *cond)
 	}
 
@@ -259,7 +255,7 @@ func (r *MachineConfigReconciler) ensureReqMCPNotExists(ctx context.Context) err
 func (r *MachineConfigReconciler) monitorProgress(ctx context.Context) (result ctrl.Result, err error) {
 
 	if v1alpha1.IsNodeObservabilityMachineConfigConditionInProgress(r.CtrlConfig.Status.Conditions, v1alpha1.DebugEnabled) {
-		if result, err = r.checkNodeObservabilityMCPStatus(ctx); err != nil {
+		if result, err = r.CheckNodeObservabilityMCPStatus(ctx); err != nil {
 			return
 		}
 	}

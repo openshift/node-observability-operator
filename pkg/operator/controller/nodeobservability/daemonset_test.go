@@ -33,7 +33,19 @@ import (
 	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
+func makeKubeletCACM() *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      srcKbltCAConfigMapName,
+			Namespace: srcKbltCAConfigMapNameSpace,
+		},
+		Data: map[string]string{
+			"ca-bundle.crt": "empty",
+		},
+	}
+}
 func TestEnsureDaemonset(t *testing.T) {
+
 	makeDaemonset := func() *appsv1.DaemonSet {
 		nodeObs := &operatorv1alpha1.NodeObservability{}
 		ls := labelsForNodeObservability(daemonSetName)
@@ -75,7 +87,7 @@ func TestEnsureDaemonset(t *testing.T) {
 								},
 							}},
 							VolumeMounts: []corev1.VolumeMount{{
-								MountPath: mountPath,
+								MountPath: socketMountPath,
 								Name:      socketName,
 								ReadOnly:  false,
 							}},
@@ -89,7 +101,7 @@ func TestEnsureDaemonset(t *testing.T) {
 							Name: socketName,
 							VolumeSource: corev1.VolumeSource{
 								HostPath: &corev1.HostPathVolumeSource{
-									Path: path,
+									Path: socketPath,
 									Type: &vst,
 								},
 							},
@@ -110,15 +122,18 @@ func TestEnsureDaemonset(t *testing.T) {
 		errExpected     bool
 	}{
 		{
-			name:            "Does not exist",
-			existingObjects: []runtime.Object{},
-			expectedExist:   true,
-			expectedDS:      makeDaemonset(),
+			name: "Does not exist",
+			existingObjects: []runtime.Object{
+				makeKubeletCACM(),
+			},
+			expectedExist: true,
+			expectedDS:    makeDaemonset(),
 		},
 		{
 			name: "Exists",
 			existingObjects: []runtime.Object{
 				makeDaemonset(),
+				makeKubeletCACM(),
 			},
 			expectedExist: true,
 			expectedDS:    makeDaemonset(),
@@ -128,11 +143,20 @@ func TestEnsureDaemonset(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cl := fake.NewClientBuilder().WithRuntimeObjects(tc.existingObjects...).Build()
 			r := &NodeObservabilityReconciler{
-				Client: cl,
-				Scheme: test.Scheme,
-				Log:    zap.New(zap.UseDevMode(true)),
+				Client:            cl,
+				ClusterWideClient: cl,
+				Scheme:            test.Scheme,
+				Log:               zap.New(zap.UseDevMode(true)),
 			}
-			nodeObs := &operatorv1alpha1.NodeObservability{}
+			nodeObs := &operatorv1alpha1.NodeObservability{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "nodeobservability-sample",
+					Namespace: "node-observability-operator",
+				},
+				Spec: operatorv1alpha1.NodeObservabilitySpec{
+					Image: "node-observability-agent:latest",
+				},
+			}
 			_, serviceAccount, err := r.ensureServiceAccount(context.TODO(), nodeObs)
 			if err != nil {
 				if !tc.errExpected {

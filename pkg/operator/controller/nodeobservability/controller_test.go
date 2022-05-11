@@ -51,10 +51,12 @@ func TestReconcile(t *testing.T) {
 	// used to simulate errors for all objects
 	ErrRuns := []ErrTestObject{
 		{
+			Enabled:  true,
 			Set:      nil,
 			NotFound: nil,
 		},
 		{
+			Enabled: true,
 			Set: map[string]bool{
 				sccObj: true,
 			},
@@ -63,6 +65,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			Enabled: true,
 			Set: map[string]bool{
 				saObj: true,
 			},
@@ -71,6 +74,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			Enabled: true,
 			Set: map[string]bool{
 				crObj: true,
 			},
@@ -79,6 +83,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			Enabled: true,
 			Set: map[string]bool{
 				crbObj: true,
 			},
@@ -87,6 +92,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			Enabled: true,
 			Set: map[string]bool{
 				dsObj: true,
 			},
@@ -95,6 +101,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			Enabled: true,
 			Set: map[string]bool{
 				sccObj: true,
 			},
@@ -103,6 +110,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			Enabled: true,
 			Set: map[string]bool{
 				saObj: true,
 			},
@@ -111,6 +119,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			Enabled: true,
 			Set: map[string]bool{
 				crObj: true,
 			},
@@ -119,6 +128,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			Enabled: true,
 			Set: map[string]bool{
 				crbObj: true,
 			},
@@ -127,6 +137,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
+			Enabled: true,
 			Set: map[string]bool{
 				dsObj: true,
 			},
@@ -175,20 +186,20 @@ func TestReconcile(t *testing.T) {
 	}{
 		{
 			name:            "Bootstrapping",
-			existingObjects: []runtime.Object{testNodeObservability()},
+			existingObjects: []runtime.Object{testNodeObservability(), makeKubeletCACM()},
 			inputRequest:    testRequest(),
 			expectedResult:  reconcile.Result{},
 			expectedEvents:  []test.Event{},
 		},
 		{
 			name:            "Deleted",
-			existingObjects: []runtime.Object{},
+			existingObjects: []runtime.Object{makeKubeletCACM()},
 			inputRequest:    testRequest(),
 			expectedResult:  reconcile.Result{},
 		},
 		{
 			name:            "Deleting",
-			existingObjects: []runtime.Object{testNodeObservabilityToBeDeleted()},
+			existingObjects: []runtime.Object{testNodeObservabilityToBeDeleted(), makeKubeletCACM()},
 			inputRequest:    testRequest(),
 			expectedResult:  reconcile.Result{},
 		},
@@ -205,10 +216,11 @@ func TestReconcile(t *testing.T) {
 				tc.expectedEvents = nil
 
 				r := &NodeObservabilityReconciler{
-					Client: cl,
-					Scheme: test.Scheme,
-					Log:    zap.New(zap.UseDevMode(true)),
-					Err:    errTest,
+					Client:            cl,
+					ClusterWideClient: cl,
+					Scheme:            test.Scheme,
+					Log:               zap.New(zap.UseDevMode(true)),
+					Err:               errTest,
 				}
 				// only check for errors when the ErrorTestObject Set and NotFound maps are nill
 				tc.errExpected = (errTest.Set != nil || errTest.NotFound != nil) && tc.name == "Bootstrapping"
@@ -273,7 +285,7 @@ func TestReconcile(t *testing.T) {
 	}
 }
 
-// // testRquest - used to create request
+// testRquest - used to create request
 func testRequest() ctrl.Request {
 	return ctrl.Request{
 		NamespacedName: types.NamespacedName{
@@ -296,6 +308,7 @@ func testNodeObservability() *operatorv1alpha1.NodeObservability {
 	}
 }
 
+// testNodeObservabilityDeleted - test for deletion
 func testNodeObservabilityToBeDeleted() *operatorv1alpha1.NodeObservability {
 	nobs := testNodeObservability()
 	nobs.Finalizers = append(nobs.Finalizers, finalizer)

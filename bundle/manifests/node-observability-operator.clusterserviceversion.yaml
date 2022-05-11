@@ -14,7 +14,7 @@ metadata:
             "expectedcount": 1,
             "image": "quay.io/prometheus/busybox",
             "labels": {
-              "app": "node-observability"
+              "node-role.kubernetes.io/worker": ""
             }
           }
         },
@@ -35,7 +35,13 @@ metadata:
           "metadata": {
             "name": "nodeobservabilityrun-sample"
           },
-          "spec": null
+          "spec": {
+            "nodeObservabilityRef": {
+              "name": "nodeobservability-sample"
+            },
+            "restoreMCOStateAfterRun": true,
+            "runType": "crioKubeletProfile"
+          }
         }
       ]
     capabilities: Basic Install
@@ -79,6 +85,14 @@ spec:
           - /debug/*
           verbs:
           - get
+        - nonResourceURLs:
+          - /node-observability-pprof
+          verbs:
+          - get
+        - nonResourceURLs:
+          - /node-observability-status
+          verbs:
+          - get
         - apiGroups:
           - ""
           resources:
@@ -87,6 +101,27 @@ spec:
           - get
           - list
           - watch
+        - apiGroups:
+          - authentication.k8s.io
+          resources:
+          - tokenreviews
+          verbs:
+          - create
+        - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - subjectaccessreviews
+          verbs:
+          - create
+        - apiGroups:
+          - ""
+          resourceNames:
+          - kubelet-serving-ca
+          resources:
+          - configmaps
+          verbs:
+          - get
+          - list
         - apiGroups:
           - ""
           resources:
@@ -106,16 +141,6 @@ spec:
           resources:
           - pods
           verbs:
-          - get
-          - list
-          - watch
-        - apiGroups:
-          - ""
-          resources:
-          - serviceaccounts
-          verbs:
-          - create
-          - delete
           - get
           - list
           - watch
@@ -278,7 +303,9 @@ spec:
           - create
         serviceAccountName: node-observability-operator-controller-manager
       deployments:
-      - name: node-observability-operator-controller-manager
+      - label:
+          control-plane: controller-manager
+        name: node-observability-operator-controller-manager
         spec:
           replicas: 1
           selector:
@@ -312,6 +339,7 @@ spec:
                 command:
                 - /manager
                 image: quay.io/openshift/node-observability-operator:v0.0.1
+                imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -334,10 +362,20 @@ spec:
                     memory: 64Mi
                 securityContext:
                   allowPrivilegeEscalation: false
+                volumeMounts:
+                - mountPath: /var/run/secrets/openshift.io/certs
+                  name: ca-bundle
               securityContext:
                 runAsNonRoot: true
               serviceAccountName: node-observability-operator-controller-manager
               terminationGracePeriodSeconds: 10
+              volumes:
+              - configMap:
+                  items:
+                  - key: service-ca.crt
+                    path: service-ca.crt
+                  name: openshift-service-ca.crt
+                name: ca-bundle
       permissions:
       - rules:
         - apiGroups:
@@ -383,7 +421,28 @@ spec:
         - apiGroups:
           - ""
           resources:
+          - configmaps
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
           - secrets
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - serviceaccounts
           verbs:
           - create
           - delete

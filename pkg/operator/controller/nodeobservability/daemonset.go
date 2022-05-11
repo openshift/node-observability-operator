@@ -14,12 +14,17 @@ import (
 )
 
 const (
-	podName          = "node-observability-agent"
-	socketName       = "socket"
-	path             = "/var/run/crio/crio.sock"
-	mountPath        = "/var/run/crio/crio.sock"
-	defaultScheduler = "default-scheduler"
-	daemonSetName    = "node-observability-ds"
+	podName           = "node-observability-agent"
+	socketName        = "socket"
+	socketPath        = "/var/run/crio/crio.sock"
+	socketMountPath   = "/var/run/crio/crio.sock"
+	kbltCAMountPath   = "/var/run/secrets/kubelet-serving-ca/"
+	kbltCAMountedFile = "ca-bundle.crt"
+	kbltCAName        = "kubelet-ca"
+	defaultScheduler  = "default-scheduler"
+	daemonSetName     = "node-observability-ds"
+	certsName         = "certs"
+	certsMountPath    = "/var/run/secrets/openshift.io/certs"
 )
 
 // ensureDaemonSet ensures that the daemonset exists
@@ -30,9 +35,16 @@ func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeO
 	desired := r.desiredDaemonSet(nodeObs, sa)
 	exist, current, err := r.currentDaemonSet(ctx, nameSpace)
 	if err != nil {
-		return false, nil, fmt.Errorf("failed to get DaemonSet: %v", err)
+		return false, nil, fmt.Errorf("failed to get DaemonSet: %w", err)
 	}
 	if !exist {
+		cmExists, err := r.createConfigMap(ctx, nodeObs)
+		if err != nil {
+			return false, nil, fmt.Errorf("failed to create the configMap for kubelet-serving-ca: %w", err)
+		}
+		if !cmExists {
+			return false, nil, fmt.Errorf("failed to get the configMap for kubelet-serving-ca: %w", err)
+		}
 		if err := r.createDaemonSet(ctx, desired); err != nil {
 			return false, nil, err
 		}
@@ -68,7 +80,7 @@ func (r *NodeObservabilityReconciler) createDaemonSet(ctx context.Context, ds *a
 // desiredDaemonSet returns a DaemonSet object
 func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObservability, sa *corev1.ServiceAccount) *appsv1.DaemonSet {
 
-	ls := labelsForNodeObservability(daemonSetName)
+	ls := labelsForNodeObservability(nodeObs.Name)
 	tgp := int64(30)
 	vst := corev1.HostPathSocket
 	privileged := true
@@ -95,45 +107,98 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 					Labels: ls,
 				},
 				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{{
-						Image:                    nodeObs.Spec.Image,
-						ImagePullPolicy:          corev1.PullIfNotPresent,
-						Name:                     podName,
-						Command:                  []string{"node-observability-agent"},
-						Args:                     []string{"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token", "--storage=/run"},
-						Resources:                corev1.ResourceRequirements{},
-						TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
-						SecurityContext: &corev1.SecurityContext{
-							Privileged: &privileged,
-						},
-						Env: []corev1.EnvVar{{
-							Name: "NODE_IP",
-							ValueFrom: &corev1.EnvVarSource{
-								FieldRef: &corev1.ObjectFieldSelector{
-									FieldPath: "status.hostIP",
+					Containers: []corev1.Container{
+						{
+							Image:           nodeObs.Spec.Image,
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							Name:            podName,
+							Command:         []string{"node-observability-agent"},
+							Args: []string{
+								"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
+								"--storage=/run",
+								fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
+							},
+							Resources:                corev1.ResourceRequirements{},
+							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+							SecurityContext: &corev1.SecurityContext{
+								Privileged: &privileged,
+							},
+							Env: []corev1.EnvVar{{
+								Name: "NODE_IP",
+								ValueFrom: &corev1.EnvVarSource{
+									FieldRef: &corev1.ObjectFieldSelector{
+										FieldPath: "status.hostIP",
+									},
+								},
+							}},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									MountPath: socketMountPath,
+									Name:      socketName,
+									ReadOnly:  false,
+								},
+								{
+									MountPath: kbltCAMountPath,
+									Name:      kbltCAName,
+									ReadOnly:  true,
 								},
 							},
-						}},
-						VolumeMounts: []corev1.VolumeMount{{
-							MountPath: mountPath,
-							Name:      socketName,
-							ReadOnly:  false,
-						}},
-					}},
+						},
+						{
+							Name:            "kube-rbac-proxy",
+							Image:           "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0",
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							Args: []string{
+								"--secure-listen-address=0.0.0.0:8443",
+								"--upstream=http://127.0.0.1:9000/",
+								fmt.Sprintf("--tls-cert-file=%s/tls.crt", certsMountPath),
+								fmt.Sprintf("--tls-private-key-file=%s/tls.key", certsMountPath),
+								"--logtostderr=true",
+								"--v=2",
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      certsName,
+									MountPath: certsMountPath,
+									ReadOnly:  true,
+								},
+							},
+						},
+					},
 					DNSPolicy:                     corev1.DNSClusterFirst,
 					RestartPolicy:                 corev1.RestartPolicyAlways,
 					SchedulerName:                 defaultScheduler,
 					ServiceAccountName:            sa.Name,
 					TerminationGracePeriodSeconds: &tgp,
-					Volumes: []corev1.Volume{{
-						Name: socketName,
-						VolumeSource: corev1.VolumeSource{
-							HostPath: &corev1.HostPathVolumeSource{
-								Path: path,
-								Type: &vst,
+					Volumes: []corev1.Volume{
+						{
+							Name: socketName,
+							VolumeSource: corev1.VolumeSource{
+								HostPath: &corev1.HostPathVolumeSource{
+									Path: socketPath,
+									Type: &vst,
+								},
 							},
 						},
-					}},
+						{
+							Name: kbltCAName,
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: nodeObs.Name,
+									},
+								},
+							},
+						},
+						{
+							Name: certsName,
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: secretName,
+								},
+							},
+						},
+					},
 					NodeSelector: nodeObs.Spec.Labels,
 				},
 			},

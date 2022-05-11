@@ -3,7 +3,7 @@ kind: NodeObservability
 metadata:
   name: nodeobservability-sample
 spec:
-  labels:
-    app: "node-observability"
+  labels: 
+    node-role.kubernetes.io/worker: ""
   image: "quay.io/prometheus/busybox"
   expectedcount: 1

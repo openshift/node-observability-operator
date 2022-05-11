@@ -102,7 +102,7 @@ func (r *MachineConfigReconciler) ensureReqNodeLabelExists(ctx context.Context) 
 		patch, _ := newPatch(add,
 			ResourceLabelsPath,
 			map[string]interface{}{
-				NodeObservabilityNodeRoleLabelName: Null,
+				NodeObservabilityNodeRoleLabelName: Empty,
 			})
 		if err := r.Patch(ctx, &nodeList.Items[i], client.RawPatch(types.JSONPatchType, patch)); err != nil {
 			return updNodeCount, err
@@ -112,7 +112,7 @@ func (r *MachineConfigReconciler) ensureReqNodeLabelExists(ctx context.Context) 
 		updNodeCount++
 		r.Node.PrevReconcileUpd[node.Name] = LabelInfo{
 			NodeObservabilityNodeRoleLabelName,
-			Null,
+			Empty,
 			add,
 		}
 	}
@@ -124,7 +124,9 @@ func (r *MachineConfigReconciler) ensureReqNodeLabelExists(ctx context.Context) 
 		}
 	}
 
-	r.Log.Info("successfully added nodeobservability role to nodes with worker role", "node count", updNodeCount)
+	if updNodeCount > 0 {
+		r.Log.Info("successfully added nodeobservability role to nodes with worker role", "node count", updNodeCount)
+	}
 	return updNodeCount, nil
 }
 
@@ -183,7 +185,7 @@ func (r *MachineConfigReconciler) ensureReqNodeLabelNotExists(ctx context.Contex
 		patch, _ := newPatch(remove,
 			ResourceLabelsPath,
 			map[string]interface{}{
-				NodeObservabilityNodeRoleLabelName: Null,
+				NodeObservabilityNodeRoleLabelName: Empty,
 			})
 		if err := r.Patch(ctx, &nodeList.Items[i], client.RawPatch(types.JSONPatchType, patch)); err != nil {
 			return updNodeCount, err
@@ -193,7 +195,7 @@ func (r *MachineConfigReconciler) ensureReqNodeLabelNotExists(ctx context.Contex
 		updNodeCount++
 		r.Node.PrevReconcileUpd[node.Name] = LabelInfo{
 			NodeObservabilityNodeRoleLabelName,
-			Null,
+			Empty,
 			remove,
 		}
 	}
@@ -205,7 +207,9 @@ func (r *MachineConfigReconciler) ensureReqNodeLabelNotExists(ctx context.Contex
 		}
 	}
 
-	r.Log.Info("successfully removed nodeobservability role from nodes with worker role", "node count", updNodeCount)
+	if updNodeCount > 0 {
+		r.Log.Info("successfully removed nodeobservability role from nodes with worker role", "node count", updNodeCount)
+	}
 	return updNodeCount, nil
 }
 
@@ -248,7 +252,7 @@ func (r *MachineConfigReconciler) revertNodeUnlabeling(ctx context.Context) erro
 // listWorkerNodes returns the list of nodes having worker role label
 func (r *MachineConfigReconciler) listWorkerNodes(ctx context.Context, nodeList *corev1.NodeList) error {
 	workerNodeLabel := map[string]string{
-		WorkerNodeRoleLabelName: Null,
+		WorkerNodeRoleLabelName: Empty,
 	}
 
 	if err := r.listNodes(ctx, nodeList, workerNodeLabel); err != nil {
@@ -262,7 +266,7 @@ func (r *MachineConfigReconciler) listWorkerNodes(ctx context.Context, nodeList 
 // listNoObsLabeledNodes returns the list of nodes having NodeObservability role label
 func (r *MachineConfigReconciler) listNoObsLabeledNodes(ctx context.Context, nodeList *corev1.NodeList) error {
 	nodeLabel := map[string]string{
-		NodeObservabilityNodeRoleLabelName: Null,
+		NodeObservabilityNodeRoleLabelName: Empty,
 	}
 
 	if err := r.listNodes(ctx, nodeList, nodeLabel); err != nil {

@@ -70,7 +70,7 @@ func (r *MachineConfigReconciler) deleteProfMCP(ctx context.Context) error {
 		return err
 	}
 
-	if err := r.deleteMCP(ctx, mcp); err != nil {
+	if err := r.DeleteMCP(ctx, mcp); err != nil {
 		return err
 	}
 
@@ -86,9 +86,9 @@ func (r *MachineConfigReconciler) fetchProfMCP(ctx context.Context, namespace ty
 	return mcp, nil
 }
 
-// getProfilingMCP is for obtaining the tailored profiling MCP
+// GetProfilingMCP is for obtaining the tailored profiling MCP
 // required for creation
-func getProfilingMCP(name string) *mcv1.MachineConfigPool {
+func (r *MachineConfigReconciler) GetProfilingMCP(name string) *mcv1.MachineConfigPool {
 
 	return &mcv1.MachineConfigPool{
 		TypeMeta: metav1.TypeMeta{
@@ -130,7 +130,7 @@ func getProfilingMCP(name string) *mcv1.MachineConfigPool {
 
 // createMCP is for creating the required MCP
 func (r *MachineConfigReconciler) createMCP(ctx context.Context, name string) error {
-	mcp := getProfilingMCP(name)
+	mcp := r.GetProfilingMCP(name)
 
 	if err := r.Create(ctx, mcp); err != nil {
 		return fmt.Errorf("failed to create MCP %s: %w", name, err)
@@ -144,8 +144,8 @@ func (r *MachineConfigReconciler) createMCP(ctx context.Context, name string) er
 	return nil
 }
 
-// deleteMCP is for deleting MCP passed MCP
-func (r *MachineConfigReconciler) deleteMCP(ctx context.Context, mcp *mcv1.MachineConfigPool) error {
+// DeleteMCP is for deleting MCP passed MCP
+func (r *MachineConfigReconciler) DeleteMCP(ctx context.Context, mcp *mcv1.MachineConfigPool) error {
 	if err := r.Delete(ctx, mcp); err != nil {
 		return fmt.Errorf("failed to remove MCP %s : %w", mcp.Name, err)
 	}
@@ -154,8 +154,8 @@ func (r *MachineConfigReconciler) deleteMCP(ctx context.Context, mcp *mcv1.Machi
 	return nil
 }
 
-// checkNodeObservabilityMCPStatus is for reconciling update status of all machines in profiling MCP
-func (r *MachineConfigReconciler) checkNodeObservabilityMCPStatus(ctx context.Context) (ctrl.Result, error) {
+// CheckNodeObservabilityMCPStatus is for reconciling update status of all machines in profiling MCP
+func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Context) (ctrl.Result, error) {
 	mcp := &mcv1.MachineConfigPool{}
 	if err := r.Get(ctx, types.NamespacedName{Name: ProfilingMCPName}, mcp); err != nil {
 		if errors.IsNotFound(err) {

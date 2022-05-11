@@ -36,8 +36,8 @@ import (
 func TestEnsureProfilingMCPExists(t *testing.T) {
 
 	nodeObsMC := testNodeObsMC()
-	mcp := getProfilingMCP(ProfilingMCPName)
 	r := testReconciler()
+	mcp := r.GetProfilingMCP(ProfilingMCPName)
 	r.CtrlConfig = nodeObsMC
 
 	tests := []struct {
@@ -85,8 +85,8 @@ func TestEnsureProfilingMCPExists(t *testing.T) {
 func TestCheckMCPUpdateStatus(t *testing.T) {
 
 	nodeObsMC := testNodeObsMC()
-	mcp := getProfilingMCP(ProfilingMCPName)
 	r := testReconciler()
+	mcp := r.GetProfilingMCP(ProfilingMCPName)
 	r.CtrlConfig = nodeObsMC
 
 	tests := []struct {
@@ -202,7 +202,7 @@ func TestCheckMCPUpdateStatus(t *testing.T) {
 		r.Client = c
 
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := r.checkMCPUpdateStatus(context.TODO()); (err != nil) != tt.wantErr {
+			if _, err := r.CheckMCPUpdateStatus(context.TODO()); (err != nil) != tt.wantErr {
 				t.Errorf("checkMCPUpdateStatus() err = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

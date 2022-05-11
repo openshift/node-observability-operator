@@ -14,9 +14,15 @@ import (
 )
 
 const (
-	serviceName = "node-observability-agent"
-	port        = 80
-	targetPort  = 9000
+	serviceName    = podName
+	secretName     = podName
+	injectCertsKey = "service.beta.openshift.io/serving-cert-secret-name"
+	port           = 8443
+	targetPort     = port
+)
+
+var (
+	requestCerts = map[string]string{injectCertsKey: serviceName}
 )
 
 // ensureService ensures that the service exists
@@ -64,12 +70,13 @@ func (r *NodeObservabilityReconciler) createService(ctx context.Context, svc *co
 
 // desiredService returns a service object
 func (r *NodeObservabilityReconciler) desiredService(nodeObs *v1alpha1.NodeObservability) *corev1.Service {
-	ls := labelsForNodeObservability(daemonSetName)
+	ls := labelsForNodeObservability(nodeObs.Name)
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: nodeObs.Namespace,
-			Name:      serviceName,
-			Labels:    ls,
+			Namespace:   nodeObs.Namespace,
+			Name:        serviceName,
+			Annotations: requestCerts,
+			Labels:      ls,
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					Name:       nodeObs.Name,

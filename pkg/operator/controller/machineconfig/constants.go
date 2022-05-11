@@ -27,8 +27,8 @@ const (
 	// defaultRequeueTime is the default reconcile requeue time
 	defaultRequeueTime = 3 * time.Minute
 
-	// Null is defined for empty string
-	Null = ""
+	// Empty is defined for empty string
+	Empty = ""
 
 	// CrioProfilingConfigName is the name CRI-O MachineConfig CR
 	CrioProfilingConfigName = "10-crio-nodeobservability"
@@ -99,12 +99,12 @@ var (
 	// NodeSelectorLabels is for storing the labels to
 	// match the nodes to include in MCP
 	NodeSelectorLabels = map[string]string{
-		NodeObservabilityNodeRoleLabelName: Null,
+		NodeObservabilityNodeRoleLabelName: Empty,
 	}
 
 	// MachineConfigLabels is for storing the labels to
 	// add in machine config resources
 	MachineConfigLabels = map[string]string{
-		MCRoleLabelName: Null,
+		MCRoleLabelName: Empty,
 	}
 )

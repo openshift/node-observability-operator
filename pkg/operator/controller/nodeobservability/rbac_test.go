@@ -56,7 +56,7 @@ func makeClusterRole() *rbacv1.ClusterRole {
 			},
 			{
 				Verbs:           []string{get},
-				NonResourceURLs: []string{url},
+				NonResourceURLs: []string{urlStatus, urlPprof},
 			},
 		},
 	}

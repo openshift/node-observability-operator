@@ -13,21 +13,27 @@ import (
 )
 
 const (
-	apiGroup               = "rbac.authorization.k8s.io"
-	clusterRoleName        = "node-observability-cr"
-	clusterRole            = "ClusterRole"
-	clusterRoleBindingName = "node-observability-crb"
-	serviceAccount         = "ServiceAccount"
-	get                    = "get"
-	list                   = "list"
-	nodes                  = "nodes"
-	nodesProxy             = "nodes/proxy"
-	pods                   = "pods"
-	url                    = "/debug/*"
-	secGroup               = "security.openshift.io"
-	secResource            = "securitycontextconstraints"
-	secResourceName        = "node-observability-scc"
-	use                    = "use"
+	apiGroup                     = "rbac.authorization.k8s.io"
+	clusterRoleName              = "node-observability-cr"
+	clusterRole                  = "ClusterRole"
+	clusterRoleBindingName       = "node-observability-crb"
+	serviceAccount               = "ServiceAccount"
+	get                          = "get"
+	create                       = "create"
+	list                         = "list"
+	nodes                        = "nodes"
+	nodesProxy                   = "nodes/proxy"
+	pods                         = "pods"
+	urlStatus                    = "/node-observability-status"
+	urlPprof                     = "/node-observability-pprof"
+	secGroup                     = "security.openshift.io"
+	authnGroup                   = "authentication.k8s.io"
+	authzGroup                   = "authorization.k8s.io"
+	secResource                  = "securitycontextconstraints"
+	secResourceName              = "node-observability-scc"
+	tokenreviewsResource         = "tokenreviews"
+	subjectaccessreviewsResource = "subjectaccessreviews"
+	use                          = "use"
 )
 
 // ensureClusterRole ensures that the clusterrole exists
@@ -96,7 +102,17 @@ func (r *NodeObservabilityReconciler) desiredClusterRole(nodeObs *v1alpha1.NodeO
 			},
 			{
 				Verbs:           []string{get},
-				NonResourceURLs: []string{url},
+				NonResourceURLs: []string{urlStatus, urlPprof},
+			},
+			{
+				APIGroups: []string{authnGroup},
+				Resources: []string{tokenreviewsResource},
+				Verbs:     []string{create},
+			},
+			{
+				APIGroups: []string{authzGroup},
+				Resources: []string{subjectaccessreviewsResource},
+				Verbs:     []string{create},
 			},
 		},
 	}
