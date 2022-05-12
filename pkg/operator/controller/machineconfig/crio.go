@@ -52,7 +52,7 @@ func (r *MachineConfigReconciler) enableCrioProf(ctx context.Context) (bool, err
 
 	criomc, err := r.fetchCrioProfConf(ctx, namespace)
 	if err != nil {
-		return createdNow, fmt.Errorf("failed to ensure crio profiling config was indeed created: %v", err)
+		return createdNow, fmt.Errorf("failed to ensure crio profiling config was indeed created: %w", err)
 	}
 
 	r.Lock()
