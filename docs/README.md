@@ -72,6 +72,28 @@ EOF
 ```
 4. Follow same steps as deployment from public release (see above)
 
+## Prepare to run profiling queries
+
+In order to be able to run profiling queries on a subset of worker nodes, a `NodeObservability` custom resource needs to be created.
+
+The following `NodeObservability` will create a daemonset targetting all nodes with label `app: example`, running a `node-observability-agent` pod on each of those node using the image given in `.spec.image`.
+
+```yaml
+apiVersion: nodeobservability.olm.openshift.io/v1alpha1
+kind: NodeObservability
+metadata:
+  name: nodeobservability-sample
+  namespace: node-observability-operator
+spec:
+  labels:
+    app: example
+  image: "brew.registry.redhat.io/rh-osbs/node-observability-agent:0.1.0-3"
+```
+
+The CRIO unix socket of the underlying node is mounted on the agent pod, thus allowing the agent to communicate with CRIO to run the pprof request.
+
+The `kubelet-serving-ca` certificate chain is also mounted on the agent pod, which allows secure communication between agent and node's kubelet endpoint.
+
 ## Run profiling queries
 
 Profiling query is a blocking operation and contains about 30 seconds
