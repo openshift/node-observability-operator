@@ -15,7 +15,7 @@ IMG=<registry>/<username>/node-observability-operator:latest make container-buil
 
 1. Create the Operator namespace:
 ```sh
-oc create namespace node-observability-operator
+oc new-project node-observability-operator
 ```
 
 2. Login to the OpenShift Container Platform web console
@@ -86,7 +86,7 @@ metadata:
   namespace: node-observability-operator
 spec:
   labels:
-    app: example
+    "node-role.kubernetes.io/worker": ""
   image: "brew.registry.redhat.io/rh-osbs/node-observability-agent:0.1.0-3"
 ```
 
