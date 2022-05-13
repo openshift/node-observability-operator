@@ -2,6 +2,19 @@
 
 ### Deploy
 
+Local deployment:
+
+```
+git clone https://github.com/openshift/node-observability-agent.git
+git clone https://github.com/openshift/node-observability-operator.git
+
+IMG=<registry>/<username>/node-observability-operator:latest make container-build container-push deploy
+```
+
+Deployment from a public release
+
+@sherine pls add instructions on operatorhub.io / container catalogue
+
 ### Run profiling queries
 
 Profiling query is a blocking operation and contains about 30 seconds
@@ -76,3 +89,13 @@ status:
 ```
 
 Data retrieval is currently in development.
+
+Right now the data is stored in the container file system under `/run`.
+
+@sherine pls add instructions
+```
+oc exec -it pod
+ls /run/...
+```
+
+### Troubleshooting
