@@ -149,10 +149,21 @@ Data retrieval is currently in development.
 
 Right now the data is stored in the container file system under `/run`.
 
-@sherine pls add instructions
-```
-oc exec -it pod
-ls /run/...
+With a nodeobservabilityrun called `nodeobservabilityrun-sample`:
+
+```sh
+for i in `oc get nodeobservabilityrun.nodeobservability.olm.openshift.io/nodeobservabilityrun-sample -o yaml | yq .status.agents[].name | cut -d\" -f2`
+  do
+  echo $i
+  list=`oc exec $i -c node-observability-agent -- bash -c "ls /run/*.pprof"`
+  for j in $list
+    do
+    k=`echo $j|cut -d\/ -f3`
+    mkdir -p /tmp/$i
+    echo copying $k to /tmp/$i/$k
+    kubectl exec $i -c node-observability-agent -- cat $j > /tmp/$i/$k
+  done
+done
 ```
 
 ## Troubleshooting
