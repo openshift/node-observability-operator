@@ -1,8 +1,8 @@
 ## Node Observability
 
-### Deploy
+## Deploy
 
-Local deployment:
+### Local deployment:
 
 ```
 git clone https://github.com/openshift/node-observability-agent.git
@@ -11,11 +11,68 @@ git clone https://github.com/openshift/node-observability-operator.git
 IMG=<registry>/<username>/node-observability-operator:latest make container-build container-push deploy
 ```
 
-Deployment from a public release
+### Deployment from a public release
 
-@sherine pls add instructions on operatorhub.io / container catalogue
+1. Create the Operator namespace:
+```sh
+oc create namespace node-observability-operator
+```
 
-### Run profiling queries
+2. Login to the OpenShift Container Platform web console
+3. Navigate to Operators → OperatorHub.
+Type Node Observability Operator into the filter box and select it.
+4. Click Install
+
+### Deployment from a custom catalog
+
+1. Prepare an index image
+```sh
+export BUNDLE_IMG=<registry>/<username>/node-observability-operator-bundle:<version>
+export INDEX_IMG=<registry>/<username>/node-observability-operator-bundle-index:<version>
+make index-image-build index-image-push
+```
+2. Ensure image registry is accessible,
+   1. by declaring the necessary credentials as secrets,
+   ```sh
+   oc -n openshift-marketplace create secret generic nodeobs-olm-secret  --type=kubernetes.io/dockercfg  --from-file=.dockercfg=${XDG_RUNTIME_DIR}/containers/auth.json
+   oc -n openshift-marketplace secrets link default nodeobs-olm-secret --for=pull
+   ```
+   2. Adding an `ImageContentSourcePolicy` if needed
+   ```sh
+   cat <<EOF  | oc create -f -
+   apiVersion: operator.openshift.io/v1alpha1
+   kind: ImageContentSourcePolicy
+   metadata:
+     name: brew-registry
+   spec:
+     repositoryDigestMirrors:
+     - mirrors:
+       - brew.registry.redhat.io
+       source: registry.redhat.io
+     - mirrors:
+       - brew.registry.redhat.io
+       source: registry.stage.redhat.io
+     - mirrors:
+       - brew.registry.redhat.io
+       source: registry-proxy.engineering.redhat.com
+   EOF
+   ```
+3. Create a CatalogSource object:
+```sh
+cat <<EOF | oc apply -f - 
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: node-observability-operator
+  namespace: openshift-marketplace
+spec:
+  sourceType: grpc
+  image: ${INDEX_IMG}
+EOF
+```
+4. Follow same steps as deployment from public release (see above)
+
+## Run profiling queries
 
 Profiling query is a blocking operation and contains about 30 seconds
 worth of profiling (kubelet + crio `/pprof`) data. As such, only one
@@ -98,4 +155,4 @@ oc exec -it pod
 ls /run/...
 ```
 
-### Troubleshooting
+## Troubleshooting
