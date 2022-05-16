@@ -15,23 +15,23 @@ You can install the NodeObservability Operator by building and pushing the Opera
 1. To build and push the Operator image into a registry, run the following commands:
    ```sh
    # set the envar CONTAINER_ENGINE to the preffered container manager tool (default is podman)
-   $ export IMG=<registry>/<username>/node-observability-operator:latest
-   $ make container-build
-   $ make container-push
+   export IMG=<registry>/<username>/node-observability-operator:latest
+   make container-build
+   make container-push
    ```
 2. To deploy the NodeObservability Operator, run the following command:
     ```
-    $ make deploy
+    make deploy
     ```
 
 ### Creating the local NodeObservability
 
 1. To create make targets, run the following command:
    ```sh
-   $ make install
-   $ make run
+   make install
+   make run
    # In another terminal execute the sample CR
-   $ oc apply -f /config/samples/nodeobservability_v1alpha1_nodeobservability-all.yaml
+   oc apply -f /config/samples/nodeobservability_v1alpha1_nodeobservability-all.yaml
    # Alternatevely you can create a new CR and change the fields accordingly
    ```
 
@@ -47,37 +47,37 @@ You can install the NodeObservability Operator by building and pushing the Opera
 
 1. Build and push the Operator image to the registry:
     ```sh
-    $ export IMG=${REGISTRY}/${REPOSITORY}/node-observability-operator:${VERSION}
-    $ make container-build container-push
+    export IMG=${REGISTRY}/${REPOSITORY}/node-observability-operator:${VERSION}
+    make container-build container-push
     ```
 
 2. Build and push the bundle image to the registry:
 
     a. Add the created Operator image in the `node-observability-operator_clusterserviceversion.yaml` file:
     ```sh
-    $ sed -i "s|quay.io/openshift/origin-node-observability-operator:latest|${IMG}|g" bundle/manifests/node-observability-operator_clusterserviceversion.yaml
+    sed -i "s|quay.io/openshift/origin-node-observability-operator:latest|${IMG}|g" bundle/manifests/node-observability-operator.clusterserviceversion.yaml
     ```
     b. Build the image:
     ```sh
-    $ export BUNDLE_IMG=${REGISTRY}/${REPOSITORY}/node-observability-operator-bundle:${VERSION}
-    $ make bundle-build bundle-push
+    export BUNDLE_IMG=${REGISTRY}/${REPOSITORY}/node-observability-operator-bundle:${VERSION}
+    make bundle-build bundle-push
     ```
 
 3. Build and push the index image to the registry:
    ```sh
-   $ export INDEX_IMG=${REGISTRY}/${REPOSITORY}/node-observability-operator-bundle-index:${VERSION}
-   $ make index-image-build index-image-push
+   export INDEX_IMG=${REGISTRY}/${REPOSITORY}/node-observability-operator-bundle-index:${VERSION}
+   make index-image-build index-image-push
    ```
 
 4. (Optional) If the image is not made public, then you have to link the registry secret to the pod of the `node-observability-operator` created in the `openshift-marketplace` namespace:
 
     a. Create a secret with authentication details of your image registry:
     ```sh
-    $ oc -n openshift-marketplace create secret generic nodeobs-olm-secret  --type=kubernetes.io/dockercfg  --from-file=.dockercfg=${XDG_RUNTIME_DIR}/containers/auth.json
+    oc -n openshift-marketplace create secret generic nodeobs-olm-secret  --type=kubernetes.io/dockercfg  --from-file=.dockercfg=${XDG_RUNTIME_DIR}/containers/auth.json
     ```
     b. Link the secret to the `default` service account:
     ```sh
-    $ oc -n openshift-marketplace secrets link default nodeobs-olm-secret --for=pull
+    oc -n openshift-marketplace secrets link default nodeobs-olm-secret --for=pull
     ````
 
 5. Create the `CatalogSource` object:
@@ -96,7 +96,7 @@ You can install the NodeObservability Operator by building and pushing the Opera
 
 6. Create the Operator namespace:
     ```sh
-    $ oc create namespace node-observability-operator
+    oc create namespace node-observability-operator
     ```
 
 **From the CLI**
@@ -151,7 +151,7 @@ Once finished, the Node Observability Operator will be listed in the Installed O
 
 * Use the following commands to verify that the Node Observability Operator has been installed.
 ```sh
-$ oc get catalogsource -n openshift-marketplace
-$ oc get operatorgroup -n node-observability-operator
-$ oc get subscription -n node-observability-operator
+oc get catalogsource -n openshift-marketplace
+oc get operatorgroup -n node-observability-operator
+oc get subscription -n node-observability-operator
 ```
