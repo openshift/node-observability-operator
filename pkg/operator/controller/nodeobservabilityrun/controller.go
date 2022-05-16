@@ -87,23 +87,34 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 		return
 	}
 
+	defer func() {
+		errUpdate := r.Status().Update(ctx, instance, &client.UpdateOptions{})
+		if errUpdate != nil {
+			r.Log.Error(err, "failed to update status")
+			err = utilerrors.NewAggregate([]error{err, errUpdate})
+		}
+	}()
+
 	// interact with MCO only if we are executing CrioKubeletProfile runs
 	// also bypass if the runtype is e2e-test
 	if instance.Spec.RunType != nodeobservabilityv1alpha1.E2ETest && (instance.Spec.RunType == nodeobservabilityv1alpha1.CrioKubeletProfile) {
-		exists, mco, err := r.ensureMCO(ctx)
-		if err != nil {
+		if err := r.ensureNOMC(ctx); err != nil {
 			return ctrl.Result{}, err
-		} else if !exists {
-			return ctrl.Result{}, fmt.Errorf("could not get NodeObservabilitymachineConfig")
 		}
-		// this will ensure we dont trigger the agent call until the mco and mcp have been updated
-		// successfully
-		result, err := r.MCOReconciler.CheckNodeObservabilityMCPStatus(ctx)
+		// this will ensure we dont trigger the agent call
+		// until the mco and mcp have been updated successfully
+
+		enabled, err := r.checkNOMCStatus(ctx, nodeobservabilityv1alpha1.DebugEnabled)
 		if err != nil {
-			r.Log.Info("waiting for NodeObservabilityMachineConfig update in NodeobeservabilityRun")
-			return result, err
+			r.Log.Error(err, "NodeObservabilityMachineConfig enable status check failed")
+			return ctrl.Result{}, err
 		}
-		r.Log.V(3).Info(fmt.Sprintf("NodeObservabilityMachineConfig : updated and ready : %s", mco.Name))
+		if !enabled {
+			r.Log.Info("NodeObservabilityMachineConfig CrioKubeletProfile not enabled yet")
+			return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
+		} else {
+			r.Log.Info("NodeObservabilityMachineConfig CrioKubeletProfile enabled")
+		}
 	}
 
 	// this code should be included in the 'if' statement above
@@ -115,28 +126,31 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 		r.Log.V(3).Info("Run for this instance has been completed already")
 		// check the CR if the RestoreMCOStateAfterRun flag is set
 		if instance.Spec.RestoreMCOStateAfterRun {
-			mco := r.desiredMCO()
-			if err := r.Delete(ctx, mco); err != nil {
-				return ctrl.Result{}, fmt.Errorf("failed to remove profiling MCO CR %s : %w", instance.Name, err)
-			}
-			mcp := r.MCOReconciler.GetProfilingMCP(machineconfigcontroller.ProfilingMCPName)
-			err = r.MCOReconciler.DeleteMCP(ctx, mcp)
+			err := r.disableCrioKubeletProfile(ctx)
 			if err != nil {
-				r.Log.Error(err, "deleting machineconfigpool")
+				return ctrl.Result{}, err
 			}
-			r.Log.Info("successfully removed profiling MCO CR", "ProfilingMCOName", mco.Name)
-			return
+
+			disabled, err := r.checkNOMCStatus(ctx, nodeobservabilityv1alpha1.DebugDisabled)
+			if err != nil {
+				r.Log.Error(err, "NodeObservabilityMachineConfig disable status check failed")
+				return ctrl.Result{}, err
+			}
+			if disabled {
+				r.Log.Info("NodeObservabilityMachineConfig CrioKubeletProfile disabled")
+				nomc := r.desiredMCO()
+				if err := r.deleteNOMC(ctx, nomc); err != nil {
+					return ctrl.Result{}, err
+				}
+
+				instance.Spec.RunType = ""
+			} else {
+				r.Log.Info("NodeObservabilityMachineConfig CrioKubeletProfile not disabled yet")
+				return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
+			}
 		}
 		return
 	}
-
-	defer func() {
-		errUpdate := r.Status().Update(ctx, instance, &client.UpdateOptions{})
-		if errUpdate != nil {
-			r.Log.Error(err, "failed to update status")
-			err = utilerrors.NewAggregate([]error{err, errUpdate})
-		}
-	}()
 
 	if inProgress(instance) {
 		r.Log.V(3).Info("Run is in progress")

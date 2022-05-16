@@ -90,3 +90,92 @@ func (r *NodeObservabilityRunReconciler) desiredMCO() *v1alpha1.NodeObservabilit
 		},
 	}
 }
+
+func (r *NodeObservabilityRunReconciler) ensureNOMC(ctx context.Context) error {
+	desired := r.desiredMCO()
+	nameSpace := types.NamespacedName{Name: desired.Name}
+	err := r.createNOMC(ctx, desired)
+	if errors.IsAlreadyExists(err) {
+		nomc, err := r.fetchNOMC(ctx, nameSpace)
+		if err != nil {
+			return err
+		}
+		if !nomc.Spec.Debug.EnableCrioProfiling {
+			nomc.Spec.Debug.EnableCrioProfiling = true
+			return r.updateNOMC(ctx, nomc)
+		}
+		return nil
+	}
+	return err
+}
+
+func (r *NodeObservabilityRunReconciler) fetchNOMC(ctx context.Context, nameSpace types.NamespacedName) (*v1alpha1.NodeObservabilityMachineConfig, error) {
+	mc := &v1alpha1.NodeObservabilityMachineConfig{}
+	if err := r.Get(ctx, nameSpace, mc); err != nil {
+		return nil, fmt.Errorf("failed to fetch NodeObservabilityMachineConfig %s: %w", mc.Name, err)
+	}
+	r.Log.V(3).Info("fetched NodeObservabilityMachinConfig", "name", mc.Name)
+	return mc, nil
+}
+
+func (r *NodeObservabilityRunReconciler) createNOMC(ctx context.Context, mc *v1alpha1.NodeObservabilityMachineConfig) error {
+	if err := r.Create(ctx, mc); err != nil {
+		return fmt.Errorf("failed to create NodeObservabilityMachineConfig %s: %w", mc.Name, err)
+	}
+	r.Log.Info("created NodeObservabilityMachinConfig", "name", mc.Name)
+	return nil
+}
+
+func (r *NodeObservabilityRunReconciler) updateNOMC(ctx context.Context, mc *v1alpha1.NodeObservabilityMachineConfig) error {
+	if err := r.Update(ctx, mc); err != nil {
+		return fmt.Errorf("failed to update NodeObservabilityMachineConfig %s: %w", mc.Name, err)
+	}
+	r.Log.Info("updated NodeObservabilityMachinConfig", "name", mc.Name)
+	return nil
+}
+
+func (r *NodeObservabilityRunReconciler) deleteNOMC(ctx context.Context, mc *v1alpha1.NodeObservabilityMachineConfig) error {
+	if err := r.Delete(ctx, mc); err != nil {
+		return fmt.Errorf("failed to delete NodeObservabilityMachineConfig %s: %w", mc.Name, err)
+	}
+	r.Log.Info("deleted NodeObservabilityMachinConfig", "name", mc.Name)
+	return nil
+}
+
+func (r *NodeObservabilityRunReconciler) checkNOMCStatus(ctx context.Context, condType v1alpha1.NodeObservabilityMachineConfigConditionType) (bool, error) {
+	nameSpace := types.NamespacedName{Name: MCOName}
+	nomc, err := r.fetchNOMC(ctx, nameSpace)
+	if err != nil {
+		return false, err
+	}
+	for _, cond := range nomc.Status.Conditions {
+		if cond.Type == condType {
+			if cond.Status == v1alpha1.ConditionTrue {
+				return true, nil
+			}
+			if cond.Status == v1alpha1.ConditionInProgress {
+				return false, nil
+			}
+		} else {
+			if cond.Status == v1alpha1.ConditionTrue ||
+				cond.Status == v1alpha1.ConditionInProgress {
+				return false, fmt.Errorf("NodeObservabilityMachineConfig not in expected state. Condition: %s State: %s", cond.Type, cond.Status)
+			}
+		}
+	}
+	return false, fmt.Errorf("NodeObservabilityMachineConfig in unknown state")
+}
+
+func (r *NodeObservabilityRunReconciler) disableCrioKubeletProfile(ctx context.Context) error {
+	nameSpace := types.NamespacedName{Name: MCOName}
+	nomc, err := r.fetchNOMC(ctx, nameSpace)
+	if err != nil {
+		return err
+	}
+
+	if nomc.Spec.Debug.EnableCrioProfiling {
+		nomc.Spec.Debug.EnableCrioProfiling = false
+		return r.updateNOMC(ctx, nomc)
+	}
+	return nil
+}
