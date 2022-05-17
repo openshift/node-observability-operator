@@ -98,7 +98,6 @@ The `kubelet-serving-ca` certificate chain is also mounted on the agent pod, whi
 
 Profiling query is a blocking operation and contains about 30 seconds
 worth of profiling (kubelet + crio `/pprof`) data. As such, only one
-query can be requested concurrently.
 
 Profiling queries can be requested with creating a `NodeObservabilityRun`
 resource. For example:
