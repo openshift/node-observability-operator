@@ -114,7 +114,7 @@ spec:
 
 _Note: `NodeObservability` resource has to exist and referenced from the Run_
 
-Once a `NodeObservabilityRun` is created, progress of the run is tracked in
+After a `NodeObservabilityRun` is created, you can track the progress of the run in
 the `.Status` field. First, `StartTimestamp` is recorded and when the run has
 finished, the `FinishedTimestamp` is recorded. Any failed nodes are tracked in
 `FailedAgents` list.
