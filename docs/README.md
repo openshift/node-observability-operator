@@ -168,7 +168,7 @@ status:
 
 Data retrieval is currently in development.
 
-Right now the data is stored in the container file system under `/run`.
+As of now the data is stored in the container file system under `/run`.
 
 With a nodeobservabilityrun called `nodeobservabilityrun-sample`:
 
