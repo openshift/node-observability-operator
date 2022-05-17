@@ -74,7 +74,7 @@ EOF
 
 ## Prepare to run profiling queries
 
-In order to be able to run profiling queries on a subset of worker nodes, a `NodeObservability` custom resource needs to be created.
+To run profiling queries on a subset of worker nodes, you should create a `NodeObservability` custom resource (CR).
 
 The following `NodeObservability` will create a daemonset targetting all nodes with label `app: example`, running a `node-observability-agent` pod on each of those node using the image given in `.spec.image`.
 
