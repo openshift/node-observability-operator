@@ -26,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 
@@ -132,12 +133,12 @@ func (r *MachineConfigReconciler) GetProfilingMCP(name string) *mcv1.MachineConf
 func (r *MachineConfigReconciler) createMCP(ctx context.Context, name string) error {
 	mcp := r.GetProfilingMCP(name)
 
-	if err := r.Create(ctx, mcp); err != nil {
-		return fmt.Errorf("failed to create MCP %s: %w", name, err)
+	if err := ctrlutil.SetOwnerReference(r.CtrlConfig, mcp, r.Scheme); err != nil {
+		r.Log.Error(err, "failed to update owner info in MCP", "MCP", name)
 	}
 
-	if err := ctrl.SetControllerReference(r.CtrlConfig, mcp, r.Scheme); err != nil {
-		r.Log.Error(err, "failed to update owner info in MCP", "MCP", name)
+	if err := r.Create(ctx, mcp); err != nil {
+		return fmt.Errorf("failed to create MCP %s: %w", name, err)
 	}
 
 	r.Log.Info("successfully created MCP", "MCP", name)

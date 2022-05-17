@@ -26,7 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	ctrlruntime "sigs.k8s.io/controller-runtime"
+	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	ignutil "github.com/coreos/ignition/v2/config/util"
 	igntypes "github.com/coreos/ignition/v2/config/v3_2/types"
@@ -109,12 +109,12 @@ func (r *MachineConfigReconciler) createCrioProfConf(ctx context.Context) error 
 		return err
 	}
 
-	if err := r.Create(ctx, criomc); err != nil {
-		return fmt.Errorf("failed to create crio profiling config %s: %w", criomc.Name, err)
+	if err := ctrlutil.SetOwnerReference(r.CtrlConfig, criomc, r.Scheme); err != nil {
+		r.Log.Error(err, "failed to update owner info in CRI-O profiling MC resource")
 	}
 
-	if err := ctrlruntime.SetControllerReference(r.CtrlConfig, criomc, r.Scheme); err != nil {
-		r.Log.Error(err, "failed to update owner info in CRI-O profiling MC resource")
+	if err := r.Create(ctx, criomc); err != nil {
+		return fmt.Errorf("failed to create crio profiling config %s: %w", criomc.Name, err)
 	}
 
 	r.Log.Info("successfully created CRI-O MC for enabling profiling", "CrioProfilingConfigName", CrioProfilingConfigName)
