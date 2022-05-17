@@ -131,6 +131,7 @@ spec:
           - get
           - list
           - patch
+          - watch
         - apiGroups:
           - ""
           resources:
@@ -155,6 +156,7 @@ spec:
           - delete
           - get
           - list
+          - watch
         - apiGroups:
           - machineconfiguration.openshift.io
           resources:
@@ -164,6 +166,7 @@ spec:
           - delete
           - get
           - list
+          - watch
         - apiGroups:
           - nodeobservability.olm.openshift.io
           resources:
