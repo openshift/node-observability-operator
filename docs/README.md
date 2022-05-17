@@ -1,15 +1,33 @@
 ## Node Observability
 
+Node Observability project is a web of controllers and node agents/daemons
+that allows you to:
+* enable richer debug/profiling setting on worker nodes
+* collect kubelet and crio `/pprof` data
+
 ## Deploy
 
-### Local deployment:
+### Local build:
 
+Build the agent:
 ```
 git clone https://github.com/openshift/node-observability-agent.git
-git clone https://github.com/openshift/node-observability-operator.git
-
-IMG=<registry>/<username>/node-observability-operator:latest make container-build container-push deploy
+cd node-observability-agent
+export IMG=<registry>/<username>/node-observability-agent
+make push.image.rhel8
 ```
+
+Build and deploy the operator:
+```
+git clone https://github.com/openshift/node-observability-operator.git
+cd node-observability-operator
+export IMG=<registry>/<username>/node-observability-operator:latest
+make container-build container-push deploy
+```
+
+Deploy the agents using [NodeObservability custom resource](#Prepare-to-run-profiling-queries) (CR).
+Link your agent image` <registry>/<username>/node-observability-agent`
+in the CR.
 
 ### Deployment from a public release
 
@@ -74,9 +92,12 @@ EOF
 
 ## Prepare to run profiling queries
 
-To run profiling queries on a subset of worker nodes, you should create a `NodeObservability` custom resource (CR).
+To run profiling queries on a subset of worker nodes,
+you should create a `NodeObservability` custom resource (CR).
 
-The following `NodeObservability` Operator creates a daemonset to target all the nodes with label `app: example` by running a `node-observability-agent` pod on each of those nodes using the image given in `.spec.image`.
+The following `NodeObservability` Operator creates a daemonset to target
+all the nodes with label `app: example` by running a `node-observability-agent`
+pod on each of those nodes using the image given in `.spec.image`.
 
 ```yaml
 apiVersion: nodeobservability.olm.openshift.io/v1alpha1
@@ -90,17 +111,19 @@ spec:
   image: "brew.registry.redhat.io/rh-osbs/node-observability-agent:0.1.0-3"
 ```
 
-The CRIO unix socket of the underlying node is mounted on the agent pod, thus allowing the agent to communicate with CRIO to run the pprof request.
+The CRIO unix socket of the underlying node is mounted on the agent pod,
+thus allowing the agent to communicate with CRIO to run the pprof request.
 
-The `kubelet-serving-ca` certificate chain is also mounted on the agent pod, which allows secure communication between agent and node's kubelet endpoint.
+The `kubelet-serving-ca` certificate chain is also mounted on the agent pod,
+which allows secure communication between agent and node's kubelet endpoint.
 
 ## Run profiling queries
 
 Profiling query is a blocking operation and contains about 30 seconds
 worth of profiling (kubelet + crio `/pprof`) data. You can query only one request concurrently.
 
-Profiling queries can be requested with creating a `NodeObservabilityRun`
-resource. For example:
+You can request a Profiling query by creating a `NodeObservabilityRun` resource.
+For example:
 
 ```yaml
 apiVersion: nodeobservability.olm.openshift.io/v1alpha1
@@ -119,7 +142,7 @@ the `.Status` field. At first, `StartTimestamp` is recorded and when the run has
 finished, the `FinishedTimestamp` is recorded. Any failed nodes are tracked in
 `FailedAgents` list.
 
-```
+```yaml
 $ oc get NodeObservabilityRun -o yaml --watch
 apiVersion: nodeobservability.olm.openshift.io/v1alpha1
 kind: NodeObservabilityRun
@@ -188,3 +211,17 @@ done
 ```
 
 ## Troubleshooting
+
+#### Node Observability Operator pod doesn't start
+
+Images - check that `Deployment` `node-observability-operator-controller-manager`
+is referencing your desired images.
+
+#### Node Observability Agent pod doesn't start
+
+Images - check that your `NodeObservability` is referencing your desired image.
+If not, delete the resource and create new one with corrected image refs.
+
+Certificates
+
+Mount crio socket
