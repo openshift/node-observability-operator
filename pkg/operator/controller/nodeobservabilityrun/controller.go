@@ -107,13 +107,13 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 		enabled, err := r.checkNOMCStatus(ctx, nodeobservabilityv1alpha1.DebugEnabled)
 		if err != nil {
 			r.Log.Error(err, "NodeObservabilityMachineConfig enable status check failed")
-			return ctrl.Result{}, err
+			return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
 		}
-		if !enabled {
+		if enabled {
+			r.Log.V(3).Info("NodeObservabilityMachineConfig CrioKubeletProfile enabled")
+		} else {
 			r.Log.Info("NodeObservabilityMachineConfig CrioKubeletProfile not enabled yet")
 			return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
-		} else {
-			r.Log.Info("NodeObservabilityMachineConfig CrioKubeletProfile enabled")
 		}
 	}
 
@@ -140,7 +140,9 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 				r.Log.Info("NodeObservabilityMachineConfig CrioKubeletProfile disabled")
 				nomc := r.desiredMCO()
 				if err := r.deleteNOMC(ctx, nomc); err != nil {
-					return ctrl.Result{}, err
+					if !errors.IsNotFound(err) {
+						return ctrl.Result{}, err
+					}
 				}
 
 				instance.Spec.RunType = ""

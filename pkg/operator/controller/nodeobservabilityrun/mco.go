@@ -148,13 +148,19 @@ func (r *NodeObservabilityRunReconciler) checkNOMCStatus(ctx context.Context, co
 	if err != nil {
 		return false, err
 	}
+
+	if len(nomc.Status.Conditions) == 0 {
+		r.Log.Info("NodeObservabilityMachineConfig has not updated any conditions yet")
+		return false, nil
+	}
+
 	for _, cond := range nomc.Status.Conditions {
 		if cond.Type == condType {
-			if cond.Status == v1alpha1.ConditionTrue {
-				return true, nil
-			}
 			if cond.Status == v1alpha1.ConditionInProgress {
 				return false, nil
+			}
+			if cond.Status == v1alpha1.ConditionTrue {
+				return true, nil
 			}
 		} else {
 			if cond.Status == v1alpha1.ConditionTrue ||
