@@ -56,11 +56,11 @@ func (r *MachineConfigReconciler) enableCrioProf(ctx context.Context) (bool, err
 	}
 
 	r.Lock()
+	defer r.Unlock()
 	r.MachineConfig.PrevReconcileUpd["crio"] = MachineConfigInfo{
 		op:     "create",
 		config: criomc,
 	}
-	r.Unlock()
 
 	return createdNow, nil
 }
@@ -84,10 +84,10 @@ func (r *MachineConfigReconciler) disableCrioProf(ctx context.Context) error {
 	}
 
 	r.Lock()
+	defer r.Unlock()
 	r.MachineConfig.PrevReconcileUpd["crio"] = MachineConfigInfo{
 		op: "delete",
 	}
-	r.Unlock()
 
 	return nil
 }
