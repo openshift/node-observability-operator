@@ -76,7 +76,7 @@ EOF
 
 To run profiling queries on a subset of worker nodes, you should create a `NodeObservability` custom resource (CR).
 
-The following `NodeObservability` will create a daemonset targetting all nodes with label `app: example`, running a `node-observability-agent` pod on each of those node using the image given in `.spec.image`.
+The following `NodeObservability` Operator creates a daemonset to target all the nodes with label `app: example` by running a `node-observability-agent` pod on each of those nodes using the image given in `.spec.image`.
 
 ```yaml
 apiVersion: nodeobservability.olm.openshift.io/v1alpha1
