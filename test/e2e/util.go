@@ -1,64 +1,45 @@
 package e2e
 
 import (
-	"context"
-	"reflect"
-	"testing"
-	"time"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 	//+kubebuilder:scaffold:imports
 )
 
-func waitForOperatorDeploymentStatusCondition(t *testing.T, cl client.Client, conditions ...appsv1.DeploymentCondition) error {
-	t.Helper()
-	return wait.PollImmediate(1*time.Second, 1*time.Minute, func() (bool, error) {
-		dep := &appsv1.Deployment{}
-		depNamespacedName := types.NamespacedName{
-			Name:      "node-observability-operator-controller-manager",
-			Namespace: "node-observability-operator",
-		}
-		if err := cl.Get(context.TODO(), depNamespacedName, dep); err != nil {
-			t.Logf("waiting to get deployment %s: %v", depNamespacedName.Name, err)
-			return false, nil
-		}
+const (
+	testName      = "test-instance"
+	testNamespace = "node-observability-operator"
+	image         = "registry.ci.openshift.org/ocp/4.11:node-observability-agent"
+)
 
-		expected := deploymentConditionMap(conditions...)
-		current := deploymentConditionMap(dep.Status.Conditions...)
-		return conditionsMatchExpected(expected, current), nil
-	})
-}
-func deploymentConditionMap(conditions ...appsv1.DeploymentCondition) map[string]string {
-	conds := map[string]string{}
-	for _, cond := range conditions {
-		conds[string(cond.Type)] = string(cond.Status)
+// testNodeObservability - minimal CR for the test
+func testNodeObservability() *operatorv1alpha1.NodeObservability {
+	return &operatorv1alpha1.NodeObservability{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      testName,
+			Namespace: testNamespace,
+		},
+		Spec: operatorv1alpha1.NodeObservabilitySpec{
+			Labels: map[string]string{
+				"node-role.kubernetes.io/worker": "",
+			},
+			Image: image,
+		},
 	}
-	return conds
 }
-func conditionsMatchExpected(expected, actual map[string]string) bool {
-	filtered := map[string]string{}
-	for k := range actual {
-		if _, comparable := expected[k]; comparable {
-			filtered[k] = actual[k]
-		}
+
+// testNodeObservabilityRun - minimal CR for the test
+func testNodeObservabilityRun() *operatorv1alpha1.NodeObservabilityRun {
+	return &operatorv1alpha1.NodeObservabilityRun{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      testName,
+			Namespace: testNamespace,
+		},
+		Spec: operatorv1alpha1.NodeObservabilityRunSpec{
+			NodeObservabilityRef: &operatorv1alpha1.NodeObservabilityRef{
+				Name: testName,
+			},
+		},
 	}
-	return reflect.DeepEqual(expected, filtered)
-}
-func waitForDaemonsetStatus(t *testing.T, cl client.Client) error {
-	t.Helper()
-	return wait.PollImmediate(1*time.Second, 1*time.Minute, func() (bool, error) {
-		ds := &appsv1.DaemonSet{}
-		dsNamespacedName := types.NamespacedName{
-			Name:      "node-observability-ds",
-			Namespace: "node-observability-operator",
-		}
-		if err := cl.Get(context.TODO(), dsNamespacedName, ds); err != nil {
-			t.Logf("waiting to get Daemonset %s: %v", dsNamespacedName.Name, err)
-			return false, nil
-		}
-		return true, nil
-	})
 }
