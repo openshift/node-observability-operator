@@ -54,6 +54,7 @@ rules:
   - get
   - list
   - patch
+  - watch
 - apiGroups:
   - ""
   resources:
@@ -78,6 +79,7 @@ rules:
   - delete
   - get
   - list
+  - watch
 - apiGroups:
   - machineconfiguration.openshift.io
   resources:
@@ -87,6 +89,7 @@ rules:
   - delete
   - get
   - list
+  - watch
 - apiGroups:
   - nodeobservability.olm.openshift.io
   resources:

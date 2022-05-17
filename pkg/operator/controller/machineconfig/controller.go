@@ -33,9 +33,9 @@ import (
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilitymachineconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilitymachineconfigs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilitymachineconfigs/finalizers,verbs=update
-//+kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigs,verbs=get;list;create;delete
-//+kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigpools,verbs=get;list;create;delete
-//+kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;patch
+//+kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigs,verbs=get;list;watch;create;delete
+//+kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigpools,verbs=get;list;watch;create;delete
+//+kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -75,15 +75,15 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	if !r.CtrlConfig.DeletionTimestamp.IsZero() {
 		r.Log.Info("MachineConfig resource marked for deletetion, cleaning up")
-		return r.cleanUp(ctx)
+		return r.cleanUp(ctx, req)
 	}
 
 	// Set finalizers on the NodeObservability/MachineConfig resource
-	updated, err := r.withFinalizers(ctx)
+	updated, err := r.withFinalizers(ctx, req)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update MachineConfig with finalizers: %w", err)
 	}
-	r.CtrlConfig = updated
+	updated.DeepCopyInto(r.CtrlConfig)
 
 	if err := r.inspectProfilingMCReq(ctx); err != nil {
 		r.Log.Error(err, "failed to reconcile requested configuration")
@@ -100,49 +100,78 @@ func (r *MachineConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *MachineConfigReconciler) cleanUp(ctx context.Context) (ctrl.Result, error) {
+func (r *MachineConfigReconciler) cleanUp(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	if hasFinalizer(r.CtrlConfig) {
 		// Remove the finalizer.
-		if _, err := r.withoutFinalizers(ctx, finalizer); err != nil {
+		if _, err := r.withoutFinalizers(ctx, req, finalizer); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to remove finalizer from MachineConfig %s: %w", r.CtrlConfig.Name, err)
 		}
 	}
 	return ctrl.Result{}, nil
 }
 
-func (r *MachineConfigReconciler) withFinalizers(ctx context.Context) (*v1alpha1.NodeObservabilityMachineConfig, error) {
-	withFinalizers := r.CtrlConfig.DeepCopy()
+func (r *MachineConfigReconciler) withFinalizers(ctx context.Context, req ctrl.Request) (*v1alpha1.NodeObservabilityMachineConfig, error) {
+	withFinalizers := &v1alpha1.NodeObservabilityMachineConfig{}
 
-	if !hasFinalizer(withFinalizers) {
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := r.Get(ctx, req.NamespacedName, withFinalizers); err != nil {
+			r.Log.Error(err, "failed to fetch nodeobservabilitymachineconfig resource for updating finalizer")
+			return err
+		}
+
+		if hasFinalizer(withFinalizers) {
+			return nil
+		}
 		withFinalizers.Finalizers = append(withFinalizers.Finalizers, finalizer)
-	}
 
-	if err := r.Update(ctx, withFinalizers); err != nil {
-		return withFinalizers, fmt.Errorf("failed to update finalizers: %w", err)
-	}
-	return withFinalizers, nil
+		if err := r.Update(ctx, withFinalizers); err != nil {
+			r.Log.Error(err, "failed to update nodeobservabilitymachineconfig resource finalizers")
+			return err
+		}
+
+		return nil
+	})
+
+	return withFinalizers, err
 }
 
-func (r *MachineConfigReconciler) withoutFinalizers(ctx context.Context, finalizer string) (*v1alpha1.NodeObservabilityMachineConfig, error) {
-	withoutFinalizers := r.CtrlConfig.DeepCopy()
+func (r *MachineConfigReconciler) withoutFinalizers(ctx context.Context, req ctrl.Request, finalizer string) (*v1alpha1.NodeObservabilityMachineConfig, error) {
+	withoutFinalizers := &v1alpha1.NodeObservabilityMachineConfig{}
 
-	newFinalizers := make([]string, 0)
-	for _, item := range withoutFinalizers.Finalizers {
-		if item == finalizer {
-			continue
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := r.Get(ctx, req.NamespacedName, withoutFinalizers); err != nil {
+			r.Log.Error(err, "failed to fetch nodeobservabilitymachineconfig resource for removing finalizer")
+			return err
 		}
-		newFinalizers = append(newFinalizers, item)
-	}
-	if len(newFinalizers) == 0 {
-		// Sanitize for unit tests, so we don't need to distinguish empty array
-		// and nil.
-		newFinalizers = nil
-	}
-	withoutFinalizers.Finalizers = newFinalizers
-	if err := r.Update(ctx, withoutFinalizers); err != nil {
-		return withoutFinalizers, err
-	}
-	return withoutFinalizers, nil
+
+		if !hasFinalizer(withoutFinalizers) {
+			return nil
+		}
+
+		newFinalizers := make([]string, 0)
+		for _, item := range withoutFinalizers.Finalizers {
+			if item == finalizer {
+				continue
+			}
+			newFinalizers = append(newFinalizers, item)
+		}
+
+		if len(newFinalizers) == 0 {
+			// Sanitize for unit tests, so we don't need to distinguish empty array
+			// and nil.
+			newFinalizers = nil
+		}
+
+		withoutFinalizers.Finalizers = newFinalizers
+		if err := r.Update(ctx, withoutFinalizers); err != nil {
+			r.Log.Error(err, "failed to remove nodeobservabilitymachineconfig resource finalizers")
+			return err
+		}
+
+		return nil
+	})
+
+	return withoutFinalizers, err
 }
 
 func hasFinalizer(mc *v1alpha1.NodeObservabilityMachineConfig) bool {
@@ -280,15 +309,21 @@ func (r *MachineConfigReconciler) monitorProgress(ctx context.Context, req ctrl.
 	}
 
 	if err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		r.Log.V(3).Info("updating nodeobservabilitymachineconfig resource status")
 		nomc := &v1alpha1.NodeObservabilityMachineConfig{}
 		if err := r.Get(ctx, req.NamespacedName, nomc); err != nil {
 			r.Log.Error(err, "failed to fetch nodeobservabilitymachineconfig resource")
 			return err
 		}
+		r.CtrlConfig.Status.DeepCopyInto(&nomc.Status)
+
 		if err := r.Status().Update(ctx, nomc); err != nil {
-			r.Log.Error(err, "failed to update nodeobservabilitymachineconfig status")
+			r.Log.Error(err, "failed to update nodeobservabilitymachineconfig resource status")
 			return err
 		}
+
+		nomc.DeepCopyInto(r.CtrlConfig)
+
 		return nil
 	}); err != nil {
 		return
