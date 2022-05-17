@@ -212,6 +212,12 @@ done
 
 ## Troubleshooting
 
+This section describes a high level "howto troubleshoot" when
+encountering problems with the deployment of Node Observability.
+It is by no means an exhaustive list of problems but should help
+the user to navigate the common errors experienced in getting the
+operator to work.
+
 #### Node Observability Operator pod doesn't start
 
 Images - check that `Deployment` `node-observability-operator-controller-manager`
@@ -219,9 +225,20 @@ is referencing your desired images.
 
 #### Node Observability Agent pod doesn't start
 
+See what the problem is `oc describe pod -l app.kubernetes.io/component=node-observability-agent`
+
 Images - check that your `NodeObservability` is referencing your desired image.
 If not, delete the resource and create new one with corrected image refs.
 
-Certificates
+Certificates - Node Observability relies on
+[CA Service](https://docs.openshift.com/container-platform/4.10/security/certificate_types_descriptions/service-ca-certificates.html)
+to provision certificates. Check that CA Service in your cluster is enabled
+and running.
 
-Mount crio socket
+Check that Service `node-observability-agent` exists in your project
+and has annotation `service.beta.openshift.io/serving-cert-secret-name=node-observability-agent`.
+Check if Secret `node-observability-agent` exists and has tls key and certificate.
+
+Mount crio socket - Agent pods mount crio.sock via HostPath mount.
+The pods run as privileged to achieve that. A cluster-wide policy, 
+preventing privileged pods in the cluster, could exist.
