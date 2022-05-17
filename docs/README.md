@@ -10,7 +10,7 @@ that allows you to:
 ### Local build:
 
 Build the agent:
-```
+```sh
 git clone https://github.com/openshift/node-observability-agent.git
 cd node-observability-agent
 export IMG=<registry>/<username>/node-observability-agent
@@ -18,7 +18,7 @@ make push.image.rhel8
 ```
 
 Build and deploy the operator:
-```
+```sh
 git clone https://github.com/openshift/node-observability-operator.git
 cd node-observability-operator
 export IMG=<registry>/<username>/node-observability-operator:latest
