@@ -55,7 +55,7 @@ You can install the NodeObservability Operator by building and pushing the Opera
 
     a. Add the created Operator image in the `node-observability-operator_clusterserviceversion.yaml` file:
     ```sh
-    $ sed -i "s|quay.io/openshift/origin-node-observability-operator:latest|${IMG}|g" bundle/manifests/node-observability-operator_clusterserviceversion.yaml
+    $ sed -i "s|quay.io/openshift/origin-node-observability-operator:latest|${IMG}|g" bundle/manifests/node-observability-operator.clusterserviceversion.yaml
     ```
     b. Build the image:
     ```sh
