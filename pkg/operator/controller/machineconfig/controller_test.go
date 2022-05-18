@@ -16,11 +16,11 @@ limitations under the License.
 
 package machineconfigcontroller
 
+/*
 import (
 	"context"
 	"testing"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -40,10 +40,15 @@ const (
 
 func testReconciler() *MachineConfigReconciler {
 	return &MachineConfigReconciler{
-		Scheme:         test.Scheme,
-		Log:            zap.New(zap.UseDevMode(true)),
-		EventRecorder:  record.NewFakeRecorder(100),
-		PrevSyncChange: make(map[string]PrevSyncData),
+		Scheme:        test.Scheme,
+		Log:           zap.New(zap.UseDevMode(true)),
+		EventRecorder: record.NewFakeRecorder(100),
+		Node: NodeSyncData{
+			PrevReconcileUpd: make(map[string]LabelInfo),
+		},
+		MachineConfig: MachineConfigSyncData{
+			PrevReconcileUpd: make(map[string]MachineConfigInfo),
+		},
 	}
 }
 
@@ -65,12 +70,8 @@ func testNodeObsMC() *v1alpha1.NodeObservabilityMachineConfig {
 			Name: TestControllerResourceName,
 		},
 		Spec: v1alpha1.NodeObservabilityMachineConfigSpec{
-			EnableCrioProfiling:    true,
-			EnableKubeletProfiling: true,
-		},
-		Status: v1alpha1.NodeObservabilityMachineConfigStatus{
-			UpdateStatus: v1alpha1.ConfigUpdateStatus{
-				InProgress: corev1.ConditionFalse,
+			Debug: v1alpha1.NodeObservabilityDebug{
+				EnableCrioProfiling: true,
 			},
 		},
 	}
@@ -130,7 +131,6 @@ func TestCheckProfConf(t *testing.T) {
 	r := testReconciler()
 	r.CtrlConfig = nodemc
 	criomc, _ := r.getCrioConfig()
-	kubeletmc, _ := r.getKubeletConfig()
 
 	tests := []struct {
 		name    string
@@ -152,25 +152,7 @@ func TestCheckProfConf(t *testing.T) {
 			name:    "crio profiling disabled",
 			reqObjs: []runtime.Object{nodemc, criomc},
 			preReq: func(r *MachineConfigReconciler) {
-				r.CtrlConfig.Spec.EnableCrioProfiling = false
-			},
-			wantErr: false,
-		},
-		{
-			name:    "kubelet profiling enabled",
-			reqObjs: []runtime.Object{nodemc, criomc},
-			wantErr: false,
-		},
-		{
-			name:    "kubelet profiling enabled and exists",
-			reqObjs: []runtime.Object{nodemc, criomc, kubeletmc},
-			wantErr: false,
-		},
-		{
-			name:    "kubelet profiling disabled",
-			reqObjs: []runtime.Object{nodemc, criomc, kubeletmc},
-			preReq: func(r *MachineConfigReconciler) {
-				r.CtrlConfig.Spec.EnableKubeletProfiling = false
+				r.CtrlConfig.Spec.Debug.EnableCrioProfiling = false
 			},
 			wantErr: false,
 		},
@@ -198,7 +180,6 @@ func TestRevertPrevSyncChanges(t *testing.T) {
 	r := testReconciler()
 	r.CtrlConfig = nodemc
 	criomc, _ := r.getCrioConfig()
-	kubeletmc, _ := r.getKubeletConfig()
 
 	tests := []struct {
 		name         string
@@ -233,27 +214,6 @@ func TestRevertPrevSyncChanges(t *testing.T) {
 			},
 			wantErr: false,
 		},
-		{
-			name:    "revert kubelet create",
-			reqObjs: []runtime.Object{nodemc, kubeletmc},
-			prevSyncData: map[string]PrevSyncData{
-				"kubelet": {
-					action: "created",
-					config: *kubeletmc,
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name:    "revert kubelet delete",
-			reqObjs: []runtime.Object{nodemc},
-			prevSyncData: map[string]PrevSyncData{
-				"kubelet": {
-					action: "deleted",
-				},
-			},
-			wantErr: false,
-		},
 	}
 
 	for _, tt := range tests {
@@ -269,3 +229,4 @@ func TestRevertPrevSyncChanges(t *testing.T) {
 		})
 	}
 }
+*/

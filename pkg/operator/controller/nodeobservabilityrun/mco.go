@@ -84,8 +84,9 @@ func (r *NodeObservabilityRunReconciler) desiredMCO() *v1alpha1.NodeObservabilit
 			Name: MCOName,
 		},
 		Spec: v1alpha1.NodeObservabilityMachineConfigSpec{
-			EnableCrioProfiling:    true,
-			EnableKubeletProfiling: true,
+			Debug: v1alpha1.NodeObservabilityDebug{
+				EnableCrioProfiling: true,
+			},
 		},
 	}
 }

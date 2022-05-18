@@ -3,5 +3,5 @@ kind: NodeObservabilityMachineConfig
 metadata:
   name: sample
 spec:
-  enableCrioProfiling: true
-  enableKubeletProfiling: true
+  debug:
+    enableCrioProfiling: true

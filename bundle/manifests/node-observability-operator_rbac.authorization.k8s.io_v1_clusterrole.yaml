@@ -1,4 +1,3 @@
----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -199,13 +198,11 @@ rules:
   - list
   - use
   - watch
----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   creationTimestamp: null
   name: manager-role
-  namespace: node-observability-operator
 rules:
 - apiGroups:
   - apps

@@ -44,8 +44,9 @@ func TestEnsureMCO(t *testing.T) {
 			Name: NodeObservabilityMachineConfigTest,
 		},
 		Spec: v1alpha1.NodeObservabilityMachineConfigSpec{
-			EnableCrioProfiling: true,
-			//EnableKubeletProfiling: true,
+			Debug: v1alpha1.NodeObservabilityDebug{
+				EnableCrioProfiling: true,
+			},
 		},
 	}
 

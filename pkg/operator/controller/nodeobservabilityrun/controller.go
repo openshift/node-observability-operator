@@ -98,7 +98,7 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 		}
 		// this will ensure we dont trigger the agent call until the mco and mcp have been updated
 		// successfully
-		result, err := r.MCOReconciler.CheckMCPUpdateStatus(ctx)
+		result, err := r.MCOReconciler.CheckNodeObservabilityMCPStatus(ctx)
 		if err != nil {
 			r.Log.Info("waiting for NodeObservabilityMachineConfig update in NodeobeservabilityRun")
 			return result, err
@@ -119,8 +119,8 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 			if err := r.Delete(ctx, mco); err != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to remove profiling MCO CR %s : %w", instance.Name, err)
 			}
-			mcp := r.MCOReconciler.GetProfilingMCP()
-			err = r.MCOReconciler.DeleteProfilingMCP(ctx, mcp)
+			mcp := r.MCOReconciler.GetProfilingMCP(machineconfigcontroller.ProfilingMCPName)
+			err = r.MCOReconciler.DeleteMCP(ctx, mcp)
 			if err != nil {
 				r.Log.Error(err, "deleting machineconfigpool")
 			}

@@ -17,35 +17,80 @@ limitations under the License.
 package v1alpha1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 // Important: Run "make" to regenerate code after modifying this file
 
+// NodeObservabilityMachineConfigConditionType is the different type of conditions
+type NodeObservabilityMachineConfigConditionType string
+
+const (
+	// DebugEnabled is the condition used to inform state of enabling the
+	// debugging configuration for the requested services
+	DebugEnabled NodeObservabilityMachineConfigConditionType = "DebugEnabled"
+
+	// DebugDisabled is the condition used to inform state of disabling the
+	// debugging configuration for the requested services
+	DebugDisabled NodeObservabilityMachineConfigConditionType = "DebugDisabled"
+
+	// Failed is the condition used to inform failed state while enabling or
+	// disabling the debugging configuration for the requested services
+	Failed NodeObservabilityMachineConfigConditionType = "Failed"
+)
+
+// ConditionStatus is the different condition states
+type ConditionStatus string
+
+const (
+	// ConditionTrue means the resource is in the defined condition
+	ConditionTrue ConditionStatus = "True"
+
+	// ConditionFalse means the resource is not in the defined condition
+	ConditionFalse ConditionStatus = "False"
+
+	// ConditionInProgress means the resource is in progress of being
+	// in the defined condition
+	ConditionInProgress ConditionStatus = "InProgress"
+
+	// ConditionUnknown means the resource is in the undetermined condition
+	ConditionUnknown ConditionStatus = "Unknown"
+)
+
 // NodeObservabilityMachineConfigSpec defines the desired state of NodeObservabilityMachineConfig
 type NodeObservabilityMachineConfigSpec struct {
+	Debug NodeObservabilityDebug `json:"debug,omitempty"`
+}
+
+// NodeObservabilityDebug is for holding the configurations defined for
+// enabling debugging of services
+type NodeObservabilityDebug struct {
 	// EnableCrioProfiling is for enabling profiling of CRI-O service
 	EnableCrioProfiling bool `json:"enableCrioProfiling,omitempty"`
-
-	// EnableKubeletProfiling is for enabling profiling of CRI-O service
-	EnableKubeletProfiling bool `json:"enableKubeletProfiling,omitempty"`
 }
 
 // NodeObservabilityMachineConfigStatus defines the observed state of NodeObservabilityMachineConfig
 type NodeObservabilityMachineConfigStatus struct {
-	// lastUpdated is the timestamp of previous status update
-	LastUpdated *metav1.Time `json:"lastUpdated,omitempty"`
-
-	// UpdateStatus contains of the status of the MCP update
-	UpdateStatus ConfigUpdateStatus `json:"updateStatus,omitempty"`
+	// conditions represents the latest available observations of current operator state.
+	// +optional
+	Conditions []NodeObservabilityMachineConfigCondition `json:"conditions"`
 }
 
-// ConfigUpdateStatus is for storing the status of the MCP update
-type ConfigUpdateStatus struct {
-	// InProgress is for tracking the update of machines in profiling MCP
-	InProgress corev1.ConditionStatus `json:"InProgress,omitempty"`
+// NodeObservabilityMachineConfigCondition is for storing the status of the MCP update
+type NodeObservabilityMachineConfigCondition struct {
+	// type specifies the state of the operator's reconciliation functionality.
+	Type NodeObservabilityMachineConfigConditionType `json:"type"`
+
+	// status of the condition, one of True, False, Unknown.
+	Status ConditionStatus `json:"status"`
+
+	// lastUpdateTime is the time last update was applied.
+	// +nullable
+	LastUpdateTime metav1.Time `json:"lastUpdateTime"`
+
+	// message provides additional information about the current condition.
+	Message string `json:"message,omitempty"`
 }
 
 //+kubebuilder:object:root=true
