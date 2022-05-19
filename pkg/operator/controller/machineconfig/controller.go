@@ -308,25 +308,9 @@ func (r *MachineConfigReconciler) monitorProgress(ctx context.Context, req ctrl.
 		}
 	}
 
-	if err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		r.Log.V(3).Info("updating nodeobservabilitymachineconfig resource status")
-		nomc := &v1alpha1.NodeObservabilityMachineConfig{}
-		if err := r.Get(ctx, req.NamespacedName, nomc); err != nil {
-			r.Log.Error(err, "failed to fetch nodeobservabilitymachineconfig resource")
-			return err
-		}
-		r.CtrlConfig.Status.DeepCopyInto(&nomc.Status)
-
-		if err := r.Status().Update(ctx, nomc); err != nil {
-			r.Log.Error(err, "failed to update nodeobservabilitymachineconfig resource status")
-			return err
-		}
-
-		nomc.DeepCopyInto(r.CtrlConfig)
-
-		return nil
-	}); err != nil {
-		return
+	if err = r.Status().Update(ctx, r.CtrlConfig); err != nil {
+		r.Log.Error(err, "failed to update nodeobservabilitymachineconfig resource status")
+		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
 	}
 
 	return
