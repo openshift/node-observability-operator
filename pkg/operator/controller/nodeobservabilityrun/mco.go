@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 
 	"github.com/openshift/node-observability-operator/api/v1alpha1"
 )
@@ -96,15 +97,17 @@ func (r *NodeObservabilityRunReconciler) ensureNOMC(ctx context.Context) error {
 	nameSpace := types.NamespacedName{Name: desired.Name}
 	err := r.createNOMC(ctx, desired)
 	if errors.IsAlreadyExists(err) {
-		nomc, err := r.fetchNOMC(ctx, nameSpace)
-		if err != nil {
-			return err
-		}
-		if !nomc.Spec.Debug.EnableCrioProfiling {
-			nomc.Spec.Debug.EnableCrioProfiling = true
-			return r.updateNOMC(ctx, nomc)
-		}
-		return nil
+		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			nomc, err := r.fetchNOMC(ctx, nameSpace)
+			if err != nil {
+				return err
+			}
+			if !nomc.Spec.Debug.EnableCrioProfiling {
+				nomc.Spec.Debug.EnableCrioProfiling = true
+				return r.updateNOMC(ctx, nomc)
+			}
+			return nil
+		})
 	}
 	return err
 }
@@ -154,34 +157,21 @@ func (r *NodeObservabilityRunReconciler) checkNOMCStatus(ctx context.Context, co
 		return false, nil
 	}
 
-	for _, cond := range nomc.Status.Conditions {
-		if cond.Type == condType {
-			if cond.Status == v1alpha1.ConditionInProgress {
-				return false, nil
-			}
-			if cond.Status == v1alpha1.ConditionTrue {
-				return true, nil
-			}
-		} else {
-			if cond.Status == v1alpha1.ConditionTrue ||
-				cond.Status == v1alpha1.ConditionInProgress {
-				return false, fmt.Errorf("NodeObservabilityMachineConfig not in expected state. Condition: %s State: %s", cond.Type, cond.Status)
-			}
-		}
-	}
-	return false, fmt.Errorf("NodeObservabilityMachineConfig in unknown state")
+	return v1alpha1.IsNodeObservabilityMachineConfigConditionAsExpected(nomc.Status.Conditions, condType)
 }
 
 func (r *NodeObservabilityRunReconciler) disableCrioKubeletProfile(ctx context.Context) error {
-	nameSpace := types.NamespacedName{Name: MCOName}
-	nomc, err := r.fetchNOMC(ctx, nameSpace)
-	if err != nil {
-		return err
-	}
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		nameSpace := types.NamespacedName{Name: MCOName}
+		nomc, err := r.fetchNOMC(ctx, nameSpace)
+		if err != nil {
+			return err
+		}
 
-	if nomc.Spec.Debug.EnableCrioProfiling {
-		nomc.Spec.Debug.EnableCrioProfiling = false
-		return r.updateNOMC(ctx, nomc)
-	}
-	return nil
+		if nomc.Spec.Debug.EnableCrioProfiling {
+			nomc.Spec.Debug.EnableCrioProfiling = false
+			return r.updateNOMC(ctx, nomc)
+		}
+		return nil
+	})
 }

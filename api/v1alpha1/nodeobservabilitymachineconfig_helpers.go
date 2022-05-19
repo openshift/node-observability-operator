@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"fmt"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -118,4 +120,24 @@ func IsNodeObservabilityMachineConfigConditionPresentAndEqual(conditions []NodeO
 		}
 	}
 	return false
+}
+
+// IsNodeObservabilityMachineConfigConditionAsExpected returns true when conditionType is present and set to `ConditionTrue`, false when not present or set to `ConditionInProgress`. Returns error when anyother conditionType is set to `ConditionTrue` or `ConditionInProgress`
+func IsNodeObservabilityMachineConfigConditionAsExpected(conditions []NodeObservabilityMachineConfigCondition, conditionType NodeObservabilityMachineConfigConditionType) (bool, error) {
+	for _, cond := range conditions {
+		if cond.Type == conditionType {
+			if cond.Status == ConditionInProgress {
+				return false, nil
+			}
+			if cond.Status == ConditionTrue {
+				return true, nil
+			}
+		} else {
+			if cond.Status == ConditionTrue ||
+				cond.Status == ConditionInProgress {
+				return false, fmt.Errorf("NodeObservabilityMachineConfig not in expected state. Condition: %s State: %s", cond.Type, cond.Status)
+			}
+		}
+	}
+	return false, fmt.Errorf("NodeObservabilityMachineConfig in unknown state")
 }
