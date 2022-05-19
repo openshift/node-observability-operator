@@ -172,6 +172,8 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 		r.Log.Info("NodeObservabilityMachineConfig current condition "+
 			"does not require MCP status check",
 			"MCP", mcp.Name, "conditions", r.CtrlConfig.Status.Conditions)
+
+		r.Unlock()
 		return ctrl.Result{}, nil
 	}
 
@@ -213,8 +215,8 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 					"Reverting changes failed, reconcile again",
 					mcp.Name, mcp.Status.DegradedMachineCount))
 			v1alpha1.SetNodeObservabilityMachineConfigCondition(&r.CtrlConfig.Status, *cond)
-			r.Unlock()
 
+			r.Unlock()
 			return ctrl.Result{RequeueAfter: defaultRequeueTime},
 				fmt.Errorf("failed to revert changes to recover degraded machines: %w", err)
 		}
@@ -224,8 +226,8 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 			v1alpha1.ConditionInProgress,
 			fmt.Sprintf("%s MCP has %d machines in degraded state, reverted changes", mcp.Name, mcp.Status.DegradedMachineCount))
 		v1alpha1.SetNodeObservabilityMachineConfigCondition(&r.CtrlConfig.Status, *cond)
-		r.Unlock()
 
+		r.Unlock()
 		return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
 	}
 
@@ -252,6 +254,8 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 		r.Log.Info("NodeObservabilityMachineConfig current condition "+
 			"does not require MCP status check",
 			"MCP", mcp.Name, "conditions", r.CtrlConfig.Status.Conditions)
+
+		r.Unlock()
 		return ctrl.Result{}, nil
 	}
 
