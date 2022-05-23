@@ -75,6 +75,10 @@ type NodeObservabilityMachineConfigStatus struct {
 	// conditions represents the latest available observations of current operator state.
 	// +optional
 	Conditions []NodeObservabilityMachineConfigCondition `json:"conditions"`
+
+	// lastReconcile is the time of last reconciliation
+	// +nullable
+	LastReconcile metav1.Time `json:"lastReconcile"`
 }
 
 // NodeObservabilityMachineConfigCondition is for storing the status of the MCP update

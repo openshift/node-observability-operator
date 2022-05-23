@@ -79,6 +79,13 @@ spec:
                   - type
                   type: object
                 type: array
+              lastReconcile:
+                description: lastReconcile is the time of last reconciliation
+                format: date-time
+                nullable: true
+                type: string
+            required:
+            - lastReconcile
             type: object
         type: object
     served: true

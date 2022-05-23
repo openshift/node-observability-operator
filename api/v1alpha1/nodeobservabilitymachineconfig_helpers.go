@@ -20,6 +20,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// UpdateLastReconcileTime is for updating LastReconcile in NodeObservabilityMachineConfigStatus
+func UpdateLastReconcileTime(status *NodeObservabilityMachineConfigStatus) {
+	status.LastReconcile = metav1.Now()
+}
+
 // NewNodeObservabilityMachineConfigCondition creates a new NodeObservabilityMachineConfig condition.
 func NewNodeObservabilityMachineConfigCondition(
 	condType NodeObservabilityMachineConfigConditionType,
