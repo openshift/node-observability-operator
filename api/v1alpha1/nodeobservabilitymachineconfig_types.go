@@ -23,41 +23,6 @@ import (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 // Important: Run "make" to regenerate code after modifying this file
 
-// NodeObservabilityMachineConfigConditionType is the different type of conditions
-type NodeObservabilityMachineConfigConditionType string
-
-const (
-	// DebugEnabled is the condition used to inform state of enabling the
-	// debugging configuration for the requested services
-	DebugEnabled NodeObservabilityMachineConfigConditionType = "DebugEnabled"
-
-	// DebugDisabled is the condition used to inform state of disabling the
-	// debugging configuration for the requested services
-	DebugDisabled NodeObservabilityMachineConfigConditionType = "DebugDisabled"
-
-	// Failed is the condition used to inform failed state while enabling or
-	// disabling the debugging configuration for the requested services
-	Failed NodeObservabilityMachineConfigConditionType = "Failed"
-)
-
-// ConditionStatus is the different condition states
-type ConditionStatus string
-
-const (
-	// ConditionTrue means the resource is in the defined condition
-	ConditionTrue ConditionStatus = "True"
-
-	// ConditionFalse means the resource is not in the defined condition
-	ConditionFalse ConditionStatus = "False"
-
-	// ConditionInProgress means the resource is in progress of being
-	// in the defined condition
-	ConditionInProgress ConditionStatus = "InProgress"
-
-	// ConditionUnknown means the resource is in the undetermined condition
-	ConditionUnknown ConditionStatus = "Unknown"
-)
-
 // NodeObservabilityMachineConfigSpec defines the desired state of NodeObservabilityMachineConfig
 type NodeObservabilityMachineConfigSpec struct {
 	Debug NodeObservabilityDebug `json:"debug,omitempty"`
@@ -74,23 +39,7 @@ type NodeObservabilityDebug struct {
 type NodeObservabilityMachineConfigStatus struct {
 	// conditions represents the latest available observations of current operator state.
 	// +optional
-	Conditions []NodeObservabilityMachineConfigCondition `json:"conditions"`
-}
-
-// NodeObservabilityMachineConfigCondition is for storing the status of the MCP update
-type NodeObservabilityMachineConfigCondition struct {
-	// type specifies the state of the operator's reconciliation functionality.
-	Type NodeObservabilityMachineConfigConditionType `json:"type"`
-
-	// status of the condition, one of True, False, Unknown.
-	Status ConditionStatus `json:"status"`
-
-	// lastUpdateTime is the time last update was applied.
-	// +nullable
-	LastUpdateTime metav1.Time `json:"lastUpdateTime"`
-
-	// message provides additional information about the current condition.
-	Message string `json:"message,omitempty"`
+	ConditionalStatus `json:"conditions"`
 }
 
 //+kubebuilder:object:root=true
@@ -113,6 +62,30 @@ type NodeObservabilityMachineConfigList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []NodeObservabilityMachineConfig `json:"items"`
+}
+
+// IsMachineConfigInProgress returns true if MachineConfig configuration is being applied
+func (s *NodeObservabilityMachineConfigStatus) IsMachineConfigInProgress() bool {
+	if cond := s.GetCondition(DebugReady); cond != nil && cond.Status == metav1.ConditionTrue && cond.Reason == ReasonInProgress {
+		return true
+	}
+	return false
+}
+
+// IsDebuggingFailed returns true if Debugging has failed
+func (s *NodeObservabilityMachineConfigStatus) IsDebuggingFailed() bool {
+	if cond := s.GetCondition(DebugReady); cond != nil && cond.Status == metav1.ConditionFalse && cond.Reason == ReasonFailed {
+		return true
+	}
+	return false
+}
+
+// IsDebuggingEnabled returns true if Debugging is enabled
+func (s *NodeObservabilityMachineConfigStatus) IsDebuggingEnabled() bool {
+	if cond := s.GetCondition(DebugEnabled); cond != nil && cond.Status == metav1.ConditionTrue {
+		return true
+	}
+	return false
 }
 
 func init() {

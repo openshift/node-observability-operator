@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -188,15 +189,12 @@ func hasFinalizer(mc *v1alpha1.NodeObservabilityMachineConfig) bool {
 // inspectProfilingMCReq is for checking and creating required configs
 // if debugging is enabled
 func (r *MachineConfigReconciler) inspectProfilingMCReq(ctx context.Context) error {
-
-	condition := v1alpha1.IsNodeObservabilityMachineConfigConditionSetInProgress(r.CtrlConfig.Status.Conditions)
-	if condition != Empty {
-		r.Log.Info("previous reconcile initiated operation in progress, changes not applied",
-			"condition", condition)
+	if r.CtrlConfig.Status.IsMachineConfigInProgress() {
+		r.Log.Info("previous reconcile initiated operation in progress, changes not applied")
 		return nil
 	}
 
-	if r.CtrlConfig.Spec.Debug != (v1alpha1.NodeObservabilityDebug{}) {
+	if r.CtrlConfig.Spec.Debug.EnableCrioProfiling {
 		return r.ensureProfConfEnabled(ctx)
 	} else {
 		return r.ensureProfConfDisabled(ctx)
@@ -225,8 +223,9 @@ func (r *MachineConfigReconciler) ensureProfConfEnabled(ctx context.Context) (er
 	setEnabledCondition += modCount
 
 	if setEnabledCondition > 0 {
-		cond := v1alpha1.NewNodeObservabilityMachineConfigCondition(v1alpha1.DebugEnabled, v1alpha1.ConditionInProgress, Empty)
-		v1alpha1.SetNodeObservabilityMachineConfigCondition(&r.CtrlConfig.Status, *cond)
+		// FIXME: missing msg
+		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled, metav1.ConditionTrue, v1alpha1.ReasonEnabled, "")
+		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, "")
 	}
 
 	return
@@ -242,9 +241,11 @@ func (r *MachineConfigReconciler) ensureProfConfDisabled(ctx context.Context) (e
 		return r.revertNodeUnlabeling(ctx)
 	}
 
+	// FIXME: shouldn't these conditions be always set to False, when ensureProfConfDisabled() is called?
 	if modCount > 0 {
-		cond := v1alpha1.NewNodeObservabilityMachineConfigCondition(v1alpha1.DebugDisabled, v1alpha1.ConditionInProgress, Empty)
-		v1alpha1.SetNodeObservabilityMachineConfigCondition(&r.CtrlConfig.Status, *cond)
+		// FIXME: missing msg
+		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled, metav1.ConditionFalse, v1alpha1.ReasonDisabled, "")
+		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonDisabled, "")
 	}
 
 	return nil
@@ -295,14 +296,13 @@ func (r *MachineConfigReconciler) ensureReqMCPNotExists(ctx context.Context) err
 
 func (r *MachineConfigReconciler) monitorProgress(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 
-	if v1alpha1.IsNodeObservabilityMachineConfigConditionInProgress(r.CtrlConfig.Status.Conditions, v1alpha1.DebugEnabled) {
+	if r.CtrlConfig.Status.IsDebuggingEnabled() {
 		if result, err = r.CheckNodeObservabilityMCPStatus(ctx); err != nil {
 			return
 		}
 	}
 
-	if v1alpha1.IsNodeObservabilityMachineConfigConditionInProgress(r.CtrlConfig.Status.Conditions, v1alpha1.DebugDisabled) ||
-		v1alpha1.IsNodeObservabilityMachineConfigConditionInProgress(r.CtrlConfig.Status.Conditions, v1alpha1.Failed) {
+	if !r.CtrlConfig.Status.IsDebuggingEnabled() || r.CtrlConfig.Status.IsDebuggingFailed() {
 		if result, err = r.checkWorkerMCPStatus(ctx); err != nil {
 			return
 		}
