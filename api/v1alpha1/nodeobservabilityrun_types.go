@@ -31,7 +31,7 @@ type NodeObservabilityRunSpec struct {
 	// if not set to crioKubeletProfile.
 	// valid values are one of [crioKubeletProfile,eBPFProfile,E2ETest]
 	//
-	// +kubebuilder:validation:Enum=crioKubeletProfile;eBPFprofile;e2e-test;
+	// +kubebuilder:validation:Enum=crioKubeletProfile;eBPFprofile;e2e-test;disabled;
 	// +kubebuilder:validation:Required
 	// +required
 	RunType NodeObservabilityRunType `json:"runType,omitempty"`
@@ -54,6 +54,7 @@ const (
 	CrioKubeletProfile NodeObservabilityRunType = "crioKubeletProfile"
 	EbpfProfile        NodeObservabilityRunType = "eBPFprofile"
 	E2ETest            NodeObservabilityRunType = "e2e-test"
+	Disabled           NodeObservabilityRunType = "disabled"
 )
 
 // NodeObservabilityRunStatus defines the observed state of NodeObservabilityRun

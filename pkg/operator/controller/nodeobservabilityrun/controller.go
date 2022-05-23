@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
@@ -87,17 +88,31 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 		return
 	}
 
+	instanceCopy := &nodeobservabilityv1alpha1.NodeObservabilityRun{}
 	defer func() {
-		errUpdate := r.Status().Update(ctx, instance, &client.UpdateOptions{})
-		if errUpdate != nil {
-			r.Log.Error(err, "failed to update status")
-			err = utilerrors.NewAggregate([]error{err, errUpdate})
+		if !reflect.DeepEqual(instance.Spec, instanceCopy.Spec) {
+			r.Log.V(3).Info("nodeobservabilityrun spec found modified, updating changes")
+			instanceCopy = &nodeobservabilityv1alpha1.NodeObservabilityRun{}
+			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				if err := r.Get(ctx, req.NamespacedName, instanceCopy); err != nil {
+					r.Log.Error(err, "failed to fetch nodeobservabilityrun resource for updating")
+					return err
+				}
+
+				instance.Spec.DeepCopyInto(&instanceCopy.Spec)
+				if err := r.Update(ctx, instanceCopy); err != nil {
+					r.Log.Error(err, "failed to update nodeobservabilityrun resource")
+					return err
+				}
+
+				return nil
+			})
 		}
 	}()
 
 	// interact with MCO only if we are executing CrioKubeletProfile runs
 	// also bypass if the runtype is e2e-test
-	if instance.Spec.RunType != nodeobservabilityv1alpha1.E2ETest && (instance.Spec.RunType == nodeobservabilityv1alpha1.CrioKubeletProfile) {
+	if instance.Spec.RunType == nodeobservabilityv1alpha1.CrioKubeletProfile {
 		if err := r.ensureNOMC(ctx); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -124,6 +139,7 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 	// continue once machineconfigpool has been updated successfully
 	if finished(instance) {
 		r.Log.V(3).Info("Run for this instance has been completed already")
+		instance.Spec.RunType = nodeobservabilityv1alpha1.Disabled
 		// check the CR if the RestoreMCOStateAfterRun flag is set
 		if instance.Spec.RestoreMCOStateAfterRun {
 			err := r.disableCrioKubeletProfile(ctx)
@@ -144,8 +160,6 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 						return ctrl.Result{}, err
 					}
 				}
-
-				instance.Spec.RunType = ""
 			} else {
 				r.Log.Info("NodeObservabilityMachineConfig CrioKubeletProfile not disabled yet")
 				return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
@@ -153,6 +167,14 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 		}
 		return
 	}
+
+	defer func() {
+		errUpdate := r.Status().Update(ctx, instance, &client.UpdateOptions{})
+		if errUpdate != nil {
+			r.Log.Error(err, "failed to update status")
+			err = utilerrors.NewAggregate([]error{err, errUpdate})
+		}
+	}()
 
 	if inProgress(instance) {
 		r.Log.V(3).Info("Run is in progress")
