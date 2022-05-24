@@ -93,7 +93,6 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	defer func() {
-		r.Log.Info("monitorPregress", "Status", r.CtrlConfig.Status)
 		errUpdate := r.Status().Update(ctx, r.CtrlConfig)
 		if errUpdate != nil {
 			r.Log.Error(errUpdate, "failed to update status")
