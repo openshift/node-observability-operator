@@ -58,33 +58,33 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return
 	}
 
-	r.Log.Info("Reconciling MachineConfig of Nodeobservability operator")
+	r.Log.V(3).Info("Reconciling NodeObservabilityMachineConfig of Nodeobservability operator")
 
-	// Fetch the nodeobservability.olm.openshift.io/machineconfig CR
+	// Fetch the nodeobservability.olm.openshift.io/nodeobservabilitymachineconfig CR
 	r.CtrlConfig = &v1alpha1.NodeObservabilityMachineConfig{}
 	if err = r.Get(ctx, req.NamespacedName, r.CtrlConfig); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
-			r.Log.Info("MachineConfig resource not found. Ignoring could have been deleted", "name", req.NamespacedName.Name)
+			r.Log.Info("NodeObservabilityMachineConfig resource not found. Ignoring could have been deleted", "name", req.NamespacedName.Name)
 			return ctrl.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
-		r.Log.Error(err, "failed to fetch MachineConfig")
+		r.Log.Error(err, "failed to fetch NodeObservabilityMachineConfig")
 		return ctrl.Result{RequeueAfter: defaultRequeueTime}, err
 	}
-	r.Log.V(3).Info("MachineConfig resource found")
+	r.Log.V(3).Info("NodeObservabilityMachineConfig resource found")
 
 	if !r.CtrlConfig.DeletionTimestamp.IsZero() {
-		r.Log.Info("MachineConfig resource marked for deletetion, cleaning up")
+		r.Log.Info("NodeObservabilityMachineConfig resource marked for deletetion, cleaning up")
 		return r.cleanUp(ctx, req)
 	}
 
 	// Set finalizers on the NodeObservabilityMachineConfig resource
 	updated, err := r.withFinalizers(ctx, req)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to update MachineConfig with finalizers: %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to update NodeObservabilityMachineConfig with finalizers: %w", err)
 	}
 	updated.DeepCopyInto(r.CtrlConfig)
 
@@ -161,8 +161,9 @@ func (r *MachineConfigReconciler) cleanUp(ctx context.Context, req ctrl.Request)
 	if removeFinalizer && hasFinalizer(r.CtrlConfig) {
 		// Remove the finalizer.
 		if _, err := r.withoutFinalizers(ctx, req, finalizer); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to remove finalizer from MachineConfig %s: %w", r.CtrlConfig.Name, err)
+			return ctrl.Result{}, fmt.Errorf("failed to remove finalizer from NodeObservabilityMachineConfig %s: %w", r.CtrlConfig.Name, err)
 		}
+		r.Log.Info("removed finalzer from NodeObservabilityMachineConfig resource, cleanup complete")
 	}
 
 	return ctrl.Result{}, nil
@@ -275,7 +276,7 @@ func (r *MachineConfigReconciler) inspectProfilingMCReq(ctx context.Context) (bo
 
 	condition := v1alpha1.IsNodeObservabilityMachineConfigConditionSetInProgress(r.CtrlConfig.Status.Conditions)
 	if condition != Empty {
-		r.Log.Info("previous reconcile initiated operation in progress, changes not applied",
+		r.Log.V(3).Info("previous reconcile initiated operation in progress, changes not applied",
 			"condition", condition)
 		return false, nil
 	}

@@ -160,7 +160,7 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 	mcp := &mcv1.MachineConfigPool{}
 	if err := r.Get(ctx, types.NamespacedName{Name: ProfilingMCPName}, mcp); err != nil {
 		if errors.IsNotFound(err) {
-			r.Log.Info("profiling MCP does not exist, skipping status check", "MCP", ProfilingMCPName)
+			r.Log.V(3).Info("profiling MCP does not exist, skipping status check", "MCP", ProfilingMCPName)
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
