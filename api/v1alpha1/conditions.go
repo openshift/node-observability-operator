@@ -40,7 +40,7 @@ const (
 	//   Reason:
 	//   - In progress
 	//   - Failed
-	//   - Enabled: config successfully applied and ready
+	//   - Ready: config successfully applied and ready
 	DebugReady string = "Ready"
 )
 
@@ -48,6 +48,8 @@ const (
 	ReasonEnabled string = "Enabled"
 
 	ReasonDisabled string = "Disabled"
+
+	ReasonReady string = "Ready"
 
 	ReasonFailed string = "Failed"
 

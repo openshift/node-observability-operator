@@ -192,7 +192,7 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 		msg := "machine config update to enable debugging completed on all machines"
 		r.Log.Info(msg)
 
-		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionTrue, v1alpha1.ReasonEnabled, msg)
+		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionTrue, v1alpha1.ReasonReady, msg)
 
 		r.Unlock()
 		return ctrl.Result{}, nil
