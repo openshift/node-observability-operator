@@ -23,6 +23,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -91,7 +92,21 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
 	}
 
-	return r.monitorProgress(ctx, req)
+	defer func() {
+		r.Log.Info("monitorPregress", "Status", r.CtrlConfig.Status)
+		errUpdate := r.Status().Update(ctx, r.CtrlConfig)
+		if errUpdate != nil {
+			r.Log.Error(errUpdate, "failed to update status")
+			err = utilerrors.NewAggregate([]error{err, errUpdate})
+		}
+	}()
+
+	res, err := r.monitorProgress(ctx, req)
+	if err != nil {
+		r.Log.Error(err, "failed to fetch MachineConfigPool status")
+	}
+
+	return res, err
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -306,11 +321,6 @@ func (r *MachineConfigReconciler) monitorProgress(ctx context.Context, req ctrl.
 		if result, err = r.checkWorkerMCPStatus(ctx); err != nil {
 			return
 		}
-	}
-
-	if err = r.Status().Update(ctx, r.CtrlConfig); err != nil {
-		r.Log.Error(err, "failed to update nodeobservabilitymachineconfig resource status")
-		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
 	}
 
 	return

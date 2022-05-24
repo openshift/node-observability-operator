@@ -53,7 +53,7 @@ const (
 
 	ReasonFailed string = "Failed"
 
-	ReasonInProgress string = "In progress"
+	ReasonInProgress string = "InProgress"
 )
 
 type ConditionalStatus struct {
@@ -61,9 +61,9 @@ type ConditionalStatus struct {
 }
 
 func (c *ConditionalStatus) GetCondition(t string) *metav1.Condition {
-	for _, cond := range c.Conditions {
+	for i, cond := range c.Conditions {
 		if cond.Type == t {
-			return &cond
+			return &c.Conditions[i]
 		}
 	}
 	return nil
