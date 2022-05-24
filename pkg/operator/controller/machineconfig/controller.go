@@ -25,8 +25,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/go-logr/logr"
+	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 
 	"github.com/openshift/node-observability-operator/api/v1alpha1"
 )
@@ -37,7 +39,7 @@ import (
 //+kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigs,verbs=get;list;watch;create;delete
 //+kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigpools,verbs=get;list;watch;create;delete
 //+kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch;patch
-//+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+//+kubebuilder:rbac:groups="",resources=events,verbs=create
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -56,7 +58,7 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return
 	}
 
-	r.Log.V(3).Info("Reconciling MachineConfig of Nodeobservability operator")
+	r.Log.Info("Reconciling MachineConfig of Nodeobservability operator")
 
 	// Fetch the nodeobservability.olm.openshift.io/machineconfig CR
 	r.CtrlConfig = &v1alpha1.NodeObservabilityMachineConfig{}
@@ -96,8 +98,9 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}
 	defer func() {
-		v1alpha1.UpdateLastReconcileTime(&r.CtrlConfig.Status)
+		r.CtrlConfig.Status.UpdateLastReconcileTime()
 		if err = r.updateStatus(ctx); err != nil {
+			result = ctrl.Result{RequeueAfter: 1 * time.Minute}
 			r.Log.Error(err, "failed to update reconciliation time")
 		}
 	}()
@@ -122,6 +125,9 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 func (r *MachineConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.NodeObservabilityMachineConfig{}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		Owns(&mcv1.MachineConfig{}).
+		Owns(&mcv1.MachineConfigPool{}).
 		Complete(r)
 }
 
@@ -306,7 +312,7 @@ func (r *MachineConfigReconciler) ensureProfConfEnabled(ctx context.Context) (bo
 	if setEnabledCondition > 0 {
 		cond := v1alpha1.NewNodeObservabilityMachineConfigCondition(v1alpha1.DebugEnabled, v1alpha1.ConditionInProgress, Empty)
 		v1alpha1.SetNodeObservabilityMachineConfigCondition(&r.CtrlConfig.Status, *cond)
-		return true, r.updateStatus(ctx)
+		return true, nil
 	}
 
 	return false, nil
@@ -326,7 +332,7 @@ func (r *MachineConfigReconciler) ensureProfConfDisabled(ctx context.Context) (b
 	if modCount > 0 {
 		cond := v1alpha1.NewNodeObservabilityMachineConfigCondition(v1alpha1.DebugDisabled, v1alpha1.ConditionInProgress, Empty)
 		v1alpha1.SetNodeObservabilityMachineConfigCondition(&r.CtrlConfig.Status, *cond)
-		return true, r.updateStatus(ctx)
+		return true, nil
 	}
 
 	return false, nil
@@ -388,10 +394,6 @@ func (r *MachineConfigReconciler) monitorProgress(ctx context.Context) (result c
 		if result, err = r.checkWorkerMCPStatus(ctx); err != nil {
 			return
 		}
-	}
-
-	if err := r.updateStatus(ctx); err != nil {
-		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
 	}
 
 	return

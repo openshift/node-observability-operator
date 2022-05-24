@@ -31,7 +31,6 @@ rules:
   - events
   verbs:
   - create
-  - patch
 - apiGroups:
   - authentication.k8s.io
   resources:

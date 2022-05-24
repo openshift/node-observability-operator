@@ -21,7 +21,7 @@ import (
 )
 
 // UpdateLastReconcileTime is for updating LastReconcile in NodeObservabilityMachineConfigStatus
-func UpdateLastReconcileTime(status *NodeObservabilityMachineConfigStatus) {
+func (status *NodeObservabilityMachineConfigStatus) UpdateLastReconcileTime() {
 	status.LastReconcile = metav1.Now()
 }
 
