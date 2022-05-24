@@ -17,7 +17,7 @@ import (
 	"context"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -30,31 +30,36 @@ var (
 	ctx = context.Background()
 )
 
-var _ = Describe("Node Observability Operator end-to-end test suite", func() {
+var _ = Describe("Node Observability Operator end-to-end test suite", Ordered, func() {
+	var (
+		nodeobservability *operatorv1alpha1.NodeObservability
+	)
 
+	BeforeAll(func() {
+		nodeobservability = testNodeObservability(defaultTestName)
+		By("deploying Node Observability Agents", func() {
+			Expect(k8sClient.Create(ctx, nodeobservability)).To(Succeed(), "test NodeObservability resource created")
+			Eventually(func() bool {
+				ds := &appsv1.DaemonSet{}
+				dsNamespacedName := types.NamespacedName{
+					Name:      "node-observability-ds",
+					Namespace: testNamespace,
+				}
+				Expect(client.IgnoreNotFound(k8sClient.Get(ctx, dsNamespacedName, ds))).To(Succeed())
+				return ds.Status.NumberReady != 0 && ds.Status.DesiredNumberScheduled == ds.Status.NumberReady
+			}, 60, time.Second).Should(BeTrue(), "number of ready agents != number of desired agents")
+		})
+	})
 	Context("Happy Path scenario - single scrape is initiated and it is expected to succeed", func() {
 		var (
-			nodeobservability    *operatorv1alpha1.NodeObservability
 			nodeobservabilityRun *operatorv1alpha1.NodeObservabilityRun
 		)
 		BeforeEach(func() {
-			nodeobservability = testNodeObservability(defaultTestName)
 			nodeobservabilityRun = testNodeObservabilityRun(defaultTestName)
+
 		})
 
 		It("runs Node Observability scrape", func() {
-			By("deploying Node Observability Agents", func() {
-				Expect(k8sClient.Create(ctx, nodeobservability)).To(Succeed(), "test NodeObservability resource created")
-				Eventually(func() bool {
-					ds := &appsv1.DaemonSet{}
-					dsNamespacedName := types.NamespacedName{
-						Name:      "node-observability-ds",
-						Namespace: testNamespace,
-					}
-					Expect(client.IgnoreNotFound(k8sClient.Get(ctx, dsNamespacedName, ds))).To(Succeed())
-					return ds.Status.NumberReady != 0 && ds.Status.DesiredNumberScheduled == ds.Status.NumberReady
-				}, 60, time.Second).Should(BeTrue(), "number of ready agents != number of desired agents")
-			})
 
 			By("by initiating the scrape", func() {
 				Expect(k8sClient.Create(ctx, nodeobservabilityRun)).To(Succeed(), "test NodeObservabilityRun resource created")
@@ -76,7 +81,6 @@ var _ = Describe("Node Observability Operator end-to-end test suite", func() {
 		})
 
 		AfterEach(func() {
-			Expect(k8sClient.Delete(ctx, nodeobservability)).To(Succeed())
 			Expect(k8sClient.Delete(ctx, nodeobservabilityRun)).To(Succeed())
 		})
 	})
@@ -85,32 +89,18 @@ var _ = Describe("Node Observability Operator end-to-end test suite", func() {
 		const (
 			run1     = "run1"
 			run2     = "run2"
-			testName = "concurrent-runs"
+			testName = defaultTestName
 		)
 		var (
-			nodeobservability     *operatorv1alpha1.NodeObservability
 			nodeobservabilityRun1 *operatorv1alpha1.NodeObservabilityRun
 			nodeobservabilityRun2 *operatorv1alpha1.NodeObservabilityRun
 		)
 		BeforeEach(func() {
-			nodeobservability = testNodeObservability(testName)
 			nodeobservabilityRun1 = testNodeObservabilityRun(run1)
 			nodeobservabilityRun2 = testNodeObservabilityRun(run2)
 		})
 
 		It("runs Node Observability scrape", func() {
-			By("deploying Node Observability Agents", func() {
-				Expect(k8sClient.Create(ctx, nodeobservability)).To(Succeed(), "test NodeObservability resource created")
-				Eventually(func() bool {
-					ds := &appsv1.DaemonSet{}
-					dsNamespacedName := types.NamespacedName{
-						Name:      "node-observability-ds",
-						Namespace: testNamespace,
-					}
-					Expect(client.IgnoreNotFound(k8sClient.Get(ctx, dsNamespacedName, ds))).To(Succeed())
-					return ds.Status.NumberReady != 0 && ds.Status.DesiredNumberScheduled == ds.Status.NumberReady
-				}, 60, time.Second).Should(BeTrue())
-			})
 
 			By("by creating NORs run2 right after previous test", func() {
 				Expect(k8sClient.Create(ctx, nodeobservabilityRun1)).To(Succeed(), "test NodeObservabilityRun resource created")
@@ -145,10 +135,12 @@ var _ = Describe("Node Observability Operator end-to-end test suite", func() {
 			})
 		})
 		AfterEach(func() {
-			Expect(k8sClient.Delete(ctx, nodeobservability)).To(Succeed())
 			Expect(k8sClient.Delete(ctx, nodeobservabilityRun1)).To(Succeed())
 			Expect(k8sClient.Delete(ctx, nodeobservabilityRun2)).To(Succeed())
 		})
 
+	})
+	AfterAll(func() {
+		Expect(k8sClient.Delete(ctx, nodeobservability)).To(Succeed())
 	})
 })
