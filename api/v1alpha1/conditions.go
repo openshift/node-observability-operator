@@ -23,10 +23,24 @@ import (
 const (
 	// DebugEnabled is the condition type used to inform state of enabling the
 	// debugging configuration for the requested services
+	// DebugEnabled has the following options:
+	//   Status:
+	//   - True
+	//   - False
+	//   Reason:
+	//   - Enabled
+	//   - Disabled
 	DebugEnabled string = "DebugEnabled"
 
 	// DebugReady is the condition type used to inform state of readiness of the
 	// debugging configuration for the requested services
+	//   Status:
+	//   - True
+	//   - False
+	//   Reason:
+	//   - In progress
+	//   - Failed
+	//   - Enabled: config successfully applied and ready
 	DebugReady string = "Ready"
 )
 
@@ -35,7 +49,7 @@ const (
 
 	ReasonDisabled string = "Disabled"
 
-	ReasonFailed string = "Debugging failed"
+	ReasonFailed string = "Failed"
 
 	ReasonInProgress string = "In progress"
 )
