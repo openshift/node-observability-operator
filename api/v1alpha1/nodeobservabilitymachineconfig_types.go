@@ -66,7 +66,7 @@ type NodeObservabilityMachineConfigList struct {
 
 // IsMachineConfigInProgress returns true if MachineConfig configuration is being applied
 func (s *NodeObservabilityMachineConfigStatus) IsMachineConfigInProgress() bool {
-	if cond := s.GetCondition(DebugReady); cond != nil && cond.Status == metav1.ConditionTrue && cond.Reason == ReasonInProgress {
+	if cond := s.GetCondition(DebugReady); cond != nil && cond.Status == metav1.ConditionFalse && cond.Reason == ReasonInProgress {
 		return true
 	}
 	return false
