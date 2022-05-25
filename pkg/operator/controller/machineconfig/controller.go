@@ -87,9 +87,17 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 	updated.DeepCopyInto(r.CtrlConfig)
 
-	if err := r.inspectProfilingMCReq(ctx); err != nil {
+	requeue, err := r.inspectProfilingMCReq(ctx)
+	if err != nil {
 		r.Log.Error(err, "failed to reconcile requested configuration")
 		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
+	}
+	// if the configuration changes were made in the current reconciling
+	// will requeue to avoid the existing status of MCP to be considered
+	// and allow MCO to pick the changes and update correct state
+	if requeue {
+		r.Log.Info("updated configurations, reconcile again in 2 minutes")
+		return ctrl.Result{RequeueAfter: 2 * time.Minute}, nil
 	}
 
 	defer func() {
@@ -200,12 +208,20 @@ func hasFinalizer(mc *v1alpha1.NodeObservabilityMachineConfig) bool {
 	return hasFinalizer
 }
 
+func (r *MachineConfigReconciler) updateStatus(ctx context.Context) error {
+	if err := r.Status().Update(ctx, r.CtrlConfig); err != nil {
+		r.Log.Error(err, "failed to update nodeobservabilitymachineconfig resource status")
+		return err
+	}
+	return nil
+}
+
 // inspectProfilingMCReq is for checking and creating required configs
 // if debugging is enabled
-func (r *MachineConfigReconciler) inspectProfilingMCReq(ctx context.Context) error {
+func (r *MachineConfigReconciler) inspectProfilingMCReq(ctx context.Context) (bool, error) {
 	if r.CtrlConfig.Status.IsMachineConfigInProgress() {
 		r.Log.Info("previous reconcile initiated operation in progress, changes not applied")
-		return nil
+		return false, nil
 	}
 
 	if r.CtrlConfig.Spec.Debug.EnableCrioProfiling {
@@ -216,23 +232,24 @@ func (r *MachineConfigReconciler) inspectProfilingMCReq(ctx context.Context) err
 }
 
 // ensureProfConfEnabled is for enabling the profiling of requested services
-func (r *MachineConfigReconciler) ensureProfConfEnabled(ctx context.Context) (err error) {
+func (r *MachineConfigReconciler) ensureProfConfEnabled(ctx context.Context) (bool, error) {
 
 	var modCount, setEnabledCondition int
+	var err error
 	if modCount, err = r.ensureReqNodeLabelExists(ctx); err != nil {
 		r.Log.Error(err, "failed to ensure nodes are labelled")
 		// fails for even one node revert changes made
-		return r.revertNodeLabeling(ctx)
+		return true, r.revertNodeLabeling(ctx)
 	}
 	setEnabledCondition += modCount
 	if modCount, err = r.ensureReqMCPExists(ctx); err != nil {
 		r.Log.Error(err, "failed to ensure mcp exists")
-		return
+		return false, err
 	}
 	setEnabledCondition += modCount
 	if modCount, err = r.ensureReqMCExists(ctx); err != nil {
 		r.Log.Error(err, "failed to ensure mc exists")
-		return
+		return false, err
 	}
 	setEnabledCondition += modCount
 
@@ -240,19 +257,21 @@ func (r *MachineConfigReconciler) ensureProfConfEnabled(ctx context.Context) (er
 		// FIXME: missing msg
 		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled, metav1.ConditionTrue, v1alpha1.ReasonEnabled, "")
 		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, "")
+		return true, r.updateStatus(ctx)
 	}
 
-	return
+	return false, nil
 }
 
 // ensureProfConfDisabled is for disabling the profiling of requested services
-func (r *MachineConfigReconciler) ensureProfConfDisabled(ctx context.Context) (err error) {
+func (r *MachineConfigReconciler) ensureProfConfDisabled(ctx context.Context) (bool, error) {
 
 	modCount := 0
+	var err error
 	if modCount, err = r.ensureReqNodeLabelNotExists(ctx); err != nil {
 		r.Log.Error(err, "failed to ensure nodes are not labelled")
 		// fails for even one node revert changes made
-		return r.revertNodeUnlabeling(ctx)
+		return true, r.revertNodeUnlabeling(ctx)
 	}
 
 	// FIXME: shouldn't these conditions be always set to False, when ensureProfConfDisabled() is called?
@@ -260,9 +279,10 @@ func (r *MachineConfigReconciler) ensureProfConfDisabled(ctx context.Context) (e
 		// FIXME: missing msg
 		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled, metav1.ConditionFalse, v1alpha1.ReasonDisabled, "")
 		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonDisabled, "")
+		return true, r.updateStatus(ctx)
 	}
 
-	return nil
+	return false, nil
 }
 
 // ensureReqMCExists is for ensuring the required machine config exists
@@ -320,6 +340,10 @@ func (r *MachineConfigReconciler) monitorProgress(ctx context.Context, req ctrl.
 		if result, err = r.checkWorkerMCPStatus(ctx); err != nil {
 			return
 		}
+	}
+
+	if err := r.updateStatus(ctx); err != nil {
+		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
 	}
 
 	return
