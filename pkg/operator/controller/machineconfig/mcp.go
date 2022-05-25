@@ -265,7 +265,7 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdated) {
 
 		r.Unlock()
-		if err := r.disableCrioProf(ctx); err != nil {
+		if err := r.ensureReqMCNotExists(ctx); err != nil {
 			return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
 		}
 		if err := r.ensureReqMCPNotExists(ctx); err != nil {

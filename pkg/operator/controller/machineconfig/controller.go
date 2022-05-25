@@ -372,10 +372,7 @@ func (r *MachineConfigReconciler) ensureReqMCExists(ctx context.Context) (int, e
 // ensureReqMCNotExists is for ensuring the machine config created when
 // profiling was enabled is indeed removed
 func (r *MachineConfigReconciler) ensureReqMCNotExists(ctx context.Context) error {
-	if !r.CtrlConfig.Spec.Debug.EnableCrioProfiling {
-		return r.disableCrioProf(ctx)
-	}
-	return nil
+	return r.disableCrioProf(ctx)
 }
 
 // ensureReqMCPExists is for ensuring the required machine config pool exists
