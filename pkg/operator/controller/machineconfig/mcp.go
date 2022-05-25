@@ -209,6 +209,7 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 				mcp.Name, mcp.Status.DegradedMachineCount)
 			// FIXME: inProgress or failed?
 			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, msg)
+
 			r.Unlock()
 			return ctrl.Result{RequeueAfter: defaultRequeueTime},
 				fmt.Errorf("failed to revert changes to recover degraded machines: %w", err)
@@ -240,6 +241,7 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 		r.Log.Info("NodeObservabilityMachineConfig current condition "+
 			"does not require MCP status check",
 			"MCP", mcp.Name, "conditions", r.CtrlConfig.Status.Conditions)
+
 		r.Unlock()
 		return ctrl.Result{}, nil
 	}

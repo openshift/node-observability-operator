@@ -109,6 +109,7 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			return ctrl.Result{Requeue: true, RequeueAfter: next}, nil
 		}
 	}
+
 	defer func() {
 		r.CtrlConfig.Status.UpdateLastReconcileTime()
 		if errUpdate := r.updateStatus(ctx); errUpdate != nil {
