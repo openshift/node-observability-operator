@@ -145,7 +145,7 @@ func (r *NodeObservabilityRunReconciler) deleteNOMC(ctx context.Context, mc *v1a
 	return nil
 }
 
-func (r *NodeObservabilityRunReconciler) checkNOMCStatus(ctx context.Context, condType v1alpha1.NodeObservabilityMachineConfigConditionType) (bool, error) {
+func (r *NodeObservabilityRunReconciler) checkNOMCStatus(ctx context.Context, isEnabled bool) (bool, error) {
 	nameSpace := types.NamespacedName{Name: MCOName}
 	nomc, err := r.fetchNOMC(ctx, nameSpace)
 	if err != nil {
@@ -157,7 +157,11 @@ func (r *NodeObservabilityRunReconciler) checkNOMCStatus(ctx context.Context, co
 		return false, nil
 	}
 
-	return v1alpha1.IsNodeObservabilityMachineConfigConditionAsExpected(nomc.Status.Conditions, condType)
+	if isEnabled {
+		return nomc.Status.IsDebuggingEnabled() && !nomc.Status.IsMachineConfigInProgress(), nil
+	}
+
+	return !nomc.Status.IsDebuggingEnabled() && !nomc.Status.IsMachineConfigInProgress(), nil
 }
 
 func (r *NodeObservabilityRunReconciler) disableCrioKubeletProfile(ctx context.Context) error {

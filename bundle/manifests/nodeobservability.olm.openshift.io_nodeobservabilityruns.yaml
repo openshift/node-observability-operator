@@ -61,7 +61,6 @@ spec:
                 - crioKubeletProfile
                 - eBPFprofile
                 - e2e-test
-                - disabled
                 type: string
             required:
             - nodeObservabilityRef

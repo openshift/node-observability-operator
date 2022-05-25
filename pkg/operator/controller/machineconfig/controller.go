@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -98,7 +100,20 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{RequeueAfter: 2 * time.Minute}, nil
 	}
 
-	return r.monitorProgress(ctx, req)
+	defer func() {
+		errUpdate := r.Status().Update(ctx, r.CtrlConfig)
+		if errUpdate != nil {
+			r.Log.Error(errUpdate, "failed to update status")
+			err = utilerrors.NewAggregate([]error{err, errUpdate})
+		}
+	}()
+
+	res, err := r.monitorProgress(ctx, req)
+	if err != nil {
+		r.Log.Error(err, "failed to fetch MachineConfigPool status")
+	}
+
+	return res, err
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -204,15 +219,12 @@ func (r *MachineConfigReconciler) updateStatus(ctx context.Context) error {
 // inspectProfilingMCReq is for checking and creating required configs
 // if debugging is enabled
 func (r *MachineConfigReconciler) inspectProfilingMCReq(ctx context.Context) (bool, error) {
-
-	condition := v1alpha1.IsNodeObservabilityMachineConfigConditionSetInProgress(r.CtrlConfig.Status.Conditions)
-	if condition != Empty {
-		r.Log.Info("previous reconcile initiated operation in progress, changes not applied",
-			"condition", condition)
+	if r.CtrlConfig.Status.IsMachineConfigInProgress() {
+		r.Log.Info("previous reconcile initiated operation in progress, changes not applied")
 		return false, nil
 	}
 
-	if r.CtrlConfig.Spec.Debug != (v1alpha1.NodeObservabilityDebug{}) {
+	if r.CtrlConfig.Spec.Debug.EnableCrioProfiling {
 		return r.ensureProfConfEnabled(ctx)
 	} else {
 		return r.ensureProfConfDisabled(ctx)
@@ -242,8 +254,9 @@ func (r *MachineConfigReconciler) ensureProfConfEnabled(ctx context.Context) (bo
 	setEnabledCondition += modCount
 
 	if setEnabledCondition > 0 {
-		cond := v1alpha1.NewNodeObservabilityMachineConfigCondition(v1alpha1.DebugEnabled, v1alpha1.ConditionInProgress, Empty)
-		v1alpha1.SetNodeObservabilityMachineConfigCondition(&r.CtrlConfig.Status, *cond)
+		// FIXME: missing msg
+		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled, metav1.ConditionTrue, v1alpha1.ReasonEnabled, "")
+		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, "")
 		return true, r.updateStatus(ctx)
 	}
 
@@ -261,9 +274,11 @@ func (r *MachineConfigReconciler) ensureProfConfDisabled(ctx context.Context) (b
 		return true, r.revertNodeUnlabeling(ctx)
 	}
 
+	// FIXME: shouldn't these conditions be always set to False, when ensureProfConfDisabled() is called?
 	if modCount > 0 {
-		cond := v1alpha1.NewNodeObservabilityMachineConfigCondition(v1alpha1.DebugDisabled, v1alpha1.ConditionInProgress, Empty)
-		v1alpha1.SetNodeObservabilityMachineConfigCondition(&r.CtrlConfig.Status, *cond)
+		// FIXME: missing msg
+		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled, metav1.ConditionFalse, v1alpha1.ReasonDisabled, "")
+		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonDisabled, "")
 		return true, r.updateStatus(ctx)
 	}
 
@@ -315,14 +330,13 @@ func (r *MachineConfigReconciler) ensureReqMCPNotExists(ctx context.Context) err
 
 func (r *MachineConfigReconciler) monitorProgress(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 
-	if v1alpha1.IsNodeObservabilityMachineConfigConditionInProgress(r.CtrlConfig.Status.Conditions, v1alpha1.DebugEnabled) {
+	if r.CtrlConfig.Status.IsDebuggingEnabled() {
 		if result, err = r.CheckNodeObservabilityMCPStatus(ctx); err != nil {
 			return
 		}
 	}
 
-	if v1alpha1.IsNodeObservabilityMachineConfigConditionInProgress(r.CtrlConfig.Status.Conditions, v1alpha1.DebugDisabled) ||
-		v1alpha1.IsNodeObservabilityMachineConfigConditionInProgress(r.CtrlConfig.Status.Conditions, v1alpha1.Failed) {
+	if !r.CtrlConfig.Status.IsDebuggingEnabled() || r.CtrlConfig.Status.IsDebuggingFailed() {
 		if result, err = r.checkWorkerMCPStatus(ctx); err != nil {
 			return
 		}

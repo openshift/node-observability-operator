@@ -1,0 +1,6 @@
+
+[allowlist]
+  description = "key pair and issuer used in testing"
+  paths = [
+    '''hack/certs''',
+  ]
