@@ -168,7 +168,7 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 
 	r.Lock()
 
-	if !v1alpha1.IsNodeObservabilityMachineConfigConditionInProgress(r.CtrlConfig.Status.Conditions, v1alpha1.DebugEnabled) {
+	if !r.CtrlConfig.Status.IsDebuggingEnabled() {
 		r.Log.Info("NodeObservabilityMachineConfig current condition "+
 			"does not require MCP status check",
 			"MCP", mcp.Name, "conditions", r.CtrlConfig.Status.Conditions)
@@ -181,9 +181,7 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 		mcp.Status.DegradedMachineCount == 0 {
 		msg := "machine config update to enable debugging in progress"
 		r.Log.Info(msg)
-		cond := v1alpha1.NewNodeObservabilityMachineConfigCondition(v1alpha1.DebugEnabled,
-			v1alpha1.ConditionInProgress, msg)
-		v1alpha1.SetNodeObservabilityMachineConfigCondition(&r.CtrlConfig.Status, *cond)
+		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, msg)
 
 		r.Unlock()
 		return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
@@ -194,8 +192,7 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 		msg := "machine config update to enable debugging completed on all machines"
 		r.Log.Info(msg)
 
-		cond := v1alpha1.NewNodeObservabilityMachineConfigCondition(v1alpha1.DebugEnabled, v1alpha1.ConditionTrue, msg)
-		v1alpha1.SetNodeObservabilityMachineConfigCondition(&r.CtrlConfig.Status, *cond)
+		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionTrue, v1alpha1.ReasonReady, msg)
 
 		r.Unlock()
 		return ctrl.Result{}, nil
@@ -208,25 +205,19 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 		r.Unlock()
 		if err := r.revertEnabledProfConf(ctx); err != nil {
 			r.Lock()
-			cond := v1alpha1.NewNodeObservabilityMachineConfigCondition(
-				v1alpha1.DebugEnabled,
-				v1alpha1.ConditionInProgress,
-				fmt.Sprintf("%s MCP has %d machines in degraded state. "+
-					"Reverting changes failed, reconcile again",
-					mcp.Name, mcp.Status.DegradedMachineCount))
-			v1alpha1.SetNodeObservabilityMachineConfigCondition(&r.CtrlConfig.Status, *cond)
-
+			msg := fmt.Sprintf("%s MCP has %d machines in degraded state. Reverting changes failed, reconcile again",
+				mcp.Name, mcp.Status.DegradedMachineCount)
+			// FIXME: inProgress or failed?
+			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, msg)
 			r.Unlock()
 			return ctrl.Result{RequeueAfter: defaultRequeueTime},
 				fmt.Errorf("failed to revert changes to recover degraded machines: %w", err)
 		}
 
 		r.Lock()
-		cond := v1alpha1.NewNodeObservabilityMachineConfigCondition(v1alpha1.Failed,
-			v1alpha1.ConditionInProgress,
-			fmt.Sprintf("%s MCP has %d machines in degraded state, reverted changes", mcp.Name, mcp.Status.DegradedMachineCount))
-		v1alpha1.SetNodeObservabilityMachineConfigCondition(&r.CtrlConfig.Status, *cond)
-
+		msg := fmt.Sprintf("%s MCP has %d machines in degraded state, reverted changes", mcp.Name, mcp.Status.DegradedMachineCount)
+		// FIXME: inProgress or failed?
+		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonFailed, msg)
 		r.Unlock()
 		return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
 	}
@@ -245,33 +236,26 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 
 	r.Lock()
 
-	var condition v1alpha1.NodeObservabilityMachineConfigConditionType
-	if v1alpha1.IsNodeObservabilityMachineConfigConditionInProgress(r.CtrlConfig.Status.Conditions, v1alpha1.DebugDisabled) {
-		condition = v1alpha1.DebugDisabled
-	} else if v1alpha1.IsNodeObservabilityMachineConfigConditionInProgress(r.CtrlConfig.Status.Conditions, v1alpha1.Failed) {
-		condition = v1alpha1.Failed
-	} else {
+	if r.CtrlConfig.Status.IsDebuggingEnabled() && !r.CtrlConfig.Status.IsDebuggingFailed() {
 		r.Log.Info("NodeObservabilityMachineConfig current condition "+
 			"does not require MCP status check",
 			"MCP", mcp.Name, "conditions", r.CtrlConfig.Status.Conditions)
-
 		r.Unlock()
 		return ctrl.Result{}, nil
 	}
 
 	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdating) &&
 		mcp.Status.DegradedMachineCount == 0 {
-		msg := ""
-		if condition == v1alpha1.DebugDisabled {
+		var msg string
+		if !r.CtrlConfig.Status.IsDebuggingEnabled() {
 			msg = "machine config update to disable debugging in progress"
-		} else {
+			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, msg)
+		}
+		if r.CtrlConfig.Status.IsDebuggingFailed() {
 			msg = "reverting machine config changes due to failure on all machines"
+			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, msg)
 		}
 		r.Log.Info(msg)
-		cond := v1alpha1.NewNodeObservabilityMachineConfigCondition(condition,
-			v1alpha1.ConditionInProgress, msg)
-		v1alpha1.SetNodeObservabilityMachineConfigCondition(&r.CtrlConfig.Status, *cond)
-
 		r.Unlock()
 		return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
 	}
@@ -279,27 +263,28 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdated) {
 
 		r.Unlock()
-		if err := r.ensureReqMCNotExists(ctx); err != nil {
+		if err := r.disableCrioProf(ctx); err != nil {
 			return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
 		}
 		if err := r.ensureReqMCPNotExists(ctx); err != nil {
 			return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
 		}
 
-		msg := ""
-		if condition == v1alpha1.DebugDisabled {
+		var msg string
+		r.Lock()
+		if !r.CtrlConfig.Status.IsDebuggingEnabled() {
 			r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "ConfigUpdate", "debug config disabled on all machines")
 			msg = "machine config update to disable debugging completed on all machines"
-		} else {
+			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonDisabled, msg)
+		}
+		if r.CtrlConfig.Status.IsDebuggingFailed() {
 			r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "ConfigUpdate", "debug config reverted on all machines")
 			msg = "reverted machine config changes due to failure on all machines"
+			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonFailed, msg)
 		}
-		r.Log.Info(msg)
-
-		r.Lock()
-		cond := v1alpha1.NewNodeObservabilityMachineConfigCondition(condition, v1alpha1.ConditionTrue, msg)
-		v1alpha1.SetNodeObservabilityMachineConfigCondition(&r.CtrlConfig.Status, *cond)
 		r.Unlock()
+
+		r.Log.Info(msg)
 
 		return ctrl.Result{}, nil
 	}
@@ -308,22 +293,24 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 		msg := fmt.Sprintf("%s MCP has %d machines in degraded state", mcp.Name, mcp.Status.DegradedMachineCount)
 		r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeWarning, "ConfigUpdate", msg)
 
-		if condition == v1alpha1.DebugDisabled {
+		if !r.CtrlConfig.Status.IsDebuggingEnabled() {
 			msg = fmt.Sprintf("%s, failed to disable debugging, reconcile again", msg)
-		} else {
-			msg = fmt.Sprintf("%s, failed to revert changes, reconcile again", msg)
+			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, msg)
 		}
-		cond := v1alpha1.NewNodeObservabilityMachineConfigCondition(condition, v1alpha1.ConditionInProgress, msg)
-		v1alpha1.SetNodeObservabilityMachineConfigCondition(&r.CtrlConfig.Status, *cond)
+		if r.CtrlConfig.Status.IsDebuggingFailed() {
+			msg = fmt.Sprintf("%s, failed to revert changes, reconcile again", msg)
+			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, msg)
+		}
 
 		r.Unlock()
 		return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
 	}
 
 	r.Unlock()
-	if condition == v1alpha1.DebugDisabled {
+	if !r.CtrlConfig.Status.IsDebuggingEnabled() {
 		r.Log.Info("waiting for disabling debugging to complete on all machines", "MCP", mcp.Name)
-	} else {
+	}
+	if r.CtrlConfig.Status.IsDebuggingFailed() {
 		r.Log.Info("waiting for reverting to complete on all machines", "MCP", mcp.Name)
 	}
 	return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil

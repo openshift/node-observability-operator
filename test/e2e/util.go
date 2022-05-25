@@ -8,13 +8,13 @@ import (
 )
 
 const (
-	testName      = "test-instance"
-	testNamespace = "node-observability-operator"
-	image         = "registry.ci.openshift.org/ocp/4.11:node-observability-agent"
+	defaultTestName = "test-instance"
+	testNamespace   = "node-observability-operator"
+	image           = "quay.io/skhoury/node-observability-agent:8a8d704"
 )
 
 // testNodeObservability - minimal CR for the test
-func testNodeObservability() *operatorv1alpha1.NodeObservability {
+func testNodeObservability(testName string) *operatorv1alpha1.NodeObservability {
 	return &operatorv1alpha1.NodeObservability{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      testName,
@@ -30,7 +30,7 @@ func testNodeObservability() *operatorv1alpha1.NodeObservability {
 }
 
 // testNodeObservabilityRun - minimal CR for the test
-func testNodeObservabilityRun() *operatorv1alpha1.NodeObservabilityRun {
+func testNodeObservabilityRun(testName string) *operatorv1alpha1.NodeObservabilityRun {
 	return &operatorv1alpha1.NodeObservabilityRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      testName,
