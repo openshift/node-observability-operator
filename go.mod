@@ -8,7 +8,7 @@ require (
 	github.com/golangci/golangci-lint v1.42.1
 	github.com/google/go-cmp v0.5.7
 	github.com/maxbrunsfeld/counterfeiter/v6 v6.5.0
-	github.com/onsi/ginkgo v1.16.5
+	github.com/onsi/ginkgo/v2 v2.0.0
 	github.com/onsi/gomega v1.18.1
 	github.com/openshift/api v0.0.0-20220124143425-d74727069f6f
 	github.com/openshift/build-machinery-go v0.0.0-20220121085309-f94edc2d6874
@@ -199,7 +199,6 @@ require (
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
-	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.62.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

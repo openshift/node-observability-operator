@@ -104,7 +104,7 @@ func (r *MachineConfigReconciler) ensureReqNodeLabelExists(ctx context.Context) 
 			map[string]interface{}{
 				NodeObservabilityNodeRoleLabelName: Empty,
 			})
-		if err := r.Patch(ctx, &nodeList.Items[i], client.RawPatch(types.JSONPatchType, patch)); err != nil {
+		if err := r.ClientPatch(ctx, &nodeList.Items[i], client.RawPatch(types.JSONPatchType, patch)); err != nil {
 			return updNodeCount, err
 		}
 		r.Log.Info("successfully added label", "node", node.Name, "label", NodeObservabilityNodeRoleLabelName)
@@ -147,7 +147,7 @@ func (r *MachineConfigReconciler) revertNodeLabeling(ctx context.Context) error 
 			})
 
 		node := &corev1.Node{}
-		if err := r.Get(ctx, types.NamespacedName{Name: name}, node); err != nil {
+		if err := r.ClientGet(ctx, types.NamespacedName{Name: name}, node); err != nil {
 			if errors.IsNotFound(err) {
 				delete(r.Node.PrevReconcileUpd, name)
 				continue
@@ -156,7 +156,7 @@ func (r *MachineConfigReconciler) revertNodeLabeling(ctx context.Context) error 
 		}
 		r.Log.Info("successfully reverted label add", "node", name, "label", label.key)
 
-		if err := r.Patch(ctx, node, client.RawPatch(types.JSONPatchType, patch)); err != nil {
+		if err := r.ClientPatch(ctx, node, client.RawPatch(types.JSONPatchType, patch)); err != nil {
 			return err
 		}
 
@@ -187,7 +187,7 @@ func (r *MachineConfigReconciler) ensureReqNodeLabelNotExists(ctx context.Contex
 			map[string]interface{}{
 				NodeObservabilityNodeRoleLabelName: Empty,
 			})
-		if err := r.Patch(ctx, &nodeList.Items[i], client.RawPatch(types.JSONPatchType, patch)); err != nil {
+		if err := r.ClientPatch(ctx, &nodeList.Items[i], client.RawPatch(types.JSONPatchType, patch)); err != nil {
 			return updNodeCount, err
 		}
 		r.Log.Info("successfully removed label", "node", node.Name, "label", NodeObservabilityNodeRoleLabelName)
@@ -230,7 +230,7 @@ func (r *MachineConfigReconciler) revertNodeUnlabeling(ctx context.Context) erro
 			})
 
 		node := &corev1.Node{}
-		if err := r.Get(ctx, types.NamespacedName{Name: name}, node); err != nil {
+		if err := r.ClientGet(ctx, types.NamespacedName{Name: name}, node); err != nil {
 			if errors.IsNotFound(err) {
 				delete(r.Node.PrevReconcileUpd, name)
 				continue
@@ -238,7 +238,7 @@ func (r *MachineConfigReconciler) revertNodeUnlabeling(ctx context.Context) erro
 			return err
 		}
 
-		if err := r.Patch(ctx, node, client.RawPatch(types.JSONPatchType, patch)); err != nil {
+		if err := r.ClientPatch(ctx, node, client.RawPatch(types.JSONPatchType, patch)); err != nil {
 			return err
 		}
 		r.Log.Info("successfully reverted label delete", "node", name, "label", label.key)
@@ -283,7 +283,7 @@ func (r *MachineConfigReconciler) listNodes(ctx context.Context, nodeList *corev
 		client.MatchingLabels(matchLabels),
 	}
 
-	if err := r.List(ctx, nodeList, listOpts...); err != nil {
+	if err := r.ClientList(ctx, nodeList, listOpts...); err != nil {
 		return err
 	}
 

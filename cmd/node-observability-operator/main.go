@@ -137,17 +137,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	nodeObsMCOReconciler = &machineconfigcontroller.MachineConfigReconciler{
-		Client:        mgr.GetClient(),
-		Scheme:        mgr.GetScheme(),
-		Log:           ctrl.Log.WithName("controller").WithName("NodeObservabilityMachineConfig"),
-		EventRecorder: mgr.GetEventRecorderFor("node-observability-operator"),
-		Node: machineconfigcontroller.NodeSyncData{
-			PrevReconcileUpd: make(map[string]machineconfigcontroller.LabelInfo),
-		},
-		MachineConfig: machineconfigcontroller.MachineConfigSyncData{
-			PrevReconcileUpd: make(map[string]machineconfigcontroller.MachineConfigInfo),
-		},
+	if nodeObsMCOReconciler, err = machineconfigcontroller.New(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "NodeObservabilityMachineConfig")
+		os.Exit(1)
 	}
 	if err = nodeObsMCOReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "NodeObservabilityMachineConfig")
