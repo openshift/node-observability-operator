@@ -45,8 +45,22 @@ spec:
                 description: Labels is map of key:value pairs that are used to match
                   against node labels
                 type: object
+              types:
+                description: 'Types defines the type of profiling queries, which will
+                  be enabled The following types are supported: * crio - 30s of /pprof
+                  data, requesting this type might cause node restart * kubelet -
+                  30s of /pprof data, requesting this type might cause node restart'
+                enum:
+                - crio
+                - kubelet
+                - ebpf
+                - custom
+                items:
+                  type: string
+                type: array
             required:
             - image
+            - types
             type: object
           status:
             description: NodeObservabilityStatus defines the observed state of NodeObservability

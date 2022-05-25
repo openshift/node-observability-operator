@@ -23,12 +23,28 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+type NodeObservabilityType string
+
+const (
+	CrioNodeObservabilityType    NodeObservabilityType = "crio"
+	KubeletNodeObservabilityType NodeObservabilityType = "kubelet"
+	EbpfNodeObservabilityType    NodeObservabilityType = "ebpf"
+	CustomNodeObservabilityType  NodeObservabilityType = "custom"
+)
+
 // NodeObservabilitySpec defines the desired state of NodeObservability
 type NodeObservabilitySpec struct {
 	// Labels is map of key:value pairs that are used to match against node labels
 	Labels map[string]string `json:"labels,omitempty"`
 	// Image is the container (pod) image to execute specific scripts on each node
 	Image string `json:"image"`
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=crio;kubelet;ebpf;custom
+	// Types defines the type of profiling queries, which will be enabled
+	// The following types are supported:
+	//   * crio - 30s of /pprof data, requesting this type might cause node restart
+	//   * kubelet - 30s of /pprof data, requesting this type might cause node restart
+	Types []NodeObservabilityType `json:"types"`
 }
 
 // NodeObservabilityStatus defines the observed state of NodeObservability

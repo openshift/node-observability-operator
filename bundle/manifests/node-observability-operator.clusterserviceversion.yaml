@@ -11,11 +11,14 @@ metadata:
             "name": "nodeobservability-sample"
           },
           "spec": {
-            "expectedcount": 1,
-            "image": "quay.io/prometheus/busybox",
+            "image": "registry.ci.openshift.org/ocp/4.11:node-observability-agent",
             "labels": {
               "node-role.kubernetes.io/worker": ""
-            }
+            },
+            "types": [
+              "crio",
+              "kubelet"
+            ]
           }
         },
         {
@@ -296,9 +299,7 @@ spec:
           - create
         serviceAccountName: node-observability-operator-controller-manager
       deployments:
-      - label:
-          control-plane: controller-manager
-        name: node-observability-operator-controller-manager
+      - name: node-observability-operator-controller-manager
         spec:
           replicas: 1
           selector:
