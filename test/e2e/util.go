@@ -10,7 +10,7 @@ import (
 const (
 	defaultTestName = "test-instance"
 	testNamespace   = "node-observability-operator"
-	image           = "quay.io/skhoury/node-observability-agent:8a8d704"
+	image           = "registry.ci.openshift.org/ocp/4.11:node-observability-agent"
 )
 
 // testNodeObservability - minimal CR for the test
