@@ -23,11 +23,14 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	"github.com/go-logr/logr"
+	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 
 	"github.com/openshift/node-observability-operator/api/v1alpha1"
 )
@@ -38,6 +41,7 @@ import (
 //+kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigs,verbs=get;list;watch;create;delete
 //+kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigpools,verbs=get;list;watch;create;delete
 //+kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch;patch
+//+kubebuilder:rbac:groups="",resources=events,verbs=create
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -50,42 +54,70 @@ import (
 // service(ex: CRI-O) requires debugging to be enabled/disabled through the
 // MachineConfigs, controller creates the required MachineConfigs, MachineConfigPool
 // and labels the nodes where the changes are to be applied.
-func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
 
-	var err error
 	if r.Log, err = logr.FromContext(ctx); err != nil {
-		return ctrl.Result{}, err
+		return
 	}
 
-	r.Log.V(3).Info("Reconciling MachineConfig of Nodeobservability operator")
+	r.Log.V(3).Info("Reconciling NodeObservabilityMachineConfig of Nodeobservability operator")
 
-	// Fetch the nodeobservability.olm.openshift.io/machineconfig CR
+	// Fetch the nodeobservability.olm.openshift.io/nodeobservabilitymachineconfig CR
 	r.CtrlConfig = &v1alpha1.NodeObservabilityMachineConfig{}
 	if err = r.Get(ctx, req.NamespacedName, r.CtrlConfig); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
-			r.Log.Info("MachineConfig resource not found. Ignoring could have been deleted", "name", req.NamespacedName.Name)
+			r.Log.Info("NodeObservabilityMachineConfig resource not found. Ignoring could have been deleted", "name", req.NamespacedName.Name)
 			return ctrl.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
-		r.Log.Error(err, "failed to fetch MachineConfig")
+		r.Log.Error(err, "failed to fetch NodeObservabilityMachineConfig")
 		return ctrl.Result{RequeueAfter: defaultRequeueTime}, err
 	}
-	r.Log.V(3).Info("MachineConfig resource found")
+	r.Log.V(3).Info("NodeObservabilityMachineConfig resource found")
 
 	if !r.CtrlConfig.DeletionTimestamp.IsZero() {
-		r.Log.Info("MachineConfig resource marked for deletetion, cleaning up")
-		return r.cleanUp(ctx, req)
+		r.Log.Info("NodeObservabilityMachineConfig resource marked for deletetion, cleaning up")
+		result, err = r.cleanUp(ctx, req)
+
+		if r.CtrlConfig.Status.IsMachineConfigInProgress() {
+			r.CtrlConfig.Status.UpdateLastReconcileTime()
+			if errUpdate := r.updateStatus(ctx); errUpdate != nil {
+				r.Log.Error(err, "failed to update cleanup status")
+				result = ctrl.Result{RequeueAfter: 1 * time.Minute}
+				err = utilerrors.NewAggregate([]error{err, errUpdate})
+			}
+		}
+		return
 	}
 
-	// Set finalizers on the NodeObservability/MachineConfig resource
+	// Set finalizers on the NodeObservabilityMachineConfig resource
 	updated, err := r.withFinalizers(ctx, req)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to update MachineConfig with finalizers: %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to update NodeObservabilityMachineConfig with finalizers: %w", err)
 	}
 	updated.DeepCopyInto(r.CtrlConfig)
+
+	if !r.CtrlConfig.Status.LastReconcile.IsZero() &&
+		r.CtrlConfig.Status.IsMachineConfigInProgress() {
+		diff := time.Since(r.CtrlConfig.Status.LastReconcile.Time).Round(time.Second)
+		if diff < time.Minute && diff >= 0 {
+			next := time.Minute - diff
+			r.Log.Info("reconciler called earlier than expected", "next reconcile in", next.String())
+			return ctrl.Result{Requeue: true, RequeueAfter: next}, nil
+		}
+	}
+
+	defer func() {
+		r.CtrlConfig.Status.UpdateLastReconcileTime()
+		if errUpdate := r.updateStatus(ctx); errUpdate != nil {
+			r.Log.Error(err, "failed to update status")
+			result = ctrl.Result{RequeueAfter: 1 * time.Minute}
+			err = utilerrors.NewAggregate([]error{err, errUpdate})
+		}
+	}()
 
 	requeue, err := r.inspectProfilingMCReq(ctx)
 	if err != nil {
@@ -100,36 +132,55 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{RequeueAfter: 2 * time.Minute}, nil
 	}
 
-	defer func() {
-		errUpdate := r.Status().Update(ctx, r.CtrlConfig)
-		if errUpdate != nil {
-			r.Log.Error(errUpdate, "failed to update status")
-			err = utilerrors.NewAggregate([]error{err, errUpdate})
-		}
-	}()
-
-	res, err := r.monitorProgress(ctx, req)
-	if err != nil {
-		r.Log.Error(err, "failed to fetch MachineConfigPool status")
-	}
-
-	return res, err
+	return r.monitorProgress(ctx)
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *MachineConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.NodeObservabilityMachineConfig{}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		Owns(&mcv1.MachineConfig{}).
+		Owns(&mcv1.MachineConfigPool{}).
 		Complete(r)
 }
 
 func (r *MachineConfigReconciler) cleanUp(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	if hasFinalizer(r.CtrlConfig) {
-		// Remove the finalizer.
-		if _, err := r.withoutFinalizers(ctx, req, finalizer); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to remove finalizer from MachineConfig %s: %w", r.CtrlConfig.Name, err)
+	disabled, err := r.ensureProfConfDisabled(ctx)
+	if err != nil {
+		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
+	}
+	if disabled {
+		return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
+	}
+
+	if r.CtrlConfig.Status.IsMachineConfigInProgress() {
+		if result, err := r.checkWorkerMCPStatus(ctx); err != nil {
+			return result, err
 		}
 	}
+
+	removeFinalizer := false
+	if !r.CtrlConfig.Status.IsMachineConfigInProgress() {
+		if !r.CtrlConfig.Status.IsDebuggingEnabled() {
+			removeFinalizer = true
+			r.Log.Info("disable debug successful for cleanup")
+		}
+
+		if r.CtrlConfig.Status.IsDebuggingFailed() {
+			removeFinalizer = true
+			r.Log.Info("failed to disable debug for cleanup")
+		}
+	}
+
+	if removeFinalizer && hasFinalizer(r.CtrlConfig) {
+		// Remove the finalizer.
+		if _, err := r.withoutFinalizers(ctx, req, finalizer); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to remove finalizer from NodeObservabilityMachineConfig %s: %w", r.CtrlConfig.Name, err)
+		}
+		r.Log.Info("removed finalzer from NodeObservabilityMachineConfig resource, cleanup complete")
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -209,10 +260,28 @@ func hasFinalizer(mc *v1alpha1.NodeObservabilityMachineConfig) bool {
 }
 
 func (r *MachineConfigReconciler) updateStatus(ctx context.Context) error {
-	if err := r.Status().Update(ctx, r.CtrlConfig); err != nil {
-		r.Log.Error(err, "failed to update nodeobservabilitymachineconfig resource status")
+
+	namespace := types.NamespacedName{Name: r.CtrlConfig.Name}
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		r.Log.V(3).Info("updating nodeobservabilitymachineconfig resource status")
+		nomc := &v1alpha1.NodeObservabilityMachineConfig{}
+		if err := r.Get(ctx, namespace, nomc); err != nil {
+			r.Log.Error(err, "failed to fetch nodeobservabilitymachineconfig resource")
+			return err
+		}
+		r.CtrlConfig.Status.DeepCopyInto(&nomc.Status)
+
+		if err := r.Status().Update(ctx, nomc); err != nil {
+			r.Log.Error(err, "failed to update nodeobservabilitymachineconfig resource status")
+			return err
+		}
+		nomc.DeepCopyInto(r.CtrlConfig)
+
+		return nil
+	}); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -257,7 +326,7 @@ func (r *MachineConfigReconciler) ensureProfConfEnabled(ctx context.Context) (bo
 		// FIXME: missing msg
 		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled, metav1.ConditionTrue, v1alpha1.ReasonEnabled, "")
 		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, "")
-		return true, r.updateStatus(ctx)
+		return true, nil
 	}
 
 	return false, nil
@@ -278,8 +347,8 @@ func (r *MachineConfigReconciler) ensureProfConfDisabled(ctx context.Context) (b
 	if modCount > 0 {
 		// FIXME: missing msg
 		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled, metav1.ConditionFalse, v1alpha1.ReasonDisabled, "")
-		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonDisabled, "")
-		return true, r.updateStatus(ctx)
+		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, "")
+		return true, nil
 	}
 
 	return false, nil
@@ -303,10 +372,7 @@ func (r *MachineConfigReconciler) ensureReqMCExists(ctx context.Context) (int, e
 // ensureReqMCNotExists is for ensuring the machine config created when
 // profiling was enabled is indeed removed
 func (r *MachineConfigReconciler) ensureReqMCNotExists(ctx context.Context) error {
-	if !r.CtrlConfig.Spec.Debug.EnableCrioProfiling {
-		return r.disableCrioProf(ctx)
-	}
-	return nil
+	return r.disableCrioProf(ctx)
 }
 
 // ensureReqMCPExists is for ensuring the required machine config pool exists
@@ -328,22 +394,20 @@ func (r *MachineConfigReconciler) ensureReqMCPNotExists(ctx context.Context) err
 	return r.deleteProfMCP(ctx)
 }
 
-func (r *MachineConfigReconciler) monitorProgress(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
+func (r *MachineConfigReconciler) monitorProgress(ctx context.Context) (result ctrl.Result, err error) {
 
 	if r.CtrlConfig.Status.IsDebuggingEnabled() {
 		if result, err = r.CheckNodeObservabilityMCPStatus(ctx); err != nil {
+			r.Log.Error(err, "failed to check nodeobservability mcp status")
 			return
 		}
 	}
 
 	if !r.CtrlConfig.Status.IsDebuggingEnabled() || r.CtrlConfig.Status.IsDebuggingFailed() {
 		if result, err = r.checkWorkerMCPStatus(ctx); err != nil {
+			r.Log.Error(err, "failed to check worker mcp status")
 			return
 		}
-	}
-
-	if err := r.updateStatus(ctx); err != nil {
-		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
 	}
 
 	return

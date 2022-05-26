@@ -160,7 +160,7 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 	mcp := &mcv1.MachineConfigPool{}
 	if err := r.Get(ctx, types.NamespacedName{Name: ProfilingMCPName}, mcp); err != nil {
 		if errors.IsNotFound(err) {
-			r.Log.Info("profiling MCP does not exist, skipping status check", "MCP", ProfilingMCPName)
+			r.Log.V(3).Info("profiling MCP does not exist, skipping status check", "MCP", ProfilingMCPName)
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
@@ -218,8 +218,7 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 		r.Lock()
 		msg := fmt.Sprintf("%s MCP has %d machines in degraded state, reverted changes", mcp.Name, mcp.Status.DegradedMachineCount)
 		// FIXME: inProgress or failed?
-		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, msg)
-
+		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonFailed, msg)
 		r.Unlock()
 		return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
 	}
@@ -256,7 +255,7 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 		}
 		if r.CtrlConfig.Status.IsDebuggingFailed() {
 			msg = "reverting machine config changes due to failure on all machines"
-			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonFailed, msg)
+			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, msg)
 		}
 		r.Log.Info(msg)
 		r.Unlock()
@@ -279,7 +278,8 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 			r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "ConfigUpdate", "debug config disabled on all machines")
 			msg = "machine config update to disable debugging completed on all machines"
 			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonDisabled, msg)
-		} else {
+		}
+		if r.CtrlConfig.Status.IsDebuggingFailed() {
 			r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "ConfigUpdate", "debug config reverted on all machines")
 			msg = "reverted machine config changes due to failure on all machines"
 			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonFailed, msg)
@@ -297,10 +297,11 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 
 		if !r.CtrlConfig.Status.IsDebuggingEnabled() {
 			msg = fmt.Sprintf("%s, failed to disable debugging, reconcile again", msg)
-			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonFailed, msg)
-		} else {
+			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, msg)
+		}
+		if r.CtrlConfig.Status.IsDebuggingFailed() {
 			msg = fmt.Sprintf("%s, failed to revert changes, reconcile again", msg)
-			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonFailed, msg)
+			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, msg)
 		}
 
 		r.Unlock()
@@ -310,7 +311,8 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 	r.Unlock()
 	if !r.CtrlConfig.Status.IsDebuggingEnabled() {
 		r.Log.Info("waiting for disabling debugging to complete on all machines", "MCP", mcp.Name)
-	} else {
+	}
+	if r.CtrlConfig.Status.IsDebuggingFailed() {
 		r.Log.Info("waiting for reverting to complete on all machines", "MCP", mcp.Name)
 	}
 	return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil

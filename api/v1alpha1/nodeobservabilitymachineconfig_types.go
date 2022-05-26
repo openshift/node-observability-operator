@@ -40,6 +40,10 @@ type NodeObservabilityMachineConfigStatus struct {
 	// conditions represents the latest available observations of current operator state.
 	// +optional
 	ConditionalStatus `json:"conditions"`
+
+	// lastReconcile is the time of last reconciliation
+	// +nullable
+	LastReconcile metav1.Time `json:"lastReconcile"`
 }
 
 //+kubebuilder:object:root=true
@@ -86,6 +90,11 @@ func (s *NodeObservabilityMachineConfigStatus) IsDebuggingEnabled() bool {
 		return true
 	}
 	return false
+}
+
+// UpdateLastReconcileTime is for updating LastReconcile in NodeObservabilityMachineConfigStatus
+func (status *NodeObservabilityMachineConfigStatus) UpdateLastReconcileTime() {
+	status.LastReconcile = metav1.Now()
 }
 
 func init() {
