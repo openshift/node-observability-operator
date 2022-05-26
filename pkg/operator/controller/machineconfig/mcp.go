@@ -207,7 +207,6 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 			r.Lock()
 			msg := fmt.Sprintf("%s MCP has %d machines in degraded state. Reverting changes failed, reconcile again",
 				mcp.Name, mcp.Status.DegradedMachineCount)
-			// FIXME: inProgress or failed?
 			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, msg)
 
 			r.Unlock()
@@ -217,7 +216,6 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 
 		r.Lock()
 		msg := fmt.Sprintf("%s MCP has %d machines in degraded state, reverted changes", mcp.Name, mcp.Status.DegradedMachineCount)
-		// FIXME: inProgress or failed?
 		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonFailed, msg)
 		r.Unlock()
 		return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil

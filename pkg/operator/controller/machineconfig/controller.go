@@ -323,9 +323,10 @@ func (r *MachineConfigReconciler) ensureProfConfEnabled(ctx context.Context) (bo
 	setEnabledCondition += modCount
 
 	if setEnabledCondition > 0 {
-		// FIXME: missing msg
-		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled, metav1.ConditionTrue, v1alpha1.ReasonEnabled, "")
-		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, "")
+		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled, metav1.ConditionTrue, v1alpha1.ReasonEnabled,
+			"debug configurations enabled")
+		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress,
+			"applying debug configurations in progress")
 		return true, nil
 	}
 
@@ -343,11 +344,11 @@ func (r *MachineConfigReconciler) ensureProfConfDisabled(ctx context.Context) (b
 		return true, r.revertNodeUnlabeling(ctx)
 	}
 
-	// FIXME: shouldn't these conditions be always set to False, when ensureProfConfDisabled() is called?
 	if modCount > 0 {
-		// FIXME: missing msg
-		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled, metav1.ConditionFalse, v1alpha1.ReasonDisabled, "")
-		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, "")
+		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled, metav1.ConditionFalse, v1alpha1.ReasonDisabled,
+			"debug configutations disabled")
+		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress,
+			"removing debug configurations in progress")
 		return true, nil
 	}
 
