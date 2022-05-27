@@ -21,7 +21,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/go-logr/logr"
 
@@ -30,16 +29,16 @@ import (
 
 // MachineConfigReconciler reconciles a NodeObservabilityMachineConfig object
 type MachineConfigReconciler struct {
-	client.Client
+	impl
 	sync.RWMutex
+
+	Log           logr.Logger
+	Scheme        *runtime.Scheme
+	EventRecorder record.EventRecorder
 
 	Node          NodeSyncData
 	MachineConfig MachineConfigSyncData
-
-	Scheme        *runtime.Scheme
-	Log           logr.Logger
 	CtrlConfig    *v1alpha1.NodeObservabilityMachineConfig
-	EventRecorder record.EventRecorder
 }
 
 // NodeSyncData is for storing the state

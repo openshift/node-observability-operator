@@ -81,7 +81,7 @@ func (r *MachineConfigReconciler) deleteProfMCP(ctx context.Context) error {
 // fetchProfilingMCP is for fetching the profiling MCP created by this controller
 func (r *MachineConfigReconciler) fetchProfMCP(ctx context.Context, namespace types.NamespacedName) (*mcv1.MachineConfigPool, error) {
 	mcp := &mcv1.MachineConfigPool{}
-	if err := r.Get(ctx, namespace, mcp); err != nil {
+	if err := r.ClientGet(ctx, namespace, mcp); err != nil {
 		return nil, err
 	}
 	return mcp, nil
@@ -137,7 +137,7 @@ func (r *MachineConfigReconciler) createMCP(ctx context.Context, name string) er
 		r.Log.Error(err, "failed to update owner info in MCP", "MCP", name)
 	}
 
-	if err := r.Create(ctx, mcp); err != nil {
+	if err := r.ClientCreate(ctx, mcp); err != nil {
 		return fmt.Errorf("failed to create MCP %s: %w", name, err)
 	}
 
@@ -147,7 +147,7 @@ func (r *MachineConfigReconciler) createMCP(ctx context.Context, name string) er
 
 // DeleteMCP is for deleting MCP passed MCP
 func (r *MachineConfigReconciler) DeleteMCP(ctx context.Context, mcp *mcv1.MachineConfigPool) error {
-	if err := r.Delete(ctx, mcp); err != nil {
+	if err := r.ClientDelete(ctx, mcp); err != nil {
 		return fmt.Errorf("failed to remove MCP %s : %w", mcp.Name, err)
 	}
 
@@ -158,7 +158,7 @@ func (r *MachineConfigReconciler) DeleteMCP(ctx context.Context, mcp *mcv1.Machi
 // CheckNodeObservabilityMCPStatus is for reconciling update status of all machines in profiling MCP
 func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Context) (ctrl.Result, error) {
 	mcp := &mcv1.MachineConfigPool{}
-	if err := r.Get(ctx, types.NamespacedName{Name: ProfilingMCPName}, mcp); err != nil {
+	if err := r.ClientGet(ctx, types.NamespacedName{Name: ProfilingMCPName}, mcp); err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.V(3).Info("profiling MCP does not exist, skipping status check", "MCP", ProfilingMCPName)
 			return ctrl.Result{}, nil
@@ -229,7 +229,7 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 // checkWorkerMCPStatus is for reconciling update status of all machines in profiling MCP
 func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctrl.Result, error) {
 	mcp := &mcv1.MachineConfigPool{}
-	if err := r.Get(ctx, types.NamespacedName{Name: WorkerNodeMCPName}, mcp); err != nil {
+	if err := r.ClientGet(ctx, types.NamespacedName{Name: WorkerNodeMCPName}, mcp); err != nil {
 		return ctrl.Result{}, err
 	}
 

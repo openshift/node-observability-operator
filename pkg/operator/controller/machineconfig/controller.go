@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -42,6 +42,25 @@ import (
 //+kubebuilder:rbac:groups=machineconfiguration.openshift.io,resources=machineconfigpools,verbs=get;list;watch;create;delete
 //+kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch;patch
 //+kubebuilder:rbac:groups="",resources=events,verbs=create
+
+// New returns a new MachineConfigReconciler instance.
+func New(mgr ctrl.Manager, impls ...impl) (*MachineConfigReconciler, error) {
+	effectiveClient := NewClient(impls...)
+	return &MachineConfigReconciler{
+		impl: effectiveClient,
+
+		Log:           ctrl.Log.WithName("controller").WithName("NodeObservabilityMachineConfig"),
+		Scheme:        effectiveClient.ManagerGetScheme(mgr),
+		EventRecorder: effectiveClient.ManagerGetEventRecorderFor(mgr, "node-observability-operator"),
+
+		Node: NodeSyncData{
+			PrevReconcileUpd: make(map[string]LabelInfo),
+		},
+		MachineConfig: MachineConfigSyncData{
+			PrevReconcileUpd: make(map[string]MachineConfigInfo),
+		},
+	}, nil
+}
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -64,8 +83,8 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// Fetch the nodeobservability.olm.openshift.io/nodeobservabilitymachineconfig CR
 	r.CtrlConfig = &v1alpha1.NodeObservabilityMachineConfig{}
-	if err = r.Get(ctx, req.NamespacedName, r.CtrlConfig); err != nil {
-		if errors.IsNotFound(err) {
+	if err = r.ClientGet(ctx, req.NamespacedName, r.CtrlConfig); err != nil {
+		if kerrors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
@@ -188,7 +207,7 @@ func (r *MachineConfigReconciler) withFinalizers(ctx context.Context, req ctrl.R
 	withFinalizers := &v1alpha1.NodeObservabilityMachineConfig{}
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if err := r.Get(ctx, req.NamespacedName, withFinalizers); err != nil {
+		if err := r.ClientGet(ctx, req.NamespacedName, withFinalizers); err != nil {
 			r.Log.Error(err, "failed to fetch nodeobservabilitymachineconfig resource for updating finalizer")
 			return err
 		}
@@ -198,7 +217,7 @@ func (r *MachineConfigReconciler) withFinalizers(ctx context.Context, req ctrl.R
 		}
 		withFinalizers.Finalizers = append(withFinalizers.Finalizers, finalizer)
 
-		if err := r.Update(ctx, withFinalizers); err != nil {
+		if err := r.ClientUpdate(ctx, withFinalizers); err != nil {
 			r.Log.Error(err, "failed to update nodeobservabilitymachineconfig resource finalizers")
 			return err
 		}
@@ -213,7 +232,7 @@ func (r *MachineConfigReconciler) withoutFinalizers(ctx context.Context, req ctr
 	withoutFinalizers := &v1alpha1.NodeObservabilityMachineConfig{}
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if err := r.Get(ctx, req.NamespacedName, withoutFinalizers); err != nil {
+		if err := r.ClientGet(ctx, req.NamespacedName, withoutFinalizers); err != nil {
 			r.Log.Error(err, "failed to fetch nodeobservabilitymachineconfig resource for removing finalizer")
 			return err
 		}
@@ -237,7 +256,7 @@ func (r *MachineConfigReconciler) withoutFinalizers(ctx context.Context, req ctr
 		}
 
 		withoutFinalizers.Finalizers = newFinalizers
-		if err := r.Update(ctx, withoutFinalizers); err != nil {
+		if err := r.ClientUpdate(ctx, withoutFinalizers); err != nil {
 			r.Log.Error(err, "failed to remove nodeobservabilitymachineconfig resource finalizers")
 			return err
 		}
@@ -265,13 +284,13 @@ func (r *MachineConfigReconciler) updateStatus(ctx context.Context) error {
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		r.Log.V(3).Info("updating nodeobservabilitymachineconfig resource status")
 		nomc := &v1alpha1.NodeObservabilityMachineConfig{}
-		if err := r.Get(ctx, namespace, nomc); err != nil {
+		if err := r.ClientGet(ctx, namespace, nomc); err != nil {
 			r.Log.Error(err, "failed to fetch nodeobservabilitymachineconfig resource")
 			return err
 		}
 		r.CtrlConfig.Status.DeepCopyInto(&nomc.Status)
 
-		if err := r.Status().Update(ctx, nomc); err != nil {
+		if err := r.ClientStatusUpdate(ctx, nomc); err != nil {
 			r.Log.Error(err, "failed to update nodeobservabilitymachineconfig resource status")
 			return err
 		}
