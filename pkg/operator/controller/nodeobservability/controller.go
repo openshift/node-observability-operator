@@ -174,6 +174,14 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	}
 	r.Log.Info(fmt.Sprintf("DaemonSet : %s", ds.Name))
 
+	haveNOMC, nomc, err := r.ensureNOMC(ctx, nodeObs)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to ensure nodeobservabilitymachineconfig : %w", err)
+	} else if !haveNOMC {
+		return ctrl.Result{}, fmt.Errorf("failed to get nodeobservabilitymachineconfig")
+	}
+	r.Log.Info(fmt.Sprintf("NodeObservabilityMachineConfig : %s", nomc.Name))
+
 	podList := &corev1.PodList{}
 	listOpts := []client.ListOption{
 		client.InNamespace(nodeObs.Namespace),
@@ -216,7 +224,7 @@ func (r *NodeObservabilityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&operatorv1alpha1.NodeObservability{}).
 		Owns(&appsv1.DaemonSet{}).
-		Owns(&corev1.Service{}).
+		Owns(&operatorv1alpha1.NodeObservabilityMachineConfig{}).
 		Complete(r)
 }
 
@@ -276,6 +284,10 @@ func (r *NodeObservabilityReconciler) ensureNodeObservabilityDeleted(ctx context
 		errs = append(errs, fmt.Errorf("failed to delete clusterrolebinding : %w", err))
 	}
 	if err := r.deleteSecurityContextConstraints(nodeObs); err != nil {
+		errs = append(errs, fmt.Errorf("failed to delete SCC : %w", err))
+	}
+	if err := r.deleteNOMC(ctx, nodeObs); err != nil {
+		// TODO: blockOwnerDeletion: true, update status
 		errs = append(errs, fmt.Errorf("failed to delete SCC : %w", err))
 	}
 	if len(errs) == 0 && hasFinalizer(nodeObs) {

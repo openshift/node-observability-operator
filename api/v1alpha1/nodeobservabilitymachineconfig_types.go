@@ -84,6 +84,14 @@ func (s *NodeObservabilityMachineConfigStatus) IsDebuggingFailed() bool {
 	return false
 }
 
+// IsDebuggingFailed returns true if Debugging has failed
+func (s *NodeObservabilityMachineConfigStatus) IsReady() bool {
+	if cond := s.GetCondition(DebugReady); cond != nil && cond.Status == metav1.ConditionTrue {
+		return true
+	}
+	return false
+}
+
 // IsDebuggingEnabled returns true if Debugging is enabled
 func (s *NodeObservabilityMachineConfigStatus) IsDebuggingEnabled() bool {
 	if cond := s.GetCondition(DebugEnabled); cond != nil && cond.Status == metav1.ConditionTrue {

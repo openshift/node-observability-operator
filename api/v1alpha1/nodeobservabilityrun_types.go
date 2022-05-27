@@ -25,19 +25,6 @@ type NodeObservabilityRunSpec struct {
 
 	// NodeObservabilityRef is the reference to the parent NodeObservability resource
 	NodeObservabilityRef *NodeObservabilityRef `json:"nodeObservabilityRef"`
-
-	// RunType identifies the runtype
-	// This setting will allow for logic to bypass machine config settings
-	// if not set to crioKubeletProfile.
-	// valid values are one of [crioKubeletProfile,eBPFProfile,E2ETest]
-	//
-	// +kubebuilder:validation:Enum=crioKubeletProfile;eBPFprofile;e2e-test;
-	// +kubebuilder:validation:Required
-	// +required
-	RunType NodeObservabilityRunType `json:"runType,omitempty"`
-
-	// RestoreMCOAfterRun - flag used to restore previous machineconfig state after run
-	RestoreMCOStateAfterRun bool `json:"restoreMCOStateAfterRun,omitempty"`
 }
 
 // NodeObservabilityRef is the reference to the parent NodeObservability resource
@@ -45,16 +32,6 @@ type NodeObservabilityRef struct {
 	// Name of the referent; More info: http://kubernetes.io/docs/user-guide/identifiers#names
 	Name string `json:"name"`
 }
-
-// NodeObservabilityRunType defines the type of profiles that can be executed
-type NodeObservabilityRunType string
-
-// A list of constant values for the run types
-const (
-	CrioKubeletProfile NodeObservabilityRunType = "crioKubeletProfile"
-	EbpfProfile        NodeObservabilityRunType = "eBPFprofile"
-	E2ETest            NodeObservabilityRunType = "e2e-test"
-)
 
 // NodeObservabilityRunStatus defines the observed state of NodeObservabilityRun
 type NodeObservabilityRunStatus struct {
@@ -77,7 +54,7 @@ type NodeObservabilityRunStatus struct {
 	FailedAgents []AgentNode `json:"failedAgents,omitempty"`
 
 	// Conditions contain details for aspects of the current state of this API Resource.
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	ConditionalStatus `json:"conditions,omitempty"`
 
 	// Output is the output location of this NodeObservabilityRun
 	// When not set, no output location is known
