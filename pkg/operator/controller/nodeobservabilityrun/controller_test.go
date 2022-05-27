@@ -249,6 +249,7 @@ func TestReconcile(t *testing.T) {
 		{
 			name: "start new run",
 			existingObjects: []runtime.Object{
+				testNOMC(),
 				testNodeObservabilityRun(),
 				&corev1.Endpoints{
 					ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
@@ -267,6 +268,7 @@ func TestReconcile(t *testing.T) {
 		{
 			name: "run in progress",
 			existingObjects: []runtime.Object{
+				testNOMC(),
 				testNodeObservabilityRunWithStatus(operatorv1alpha1.NodeObservabilityRunStatus{
 					StartTimestamp: &now,
 				}),
@@ -317,6 +319,25 @@ func TestReconcile(t *testing.T) {
 		}
 	}
 
+}
+
+// testNOMC return test NodeObservabilityMachineConfig
+func testNOMC() *operatorv1alpha1.NodeObservabilityMachineConfig {
+	return &operatorv1alpha1.NodeObservabilityMachineConfig{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Status: operatorv1alpha1.NodeObservabilityMachineConfigStatus{
+			ConditionalStatus: operatorv1alpha1.ConditionalStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   operatorv1alpha1.DebugReady,
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+		},
+	}
 }
 
 // testNodeObservability - minimal CR for the test

@@ -344,13 +344,7 @@ func (in *NodeObservabilityRunStatus) DeepCopyInto(out *NodeObservabilityRunStat
 		*out = make([]AgentNode, len(*in))
 		copy(*out, *in)
 	}
-	if in.Conditions != nil {
-		in, out := &in.Conditions, &out.Conditions
-		*out = make([]v1.Condition, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
-	}
+	in.ConditionalStatus.DeepCopyInto(&out.ConditionalStatus)
 	if in.Output != nil {
 		in, out := &in.Output, &out.Output
 		*out = new(string)

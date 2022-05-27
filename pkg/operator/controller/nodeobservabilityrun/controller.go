@@ -37,7 +37,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	nodeobservabilityv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
-	machineconfigcontroller "github.com/openshift/node-observability-operator/pkg/operator/controller/machineconfig"
 )
 
 const (
@@ -55,8 +54,7 @@ var (
 // NodeObservabilityRunReconciler reconciles a NodeObservabilityRun object
 type NodeObservabilityRunReconciler struct {
 	client.Client
-	Log           logr.Logger
-	MCOReconciler *machineconfigcontroller.MachineConfigReconciler
+	Log logr.Logger
 	URL
 	Scheme    *runtime.Scheme
 	Namespace string
@@ -94,15 +92,6 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 		return
 	}
 
-	var canProceed bool
-	if canProceed, err = r.preconditionsMet(ctx, instance); !canProceed {
-		if err != nil {
-			r.Log.Error(err, "preconditions not met")
-			return
-		}
-		return ctrl.Result{RequeueAfter: pollingPeriod}, err
-	}
-
 	defer func() {
 		errUpdate := r.Status().Update(ctx, instance, &client.UpdateOptions{})
 		if errUpdate != nil {
@@ -111,22 +100,42 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 		}
 	}()
 
+	var canProceed bool
+	if canProceed, err = r.preconditionsMet(ctx, instance); !canProceed {
+		if err != nil {
+			r.Log.Error(err, "preconditions not met")
+			return
+		}
+		msg := fmt.Sprintf("Waiting for NodeObservabilityMachineConfig %s to become ready", instance.Spec.NodeObservabilityRef.Name)
+		instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugReady, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonInProgress, msg)
+		return ctrl.Result{RequeueAfter: pollingPeriod}, err
+	}
+
 	if inProgress(instance) {
 		r.Log.V(3).Info("Run is in progress")
 		var requeue bool
 		requeue, err = r.handleInProgress(instance)
 		if requeue {
+			msg := "Profiling query in progress"
+			instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugReady, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonInProgress, msg)
 			return ctrl.Result{RequeueAfter: pollingPeriod}, err
 		}
 		t := metav1.Now()
 		instance.Status.FinishedTimestamp = &t
+		msg := "Profiling query done"
+		instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugReady, metav1.ConditionTrue, nodeobservabilityv1alpha1.ReasonInProgress, msg)
 		return
 	}
 
 	err = r.startRun(ctx, instance)
 	if err != nil {
+		msg := fmt.Sprintf("Failed to initiated profiling query: %s", err.Error())
+		instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugReady, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonFailed, msg)
 		return ctrl.Result{}, err
 	}
+
+	msg := "Profiling query initiated"
+	instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugReady, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonInProgress, msg)
 
 	// one cycle takes cca 30s
 	return ctrl.Result{RequeueAfter: time.Second * 30}, err

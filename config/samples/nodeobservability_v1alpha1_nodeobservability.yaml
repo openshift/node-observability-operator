@@ -9,3 +9,5 @@ spec:
   types:
   - crio
   - kubelet
+  - ebpf
+  - custom
