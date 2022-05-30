@@ -49,7 +49,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    operators.operatorframework.io/builder: operator-sdk-v1.14.0+git
+    operators.operatorframework.io/builder: operator-sdk-v1.18.0+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
   name: node-observability-operator.v0.0.1
   namespace: placeholder
@@ -299,7 +299,9 @@ spec:
           - create
         serviceAccountName: node-observability-operator-controller-manager
       deployments:
-      - name: node-observability-operator-controller-manager
+      - label:
+          control-plane: controller-manager
+        name: node-observability-operator-controller-manager
         spec:
           replicas: 1
           selector:

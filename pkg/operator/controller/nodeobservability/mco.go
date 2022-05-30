@@ -29,10 +29,6 @@ import (
 	"github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
-const (
-// NOMCName = "nodeobservabilitymachineconfig"
-)
-
 func (r *NodeObservabilityReconciler) ensureNOMC(ctx context.Context, instance *v1alpha1.NodeObservability) (bool, *v1alpha1.NodeObservabilityMachineConfig, error) {
 	desired := r.desiredNOMC(instance)
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
