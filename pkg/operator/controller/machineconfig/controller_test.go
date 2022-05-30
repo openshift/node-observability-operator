@@ -495,10 +495,10 @@ func TestMonitorProgress(t *testing.T) {
 	workerMCP := testWorkerMCP()
 
 	tests := []struct {
-		name       string
-		reqObjs    []runtime.Object
-		preReq     func(*MachineConfigReconciler, *[]runtime.Object)
-		wantErr    bool
+		name    string
+		reqObjs []runtime.Object
+		preReq  func(*MachineConfigReconciler, *[]runtime.Object)
+		wantErr bool
 	}{
 		{
 			name: "nodeobservability MCP does not exist",
@@ -539,7 +539,7 @@ func TestMonitorProgress(t *testing.T) {
 		{
 			name: "worker MCP does not exist",
 			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				r = testReconciler()
+				r.CtrlConfig.Status = v1alpha1.NodeObservabilityMachineConfigStatus{}
 				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled,
 					metav1.ConditionFalse, v1alpha1.ReasonDisabled, "")
 				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady,
@@ -551,7 +551,7 @@ func TestMonitorProgress(t *testing.T) {
 			name: "worker MCP update progressing",
 			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
 				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled,
-				metav1.ConditionFalse, v1alpha1.ReasonDisabled, "")
+					metav1.ConditionFalse, v1alpha1.ReasonDisabled, "")
 				workerMCP.Status.MachineCount = 3
 				workerMCP.Status.UpdatedMachineCount = 2
 				workerMCP.Status.ReadyMachineCount = 1
@@ -579,9 +579,9 @@ func TestMonitorProgress(t *testing.T) {
 		{
 			name: "worker MCP update progressing due to a failure",
 			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				r = testReconciler()
+				r.CtrlConfig.Status = v1alpha1.NodeObservabilityMachineConfigStatus{}
 				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled,
-				metav1.ConditionFalse, v1alpha1.ReasonFailed, "")
+					metav1.ConditionFalse, v1alpha1.ReasonFailed, "")
 				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady,
 					metav1.ConditionFalse, v1alpha1.ReasonFailed, "")
 				workerMCP = testWorkerMCP()
@@ -610,7 +610,7 @@ func TestMonitorProgress(t *testing.T) {
 		{
 			name: "worker MCP initializing disabled condition",
 			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				r = testReconciler()
+				r.CtrlConfig.Status = v1alpha1.NodeObservabilityMachineConfigStatus{}
 				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled,
 					metav1.ConditionFalse, v1alpha1.ReasonDisabled, "")
 				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady,
@@ -628,7 +628,7 @@ func TestMonitorProgress(t *testing.T) {
 		{
 			name: "worker MCP initializing failed condition",
 			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				r = testReconciler()
+				r.CtrlConfig.Status = v1alpha1.NodeObservabilityMachineConfigStatus{}
 				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled,
 					metav1.ConditionFalse, v1alpha1.ReasonFailed, "")
 				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady,
