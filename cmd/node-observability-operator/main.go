@@ -132,6 +132,7 @@ func main() {
 		ClusterWideClient: clusterWideCli,
 		Scheme:            mgr.GetScheme(),
 		Log:               ctrl.Log.WithName("controller").WithName("NodeObservability"),
+		Namespace:         operatorNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "NodeObservability")
 		os.Exit(1)

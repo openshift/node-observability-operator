@@ -36,11 +36,11 @@ const (
 func (r *NodeObservabilityReconciler) ensureNOMC(ctx context.Context, instance *v1alpha1.NodeObservability) (bool, *v1alpha1.NodeObservabilityMachineConfig, error) {
 	desired := r.desiredNOMC(instance)
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		ctrlutil.CreateOrUpdate(ctx, r.Client, desired, func() error {
+		_, corErr := ctrlutil.CreateOrUpdate(ctx, r.Client, desired, func() error {
 			desired.Spec = r.desiredNOMCSpec(instance)
 			return ctrlutil.SetControllerReference(instance, desired, r.Scheme)
 		})
-		return nil
+		return corErr
 	})
 	if err != nil {
 		return false, nil, err

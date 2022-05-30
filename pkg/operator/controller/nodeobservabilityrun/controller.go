@@ -101,7 +101,7 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 	}()
 
 	var canProceed bool
-	if canProceed, err = r.preconditionsMet(ctx, instance); !canProceed {
+	if canProceed, err = r.preconditionsMet(ctx, instance, r.Namespace); !canProceed {
 		if err != nil {
 			r.Log.Error(err, "preconditions not met")
 			return
@@ -193,12 +193,13 @@ func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance 
 	return nil
 }
 
-func (r *NodeObservabilityRunReconciler) preconditionsMet(ctx context.Context, instance *nodeobservabilityv1alpha1.NodeObservabilityRun) (bool, error) {
-	mc := &nodeobservabilityv1alpha1.NodeObservabilityMachineConfig{}
-	if err := r.Get(ctx, types.NamespacedName{Name: instance.Spec.NodeObservabilityRef.Name}, mc); err != nil {
+func (r *NodeObservabilityRunReconciler) preconditionsMet(ctx context.Context, instance *nodeobservabilityv1alpha1.NodeObservabilityRun, ns string) (bool, error) {
+	no := &nodeobservabilityv1alpha1.NodeObservability{}
+	key := types.NamespacedName{Name: instance.Spec.NodeObservabilityRef.Name, Namespace: ns}
+	if err := r.Get(ctx, key, no); err != nil {
 		return false, err
 	}
-	return mc.Status.IsReady(), nil
+	return no.Status.IsReady(), nil
 }
 
 func finished(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) bool {

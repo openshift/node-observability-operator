@@ -48,7 +48,7 @@ type NodeObservabilityMachineConfigStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
-//+kubebuilder:resource:scope=Cluster
+//+kubebuilder:resource:scope=Cluster,shortName=nomc
 
 // NodeObservabilityMachineConfig is the Schema for the nodeobservabilitymachineconfigs API
 type NodeObservabilityMachineConfig struct {

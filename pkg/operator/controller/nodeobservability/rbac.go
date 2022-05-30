@@ -40,7 +40,7 @@ const (
 // Returns a Boolean value indicating whether it exists, a pointer to
 // cluster role and an error when relevant
 func (r *NodeObservabilityReconciler) ensureClusterRole(ctx context.Context, nodeObs *v1alpha1.NodeObservability) (bool, *rbacv1.ClusterRole, error) {
-	nameSpace := types.NamespacedName{Namespace: nodeObs.Namespace, Name: clusterRoleName}
+	nameSpace := types.NamespacedName{Name: clusterRoleName}
 	desired := r.desiredClusterRole(nodeObs)
 	exist, current, err := r.currentClusterRole(ctx, nameSpace)
 	if err != nil {
@@ -84,9 +84,8 @@ func (r *NodeObservabilityReconciler) desiredClusterRole(nodeObs *v1alpha1.NodeO
 
 	cr := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterRoleName,
-			Namespace: nodeObs.Namespace,
-			Labels:    labelsForClusterRole(clusterRoleName),
+			Name:   clusterRoleName,
+			Labels: labelsForClusterRole(clusterRoleName),
 		},
 		Rules: []rbacv1.PolicyRule{
 			{
@@ -122,9 +121,9 @@ func (r *NodeObservabilityReconciler) desiredClusterRole(nodeObs *v1alpha1.NodeO
 // ensureClusterRoleBinding ensures that the clusterrolebinding exists
 // Returns a Boolean value indicating whether it exists, a pointer to the
 // clusterrolebinding and an error when relevant
-func (r *NodeObservabilityReconciler) ensureClusterRoleBinding(ctx context.Context, nodeObs *v1alpha1.NodeObservability, saName string) (bool, *rbacv1.ClusterRoleBinding, error) {
-	nameSpace := types.NamespacedName{Namespace: nodeObs.Namespace, Name: clusterRoleBindingName}
-	desired := r.desiredClusterRoleBinding(nodeObs, saName)
+func (r *NodeObservabilityReconciler) ensureClusterRoleBinding(ctx context.Context, nodeObs *v1alpha1.NodeObservability, saName, ns string) (bool, *rbacv1.ClusterRoleBinding, error) {
+	nameSpace := types.NamespacedName{Namespace: ns, Name: clusterRoleBindingName}
+	desired := r.desiredClusterRoleBinding(nodeObs, saName, ns)
 	exist, current, err := r.currentClusterRoleBinding(ctx, nameSpace)
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to get ClusterRoleBinding: %v", err)
@@ -164,18 +163,17 @@ func (r *NodeObservabilityReconciler) createClusterRoleBinding(ctx context.Conte
 }
 
 // desiredClusterRoleBinding returns a clusterrolebinding object
-func (r *NodeObservabilityReconciler) desiredClusterRoleBinding(nodeObs *v1alpha1.NodeObservability, saName string) *rbacv1.ClusterRoleBinding {
+func (r *NodeObservabilityReconciler) desiredClusterRoleBinding(nodeObs *v1alpha1.NodeObservability, saName, ns string) *rbacv1.ClusterRoleBinding {
 
 	crb := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterRoleBindingName,
-			Namespace: nodeObs.Namespace,
+			Name: clusterRoleBindingName,
 		},
 		Subjects: []rbacv1.Subject{
 			{
 				Kind:      serviceAccount,
 				Name:      saName,
-				Namespace: nodeObs.Namespace,
+				Namespace: ns,
 			},
 		},
 		RoleRef: rbacv1.RoleRef{

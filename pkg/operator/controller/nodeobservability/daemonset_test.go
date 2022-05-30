@@ -157,7 +157,7 @@ func TestEnsureDaemonset(t *testing.T) {
 					Image: "node-observability-agent:latest",
 				},
 			}
-			_, serviceAccount, err := r.ensureServiceAccount(context.TODO(), nodeObs)
+			_, serviceAccount, err := r.ensureServiceAccount(context.TODO(), nodeObs, test.TestNamespace)
 			if err != nil {
 				if !tc.errExpected {
 					t.Fatalf("unexpected error received: %v", err)
@@ -166,7 +166,7 @@ func TestEnsureDaemonset(t *testing.T) {
 			}
 			r.Log.Info(fmt.Sprintf("Service Account : %s", serviceAccount.Name))
 
-			gotExist, _, err := r.ensureDaemonSet(context.TODO(), nodeObs, serviceAccount)
+			gotExist, _, err := r.ensureDaemonSet(context.TODO(), nodeObs, serviceAccount, test.TestNamespace)
 			if err != nil {
 				if !tc.errExpected {
 					t.Fatalf("unexpected error received: %v", err)

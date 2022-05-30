@@ -249,7 +249,7 @@ func TestReconcile(t *testing.T) {
 		{
 			name: "start new run",
 			existingObjects: []runtime.Object{
-				testNOMC(),
+				testNodeObservability(),
 				testNodeObservabilityRun(),
 				&corev1.Endpoints{
 					ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
@@ -268,7 +268,7 @@ func TestReconcile(t *testing.T) {
 		{
 			name: "run in progress",
 			existingObjects: []runtime.Object{
-				testNOMC(),
+				testNodeObservability(),
 				testNodeObservabilityRunWithStatus(operatorv1alpha1.NodeObservabilityRunStatus{
 					StartTimestamp: &now,
 				}),
@@ -321,26 +321,7 @@ func TestReconcile(t *testing.T) {
 
 }
 
-// testNOMC return test NodeObservabilityMachineConfig
-func testNOMC() *operatorv1alpha1.NodeObservabilityMachineConfig {
-	return &operatorv1alpha1.NodeObservabilityMachineConfig{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-		Status: operatorv1alpha1.NodeObservabilityMachineConfigStatus{
-			ConditionalStatus: operatorv1alpha1.ConditionalStatus{
-				Conditions: []metav1.Condition{
-					{
-						Type:   operatorv1alpha1.DebugReady,
-						Status: metav1.ConditionTrue,
-					},
-				},
-			},
-		},
-	}
-}
-
-// testNodeObservability - minimal CR for the test
+// testNodeObservabilityRun - minimal CR for the test
 func testNodeObservabilityRun() *operatorv1alpha1.NodeObservabilityRun {
 	return &operatorv1alpha1.NodeObservabilityRun{
 		ObjectMeta: metav1.ObjectMeta{
@@ -353,6 +334,27 @@ func testNodeObservabilityRun() *operatorv1alpha1.NodeObservabilityRun {
 			},
 		},
 		Status: operatorv1alpha1.NodeObservabilityRunStatus{},
+	}
+}
+
+// testNodeObservability - minimal CR for the test
+func testNodeObservability() *operatorv1alpha1.NodeObservability {
+	return &operatorv1alpha1.NodeObservability{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: operatorv1alpha1.NodeObservabilitySpec{},
+		Status: operatorv1alpha1.NodeObservabilityStatus{
+			ConditionalStatus: operatorv1alpha1.ConditionalStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   operatorv1alpha1.DebugReady,
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+		},
 	}
 }
 

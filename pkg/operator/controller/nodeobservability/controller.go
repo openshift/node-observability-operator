@@ -22,7 +22,6 @@ import (
 
 	logr "github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -31,6 +30,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/node-observability-operator/api/v1alpha1"
 	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
@@ -48,6 +48,7 @@ type NodeObservabilityReconciler struct {
 	ClusterWideClient client.Client
 	Log               logr.Logger
 	Scheme            *runtime.Scheme
+	Namespace         string
 	// Used to inject errors for testing
 	Err ErrTestObject
 }
@@ -121,7 +122,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	// - clusterrolebinding (bind the sa to the role)
 
 	// ensure scc
-	haveSCC, scc, err := r.ensureSecurityContextConstraints(ctx, nodeObs)
+	haveSCC, scc, err := r.ensureSecurityContextConstraints(ctx, nodeObs, r.Namespace)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure securitycontectconstraints : %w", err)
 	} else if !haveSCC {
@@ -130,7 +131,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	r.Log.Info(fmt.Sprintf("SecurityContextConstraints : %s", scc.Name))
 
 	// ensure serviceaccount
-	haveSA, sa, err := r.ensureServiceAccount(ctx, nodeObs)
+	haveSA, sa, err := r.ensureServiceAccount(ctx, nodeObs, r.Namespace)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure serviceaccount : %w", err)
 	} else if !haveSA {
@@ -139,7 +140,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	r.Log.Info(fmt.Sprintf("ServiceAccount : %s", sa.Name))
 
 	// ensure service
-	haveSvc, svc, err := r.ensureService(ctx, nodeObs)
+	haveSvc, svc, err := r.ensureService(ctx, nodeObs, r.Namespace)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure service : %w", err)
 	} else if !haveSvc {
@@ -157,7 +158,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	r.Log.Info(fmt.Sprintf("ClusterRole : %s", cr.Name))
 
 	// check clusterolebinding with serviceaccount
-	haveCRB, crb, err := r.ensureClusterRoleBinding(ctx, nodeObs, sa.Name)
+	haveCRB, crb, err := r.ensureClusterRoleBinding(ctx, nodeObs, sa.Name, r.Namespace)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure clusterrolebinding : %w", err)
 	} else if !haveCRB {
@@ -166,7 +167,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	r.Log.Info(fmt.Sprintf("ClusterRoleBinding : %s", crb.Name))
 
 	// check daemonset
-	haveDS, ds, err := r.ensureDaemonSet(ctx, nodeObs, sa)
+	haveDS, ds, err := r.ensureDaemonSet(ctx, nodeObs, sa, r.Namespace)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure daemonset : %w", err)
 	} else if !haveDS {
@@ -174,39 +175,33 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	}
 	r.Log.Info(fmt.Sprintf("DaemonSet : %s", ds.Name))
 
-	haveNOMC, nomc, err := r.ensureNOMC(ctx, nodeObs)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to ensure nodeobservabilitymachineconfig : %w", err)
-	} else if !haveNOMC {
-		return ctrl.Result{}, fmt.Errorf("failed to get nodeobservabilitymachineconfig")
-	}
-	r.Log.Info(fmt.Sprintf("NodeObservabilityMachineConfig : %s", nomc.Name))
+	dsReady := ds.Status.NumberReady == ds.Status.DesiredNumberScheduled
 
-	podList := &corev1.PodList{}
-	listOpts := []client.ListOption{
-		client.InNamespace(nodeObs.Namespace),
-		client.MatchingLabels(labelsForNodeObservability(nodeObs.Name)),
-	}
-
-	// list pods to ensure that the agents get deployed
-	if err = r.List(ctx, podList, listOpts...); err != nil {
-		r.Log.Error(err, "Failed to list pods", "NodeObservability.Namespace", nodeObs.Namespace, "NodeObservability.Name", nodeObs.Name)
-		return ctrl.Result{}, err
-	}
-	count := 0
-	for x, pod := range podList.Items {
-		r.Log.Info(fmt.Sprintf("Pod item : %d phase status : %s", x, pod.Status.Phase))
-		if pod.Status.Phase == corev1.PodRunning {
-			count++
+	var nomcReady bool = true
+	if machineConfigChangeRequested(nodeObs) {
+		haveNOMC, nomc, err := r.ensureNOMC(ctx, nodeObs)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to ensure nodeobservabilitymachineconfig : %w", err)
+		} else if !haveNOMC {
+			return ctrl.Result{}, fmt.Errorf("failed to get nodeobservabilitymachineconfig")
 		}
+		r.Log.Info(fmt.Sprintf("NodeObservabilityMachineConfig : %s", nomc.Name))
+		nomcReady = nomc.Status.IsReady()
 	}
+
+	if dsReady && nomcReady {
+		nodeObs.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionTrue, "Ready", "Ready")
+	} else {
+		nodeObs.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, "NotReady", "NotReady")
+	}
+
 	// ignore when testing
-	if count == 0 && !r.Err.Enabled {
+	if ds.Status.NumberReady == 0 && !r.Err.Enabled {
+		// FIXME: this is not an error, pods will eventually come up
 		return ctrl.Result{}, fmt.Errorf("agent pods are not deployed correctly with status 'Running'")
 	}
-	r.Log.Info(fmt.Sprintf("Agent pods deployed : count %d", len(podList.Items)))
-
-	nodeObs.Status.Count = len(podList.Items)
+	r.Log.Info(fmt.Sprintf("Agent pods deployed : count %d", ds.Status.NumberReady))
+	nodeObs.Status.Count = ds.Status.NumberReady
 	now := metav1.NewTime(clock.Now())
 	nodeObs.Status.LastUpdate = &now
 	err = r.Status().Update(ctx, nodeObs)
@@ -214,7 +209,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		r.Log.Error(err, "failed to update status")
 		return ctrl.Result{}, err
 	}
-	r.Log.Info(fmt.Sprintf("Status updated count : %d lastUpdated : %v", len(podList.Items), now))
+	r.Log.Info(fmt.Sprintf("Status updated count : %d lastUpdated : %v", ds.Status.NumberReady, now))
 
 	return ctrl.Result{}, nil
 }
@@ -287,8 +282,7 @@ func (r *NodeObservabilityReconciler) ensureNodeObservabilityDeleted(ctx context
 		errs = append(errs, fmt.Errorf("failed to delete SCC : %w", err))
 	}
 	if err := r.deleteNOMC(ctx, nodeObs); err != nil {
-		// TODO: blockOwnerDeletion: true, update status
-		errs = append(errs, fmt.Errorf("failed to delete SCC : %w", err))
+		errs = append(errs, fmt.Errorf("failed to delete nodeobservabilitymachineconfig : %w", err))
 	}
 	if len(errs) == 0 && hasFinalizer(nodeObs) {
 		// Remove the finalizer.
@@ -298,4 +292,15 @@ func (r *NodeObservabilityReconciler) ensureNodeObservabilityDeleted(ctx context
 		}
 	}
 	return utilerrors.NewAggregate(errs)
+}
+
+// machineConfigChangeRequested returns true, when a given NodeObservabilityType needs
+// machine config change. Only CrioNodeObservabilityType requires a MC change, false otherwise
+func machineConfigChangeRequested(nodeObs *operatorv1alpha1.NodeObservability) bool {
+	for _, t := range nodeObs.Spec.Types {
+		if t == v1alpha1.CrioNodeObservabilityType {
+			return true
+		}
+	}
+	return false
 }

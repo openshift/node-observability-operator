@@ -19,9 +19,9 @@ const (
 // ensureServiceAccount ensures that the serviceaccount exists
 // Returns a Boolean value indicating whether it exists, a pointer to the
 // serviceaccount and an error when relevant
-func (r *NodeObservabilityReconciler) ensureServiceAccount(ctx context.Context, nodeObs *v1alpha1.NodeObservability) (bool, *corev1.ServiceAccount, error) {
-	nameSpace := types.NamespacedName{Namespace: nodeObs.Namespace, Name: serviceAccountName}
-	desired := r.desiredServiceAccount(nodeObs)
+func (r *NodeObservabilityReconciler) ensureServiceAccount(ctx context.Context, nodeObs *v1alpha1.NodeObservability, ns string) (bool, *corev1.ServiceAccount, error) {
+	nameSpace := types.NamespacedName{Namespace: ns, Name: serviceAccountName}
+	desired := r.desiredServiceAccount(nodeObs, ns)
 	exist, current, err := r.currentServiceAccount(ctx, nameSpace)
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to get ServiceAccount: %v", err)
@@ -60,11 +60,11 @@ func (r *NodeObservabilityReconciler) createServiceAccount(ctx context.Context, 
 }
 
 // desiredServiceAccount returns a serviceaccount object
-func (r *NodeObservabilityReconciler) desiredServiceAccount(nodeObs *v1alpha1.NodeObservability) *corev1.ServiceAccount {
+func (r *NodeObservabilityReconciler) desiredServiceAccount(nodeObs *v1alpha1.NodeObservability, ns string) *corev1.ServiceAccount {
 
 	sa := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: nodeObs.Namespace,
+			Namespace: ns,
 			Name:      serviceAccountName,
 			OwnerReferences: []metav1.OwnerReference{
 				{

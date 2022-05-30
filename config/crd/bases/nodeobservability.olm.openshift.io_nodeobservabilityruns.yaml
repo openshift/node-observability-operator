@@ -12,6 +12,8 @@ spec:
     kind: NodeObservabilityRun
     listKind: NodeObservabilityRunList
     plural: nodeobservabilityruns
+    shortNames:
+    - "no"
     singular: nodeobservabilityrun
   scope: Namespaced
   versions:

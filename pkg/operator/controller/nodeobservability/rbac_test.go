@@ -64,11 +64,9 @@ func makeClusterRole() *rbacv1.ClusterRole {
 }
 
 func makeClusterRoleBinding() *rbacv1.ClusterRoleBinding {
-	nodeObs := &operatorv1alpha1.NodeObservability{}
 	clusterRoleBinding := rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterRoleBindingName,
-			Namespace: nodeObs.Namespace,
+			Name: clusterRoleBindingName,
 		},
 		Subjects: []rbacv1.Subject{
 			{
@@ -282,7 +280,7 @@ func TestEnsureClusterRole(t *testing.T) {
 				Log:    zap.New(zap.UseDevMode(true)),
 			}
 			nodeObs := &operatorv1alpha1.NodeObservability{}
-			_, serviceAccount, err := r.ensureServiceAccount(context.TODO(), nodeObs)
+			_, serviceAccount, err := r.ensureServiceAccount(context.TODO(), nodeObs, test.TestNamespace)
 			if err != nil {
 				if !tc.errExpected {
 					t.Fatalf("unexpected error received: %v", err)
@@ -291,7 +289,7 @@ func TestEnsureClusterRole(t *testing.T) {
 			}
 			r.Log.Info(fmt.Sprintf("ServiceAccount : %s", serviceAccount.Name))
 
-			gotExist, _, err := r.ensureClusterRoleBinding(context.TODO(), nodeObs, serviceAccount.Name)
+			gotExist, _, err := r.ensureClusterRoleBinding(context.TODO(), nodeObs, serviceAccount.Name, test.TestNamespace)
 			if err != nil {
 				if !tc.errExpected {
 					t.Fatalf("unexpected error received: %v", err)

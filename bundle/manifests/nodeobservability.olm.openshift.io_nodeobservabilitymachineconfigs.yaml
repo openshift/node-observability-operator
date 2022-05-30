@@ -11,6 +11,8 @@ spec:
     kind: NodeObservabilityMachineConfig
     listKind: NodeObservabilityMachineConfigList
     plural: nodeobservabilitymachineconfigs
+    shortNames:
+    - nomc
     singular: nodeobservabilitymachineconfig
   scope: Cluster
   versions:
