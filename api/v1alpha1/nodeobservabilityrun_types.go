@@ -68,7 +68,7 @@ type AgentNode struct {
 }
 
 // +kubebuilder:printcolumn:JSONPath=".spec.nodeObservabilityRef.name", name="NodeObservabilityRef", type="string"
-//+kubebuilder:resource:shortName=no
+//+kubebuilder:resource:shortName=nor
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
