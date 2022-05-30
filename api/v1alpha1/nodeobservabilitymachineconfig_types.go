@@ -93,8 +93,8 @@ func (s *NodeObservabilityMachineConfigStatus) IsDebuggingEnabled() bool {
 }
 
 // UpdateLastReconcileTime is for updating LastReconcile in NodeObservabilityMachineConfigStatus
-func (status *NodeObservabilityMachineConfigStatus) UpdateLastReconcileTime() {
-	status.LastReconcile = metav1.Now()
+func (s *NodeObservabilityMachineConfigStatus) UpdateLastReconcileTime() {
+	s.LastReconcile = metav1.Now()
 }
 
 func init() {
