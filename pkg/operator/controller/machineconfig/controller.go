@@ -98,7 +98,7 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	r.Log.V(3).Info("NodeObservabilityMachineConfig resource found")
 
 	if !r.CtrlConfig.DeletionTimestamp.IsZero() {
-		r.Log.Info("NodeObservabilityMachineConfig resource marked for deletetion, cleaning up")
+		r.Log.Info("NodeObservabilityMachineConfig resource marked for deletion, cleaning up")
 		result, err = r.cleanUp(ctx, req)
 
 		if r.CtrlConfig.Status.IsMachineConfigInProgress() {
@@ -197,7 +197,7 @@ func (r *MachineConfigReconciler) cleanUp(ctx context.Context, req ctrl.Request)
 		if _, err := r.withoutFinalizers(ctx, req, finalizer); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to remove finalizer from NodeObservabilityMachineConfig %s: %w", r.CtrlConfig.Name, err)
 		}
-		r.Log.Info("removed finalzer from NodeObservabilityMachineConfig resource, cleanup complete")
+		r.Log.Info("removed finalizer from NodeObservabilityMachineConfig resource, cleanup complete")
 	}
 
 	return ctrl.Result{}, nil
@@ -365,7 +365,7 @@ func (r *MachineConfigReconciler) ensureProfConfDisabled(ctx context.Context) (b
 
 	if modCount > 0 {
 		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled, metav1.ConditionFalse, v1alpha1.ReasonDisabled,
-			"debug configutations disabled")
+			"debug configurations disabled")
 		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress,
 			"removing debug configurations in progress")
 		return true, nil

@@ -168,15 +168,6 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 
 	r.Lock()
 
-	if !r.CtrlConfig.Status.IsDebuggingEnabled() {
-		r.Log.Info("NodeObservabilityMachineConfig current condition "+
-			"does not require MCP status check",
-			"MCP", mcp.Name, "conditions", r.CtrlConfig.Status.Conditions)
-
-		r.Unlock()
-		return ctrl.Result{}, nil
-	}
-
 	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdating) &&
 		mcp.Status.DegradedMachineCount == 0 {
 		msg := "machine config update to enable debugging in progress"
@@ -234,15 +225,6 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 	}
 
 	r.Lock()
-
-	if r.CtrlConfig.Status.IsDebuggingEnabled() && !r.CtrlConfig.Status.IsDebuggingFailed() {
-		r.Log.Info("NodeObservabilityMachineConfig current condition "+
-			"does not require MCP status check",
-			"MCP", mcp.Name, "conditions", r.CtrlConfig.Status.Conditions)
-
-		r.Unlock()
-		return ctrl.Result{}, nil
-	}
 
 	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdating) &&
 		mcp.Status.DegradedMachineCount == 0 {

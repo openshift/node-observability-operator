@@ -213,7 +213,7 @@ func (r *MachineConfigReconciler) ensureReqNodeLabelNotExists(ctx context.Contex
 	return updNodeCount, nil
 }
 
-// revertNodeUnlabeling is for revrting the labels removed from the nodes during failure scenarios
+// revertNodeUnlabeling is for reverting the labels removed from the nodes during failure scenarios
 func (r *MachineConfigReconciler) revertNodeUnlabeling(ctx context.Context) error {
 	r.Lock()
 	defer r.Unlock()
