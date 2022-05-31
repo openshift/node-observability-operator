@@ -109,7 +109,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	r.Log.Info(fmt.Sprintf("NodeObservability resource found : Namespace %s : Name %s ", req.NamespacedName.Namespace, nodeObs.Name))
 
 	// Set finalizers on the NodeObservability resource
-	updated, err := r.withFinalizers(nodeObs)
+	updated, err := r.withFinalizers(ctx, nodeObs)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update NodeObservability with finalizers:, %w", err)
 	}
@@ -177,6 +177,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	dsReady := ds.Status.NumberReady == ds.Status.DesiredNumberScheduled
 
+	// if machine config change is not requested, we can mark it as ready
 	var nomcReady bool = true
 	if machineConfigChangeRequested(nodeObs) {
 		haveNOMC, nomc, err := r.ensureNOMC(ctx, nodeObs)
@@ -189,15 +190,17 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		nomcReady = nomc.Status.IsReady()
 	}
 
+	msg := fmt.Sprintf("Deployment %s ready: %t NodeObservabilityMachineConfig ready: %t", ds.Name, dsReady, nomcReady)
 	if dsReady && nomcReady {
-		nodeObs.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionTrue, "Ready", "Ready")
+		nodeObs.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionTrue, v1alpha1.ReasonReady, msg)
 	} else {
-		nodeObs.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, "NotReady", "NotReady")
+		nodeObs.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, msg)
 	}
 
 	// ignore when testing
 	if ds.Status.NumberReady == 0 && !r.Err.Enabled {
 		// FIXME: this is not an error, pods will eventually come up
+		// FIXME: call r.Status().Update() before returning (eg deferred call)
 		return ctrl.Result{}, fmt.Errorf("agent pods are not deployed correctly with status 'Running'")
 	}
 	r.Log.Info(fmt.Sprintf("Agent pods deployed : count %d", ds.Status.NumberReady))
@@ -256,14 +259,14 @@ func (r *NodeObservabilityReconciler) withoutFinalizers(ctx context.Context, nod
 	return withoutFinalizers, nil
 }
 
-func (r *NodeObservabilityReconciler) withFinalizers(nodeObs *operatorv1alpha1.NodeObservability) (*operatorv1alpha1.NodeObservability, error) {
+func (r *NodeObservabilityReconciler) withFinalizers(ctx context.Context, nodeObs *operatorv1alpha1.NodeObservability) (*operatorv1alpha1.NodeObservability, error) {
 	withFinalizers := nodeObs.DeepCopy()
 
 	if !hasFinalizer(withFinalizers) {
 		withFinalizers.Finalizers = append(withFinalizers.Finalizers, finalizer)
 	}
 
-	if err := r.Update(context.TODO(), withFinalizers); err != nil {
+	if err := r.Update(ctx, withFinalizers); err != nil {
 		return withFinalizers, fmt.Errorf("failed to update finalizers: %w", err)
 	}
 	return withFinalizers, nil

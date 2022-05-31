@@ -327,6 +327,11 @@ func testNodeObservabilityRun() *operatorv1alpha1.NodeObservabilityRun {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					Name: name,
+				},
+			},
 		},
 		Spec: operatorv1alpha1.NodeObservabilityRunSpec{
 			NodeObservabilityRef: &operatorv1alpha1.NodeObservabilityRef{

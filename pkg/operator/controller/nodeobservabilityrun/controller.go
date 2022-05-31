@@ -27,6 +27,7 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,6 +36,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	nodeobservabilityv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
@@ -93,12 +95,22 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 	}
 
 	defer func() {
-		errUpdate := r.Status().Update(ctx, instance, &client.UpdateOptions{})
+		errUpdate := r.updateStatus(ctx, instance)
 		if errUpdate != nil {
 			r.Log.Error(errUpdate, "failed to update status")
 			err = utilerrors.NewAggregate([]error{err, errUpdate})
 		}
 	}()
+
+	var isAdopted bool
+	if isAdopted, err = r.adoptResource(ctx, instance); !isAdopted {
+		if err != nil {
+			r.Log.Error(err, "Error while setting owner reference NodeObservabilityRun->NodeObservability")
+			return
+		}
+		res = ctrl.Result{Requeue: true}
+		return
+	}
 
 	var canProceed bool
 	if canProceed, err = r.preconditionsMet(ctx, instance, r.Namespace); !canProceed {
@@ -123,7 +135,7 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 		t := metav1.Now()
 		instance.Status.FinishedTimestamp = &t
 		msg := "Profiling query done"
-		instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugReady, metav1.ConditionTrue, nodeobservabilityv1alpha1.ReasonInProgress, msg)
+		instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugReady, metav1.ConditionTrue, nodeobservabilityv1alpha1.ReasonReady, msg)
 		return
 	}
 
@@ -139,6 +151,29 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 
 	// one cycle takes cca 30s
 	return ctrl.Result{RequeueAfter: time.Second * 30}, err
+}
+
+// adoptResource sets OwnerReference to point to NodeObservability from .spec.ref.name
+// returns true if already adopted, false otherwise
+func (r *NodeObservabilityRunReconciler) adoptResource(ctx context.Context, instance *nodeobservabilityv1alpha1.NodeObservabilityRun) (bool, error) {
+	for _, ref := range instance.OwnerReferences {
+		// FIXME: check kind as well?
+		if ref.Name == instance.Spec.NodeObservabilityRef.Name {
+			return true, nil
+		}
+	}
+	nodeObs := &nodeobservabilityv1alpha1.NodeObservability{}
+	if err := r.Get(ctx, types.NamespacedName{Name: instance.Spec.NodeObservabilityRef.Name}, nodeObs); err != nil {
+		return false, err
+	}
+	cpy := instance.DeepCopy()
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, corErr := ctrlutil.CreateOrUpdate(ctx, r.Client, cpy, func() error {
+			return ctrlutil.SetOwnerReference(nodeObs, cpy, r.Scheme)
+		})
+		return corErr
+	})
+	return false, err
 }
 
 func (r *NodeObservabilityRunReconciler) handleInProgress(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) (bool, error) {
@@ -191,6 +226,21 @@ func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance 
 	instance.Status.Agents = targets
 	instance.Status.FailedAgents = failedTargets
 	return nil
+}
+
+func (r *NodeObservabilityRunReconciler) updateStatus(ctx context.Context, instance *nodeobservabilityv1alpha1.NodeObservabilityRun) error {
+	key := types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}
+	freshRun := &nodeobservabilityv1alpha1.NodeObservabilityRun{}
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := r.Get(ctx, key, freshRun); err != nil {
+			return err
+		}
+		if equality.Semantic.DeepEqual(freshRun.Status, instance.Status) {
+			return nil
+		}
+		freshRun.Status = instance.Status
+		return r.Status().Update(ctx, freshRun, &client.UpdateOptions{})
+	})
 }
 
 func (r *NodeObservabilityRunReconciler) preconditionsMet(ctx context.Context, instance *nodeobservabilityv1alpha1.NodeObservabilityRun, ns string) (bool, error) {
