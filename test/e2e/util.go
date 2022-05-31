@@ -26,7 +26,6 @@ func testNodeObservability(testName string) *operatorv1alpha1.NodeObservability 
 			},
 			Image: image,
 			Types: []operatorv1alpha1.NodeObservabilityType{
-				operatorv1alpha1.CrioNodeObservabilityType,
 				operatorv1alpha1.KubeletNodeObservabilityType,
 			},
 		},
