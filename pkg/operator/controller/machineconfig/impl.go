@@ -43,11 +43,13 @@ type impl interface {
 	ClientPatch(context.Context, client.Object, client.Patch, ...client.PatchOption) error
 }
 
-func NewClient(impls ...impl) impl {
+func NewClient(m manager.Manager, impls ...impl) impl {
 	if len(impls) != 0 {
 		return impls[0]
 	}
-	return &defaultImpl{}
+	return &defaultImpl{
+		Client: m.GetClient(),
+	}
 }
 
 func (c *defaultImpl) ManagerGetScheme(m manager.Manager) *runtime.Scheme {
