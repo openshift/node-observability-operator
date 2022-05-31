@@ -38,10 +38,21 @@ const (
 	//   - True
 	//   - False
 	//   Reason:
-	//   - In progress
+	//   - Progressing
 	//   - Failed
 	//   - Ready: config successfully applied and ready
 	DebugReady string = "Ready"
+
+	// DebugFinished is the condition type used to inform state of running debug
+	// operation
+	//   Status:
+	//   - True
+	//   - False
+	//   Reason:
+	//   - Progressing
+	//   - Failed
+	//   - Finished
+	DebugFinished string = "Finished"
 )
 
 const (
@@ -50,6 +61,8 @@ const (
 	ReasonDisabled string = "Disabled"
 
 	ReasonReady string = "Ready"
+
+	ReasonFinished string = "Finished"
 
 	ReasonFailed string = "Failed"
 

@@ -72,6 +72,7 @@ type NodeObservabilityRunReconciler struct {
 
 // Reconcile manages NodeObservabilityRuns
 func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
+	var msg string
 	r.Log, err = logr.FromContext(ctx)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -118,36 +119,38 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 			r.Log.Error(err, "preconditions not met")
 			return
 		}
-		msg := fmt.Sprintf("Waiting for NodeObservabilityMachineConfig %s to become ready", instance.Spec.NodeObservabilityRef.Name)
+		msg = fmt.Sprintf("Waiting for NodeObservabilityMachineConfig %s to become ready", instance.Spec.NodeObservabilityRef.Name)
 		instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugReady, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonInProgress, msg)
 		return ctrl.Result{RequeueAfter: pollingPeriod}, err
 	}
+	msg = "Ready to start profiling"
+	instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugReady, metav1.ConditionTrue, nodeobservabilityv1alpha1.ReasonReady, msg)
 
 	if inProgress(instance) {
 		r.Log.V(3).Info("Run is in progress")
 		var requeue bool
 		requeue, err = r.handleInProgress(instance)
 		if requeue {
-			msg := "Profiling query in progress"
-			instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugReady, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonInProgress, msg)
+			msg = "Profiling query in progress"
+			instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonInProgress, msg)
 			return ctrl.Result{RequeueAfter: pollingPeriod}, err
 		}
 		t := metav1.Now()
 		instance.Status.FinishedTimestamp = &t
-		msg := "Profiling query done"
-		instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugReady, metav1.ConditionTrue, nodeobservabilityv1alpha1.ReasonReady, msg)
+		msg = "Profiling query done"
+		instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugFinished, metav1.ConditionTrue, nodeobservabilityv1alpha1.ReasonFinished, msg)
 		return
 	}
 
 	err = r.startRun(ctx, instance)
 	if err != nil {
-		msg := fmt.Sprintf("Failed to initiated profiling query: %s", err.Error())
-		instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugReady, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonFailed, msg)
+		msg = fmt.Sprintf("Failed to initiated profiling query: %s", err.Error())
+		instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonFailed, msg)
 		return ctrl.Result{}, err
 	}
 
-	msg := "Profiling query initiated"
-	instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugReady, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonInProgress, msg)
+	msg = "Profiling query initiated"
+	instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonInProgress, msg)
 
 	// one cycle takes cca 30s
 	return ctrl.Result{RequeueAfter: time.Second * 30}, err

@@ -42,7 +42,7 @@ func testNodeObservabilityRun(testName string) *operatorv1alpha1.NodeObservabili
 		},
 		Spec: operatorv1alpha1.NodeObservabilityRunSpec{
 			NodeObservabilityRef: &operatorv1alpha1.NodeObservabilityRef{
-				Name: testName,
+				Name: defaultTestName,
 			},
 		},
 	}
