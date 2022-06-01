@@ -47,7 +47,7 @@ var _ = Describe("Node Observability Operator end-to-end test suite", Ordered, f
 				}
 				Expect(client.IgnoreNotFound(k8sClient.Get(ctx, dsNamespacedName, ds))).To(Succeed())
 				return ds.Status.NumberReady != 0 && ds.Status.DesiredNumberScheduled == ds.Status.NumberReady
-			}, 60, time.Second).Should(BeTrue(), "number of ready agents != number of desired agents")
+			}, 60, time.Second).Should(BeTrue(), "number of ready agents should be equal number of desired agents")
 		})
 	})
 	Context("Happy Path scenario - single scrape is initiated and it is expected to succeed", func() {
@@ -86,38 +86,20 @@ var _ = Describe("Node Observability Operator end-to-end test suite", Ordered, f
 
 	Context("UnHappy Path scenario - When a concurrent scrape is initiated", func() {
 		const (
-			run1     = "run1"
 			run2     = "run2"
 			testName = defaultTestName
 		)
 		var (
-			nodeobservabilityRun1 *operatorv1alpha1.NodeObservabilityRun
 			nodeobservabilityRun2 *operatorv1alpha1.NodeObservabilityRun
 		)
 		BeforeEach(func() {
-			nodeobservabilityRun1 = testNodeObservabilityRun(run1)
 			nodeobservabilityRun2 = testNodeObservabilityRun(run2)
 		})
 
 		It("runs Node Observability scrape", func() {
 
 			By("by creating NORs run2 right after previous test", func() {
-				Expect(k8sClient.Create(ctx, nodeobservabilityRun1)).To(Succeed(), "test NodeObservabilityRun resource created")
-				time.Sleep(time.Second)
 				Expect(k8sClient.Create(ctx, nodeobservabilityRun2)).To(Succeed(), "test NodeObservabilityRun resource created")
-			})
-
-			By("by verifying successful status for run1", func() {
-				firstrun := &operatorv1alpha1.NodeObservabilityRun{}
-				runNamespacedName := types.NamespacedName{
-					Name:      run1,
-					Namespace: testNamespace,
-				}
-				Eventually(func() bool {
-					Expect(k8sClient.Get(ctx, runNamespacedName, firstrun)).To(Succeed())
-					return firstrun.Status.FinishedTimestamp.IsZero()
-				}, 360, time.Second).Should(BeFalse())
-				Expect(firstrun.Status.FailedAgents).To(BeEmpty(), firstrun.Name+" should not have failed agents")
 			})
 
 			By("by verifying failed status for run2", func() {
@@ -134,7 +116,6 @@ var _ = Describe("Node Observability Operator end-to-end test suite", Ordered, f
 			})
 		})
 		AfterEach(func() {
-			Expect(k8sClient.Delete(ctx, nodeobservabilityRun1)).To(Succeed())
 			Expect(k8sClient.Delete(ctx, nodeobservabilityRun2)).To(Succeed())
 		})
 
