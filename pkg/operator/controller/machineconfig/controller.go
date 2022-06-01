@@ -45,7 +45,7 @@ import (
 
 // New returns a new MachineConfigReconciler instance.
 func New(mgr ctrl.Manager, impls ...impl) (*MachineConfigReconciler, error) {
-	effectiveClient := NewClient(impls...)
+	effectiveClient := NewClient(mgr, impls...)
 	return &MachineConfigReconciler{
 		impl: effectiveClient,
 
