@@ -175,7 +175,7 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, msg)
 
 		r.Unlock()
-		return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
+		return ctrl.Result{}, nil
 	}
 
 	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdated) {
@@ -209,12 +209,12 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 		msg := fmt.Sprintf("%s MCP has %d machines in degraded state, reverted changes", mcp.Name, mcp.Status.DegradedMachineCount)
 		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonFailed, msg)
 		r.Unlock()
-		return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
+		return ctrl.Result{}, nil
 	}
 
 	r.Unlock()
 	r.Log.Info("waiting for machine config update to complete on all machines", "MCP", mcp.Name)
-	return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
+	return ctrl.Result{}, nil
 }
 
 // checkWorkerMCPStatus is for reconciling update status of all machines in profiling MCP
@@ -239,17 +239,17 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 		}
 		r.Log.Info(msg)
 		r.Unlock()
-		return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
+		return ctrl.Result{}, nil
 	}
 
 	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdated) {
 
 		r.Unlock()
 		if err := r.ensureReqMCNotExists(ctx); err != nil {
-			return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
+			return ctrl.Result{RequeueAfter: defaultRequeueTime}, err
 		}
 		if err := r.ensureReqMCPNotExists(ctx); err != nil {
-			return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
+			return ctrl.Result{RequeueAfter: defaultRequeueTime}, err
 		}
 
 		var msg string
@@ -295,5 +295,5 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 	if r.CtrlConfig.Status.IsDebuggingFailed() {
 		r.Log.Info("waiting for reverting to complete on all machines", "MCP", mcp.Name)
 	}
-	return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
+	return ctrl.Result{}, nil
 }
