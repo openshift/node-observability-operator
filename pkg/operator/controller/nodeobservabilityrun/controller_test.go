@@ -346,8 +346,7 @@ func testNodeObservabilityRun() *operatorv1alpha1.NodeObservabilityRun {
 func testNodeObservability() *operatorv1alpha1.NodeObservability {
 	return &operatorv1alpha1.NodeObservability{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
+			Name: name,
 		},
 		Spec: operatorv1alpha1.NodeObservabilitySpec{},
 		Status: operatorv1alpha1.NodeObservabilityStatus{
