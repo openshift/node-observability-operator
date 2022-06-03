@@ -116,7 +116,7 @@ var _ = Describe("Node Observability Operator end-to-end test suite", Ordered, f
 				Eventually(func() bool {
 					Expect(k8sClient.Get(ctx, runNamespacedName, firstrun)).To(Succeed())
 					return firstrun.Status.FinishedTimestamp.IsZero()
-				}, 360, time.Second).Should(BeFalse())
+				}, 600, time.Second).Should(BeFalse())
 				Expect(firstrun.Status.FailedAgents).To(BeEmpty(), firstrun.Name+" should not have failed agents")
 			})
 
@@ -129,7 +129,7 @@ var _ = Describe("Node Observability Operator end-to-end test suite", Ordered, f
 				Eventually(func() bool {
 					Expect(k8sClient.Get(ctx, runNamespacedName, secondrun)).To(Succeed())
 					return secondrun.Status.FinishedTimestamp.IsZero()
-				}, 1800, time.Second).Should(BeFalse())
+				}, 600, time.Second).Should(BeFalse())
 				Expect(len(secondrun.Status.FailedAgents) > 0).To(BeTrue())
 			})
 		})

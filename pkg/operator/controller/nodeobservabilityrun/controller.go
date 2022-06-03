@@ -114,12 +114,12 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 	}
 
 	var canProceed bool
-	if canProceed, err = r.preconditionsMet(ctx, instance, r.Namespace); !canProceed {
+	if canProceed, err = r.preconditionsMet(ctx, instance); !canProceed {
 		if err != nil {
 			r.Log.Error(err, "preconditions not met")
 			return
 		}
-		msg = fmt.Sprintf("Waiting for NodeObservabilityMachineConfig %s to become ready", instance.Spec.NodeObservabilityRef.Name)
+		msg = fmt.Sprintf("Waiting for NodeObservability %s to become ready", instance.Spec.NodeObservabilityRef.Name)
 		instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugReady, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonInProgress, msg)
 		return ctrl.Result{RequeueAfter: pollingPeriod}, err
 	}
@@ -246,9 +246,9 @@ func (r *NodeObservabilityRunReconciler) updateStatus(ctx context.Context, insta
 	})
 }
 
-func (r *NodeObservabilityRunReconciler) preconditionsMet(ctx context.Context, instance *nodeobservabilityv1alpha1.NodeObservabilityRun, ns string) (bool, error) {
+func (r *NodeObservabilityRunReconciler) preconditionsMet(ctx context.Context, instance *nodeobservabilityv1alpha1.NodeObservabilityRun) (bool, error) {
 	no := &nodeobservabilityv1alpha1.NodeObservability{}
-	key := types.NamespacedName{Name: instance.Spec.NodeObservabilityRef.Name, Namespace: ns}
+	key := types.NamespacedName{Name: instance.Spec.NodeObservabilityRef.Name}
 	if err := r.Get(ctx, key, no); err != nil {
 		return false, err
 	}

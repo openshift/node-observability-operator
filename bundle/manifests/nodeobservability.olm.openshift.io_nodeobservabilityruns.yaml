@@ -12,7 +12,7 @@ spec:
     listKind: NodeObservabilityRunList
     plural: nodeobservabilityruns
     shortNames:
-    - nor
+    - nobr
     singular: nodeobservabilityrun
   scope: Namespaced
   versions:

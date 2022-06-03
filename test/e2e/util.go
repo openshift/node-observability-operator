@@ -25,10 +25,7 @@ func testNodeObservability(testName string) *operatorv1alpha1.NodeObservability 
 				"node-role.kubernetes.io/worker": "",
 			},
 			Image: image,
-			Types: []operatorv1alpha1.NodeObservabilityType{
-				operatorv1alpha1.CrioNodeObservabilityType,
-				operatorv1alpha1.KubeletNodeObservabilityType,
-			},
+			Type:  operatorv1alpha1.CrioKubeletNodeObservabilityType,
 		},
 	}
 }

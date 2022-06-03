@@ -11,6 +11,8 @@ spec:
     kind: NodeObservability
     listKind: NodeObservabilityList
     plural: nodeobservabilities
+    shortNames:
+    - nob
     singular: nodeobservability
   scope: Cluster
   versions:
@@ -44,22 +46,16 @@ spec:
                 description: Labels is map of key:value pairs that are used to match
                   against node labels
                 type: object
-              types:
-                description: 'Types defines the type of profiling queries, which will
-                  be enabled The following types are supported: * crio - 30s of /pprof
-                  data, requesting this type might cause node restart * kubelet -
-                  30s of /pprof data, requesting this type might cause node restart'
-                items:
-                  enum:
-                  - crio
-                  - kubelet
-                  - ebpf
-                  - custom
-                  type: string
-                type: array
+              type:
+                description: 'Type defines the type of profiling queries, which will
+                  be enabled The following types are supported: * crio-kubelet - 30s
+                  of /pprof data, requesting this type might cause node restart'
+                enum:
+                - crio-kubelet
+                type: string
             required:
             - image
-            - types
+            - type
             type: object
           status:
             description: NodeObservabilityStatus defines the observed state of NodeObservability

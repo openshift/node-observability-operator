@@ -122,7 +122,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	// - clusterrolebinding (bind the sa to the role)
 
 	// ensure scc
-	haveSCC, scc, err := r.ensureSecurityContextConstraints(ctx, nodeObs, r.Namespace)
+	haveSCC, scc, err := r.ensureSecurityContextConstraints(ctx, nodeObs)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure securitycontectconstraints : %w", err)
 	} else if !haveSCC {
@@ -300,10 +300,8 @@ func (r *NodeObservabilityReconciler) ensureNodeObservabilityDeleted(ctx context
 // machineConfigChangeRequested returns true, when a given NodeObservabilityType needs
 // machine config change. Only CrioNodeObservabilityType requires a MC change, false otherwise
 func machineConfigChangeRequested(nodeObs *operatorv1alpha1.NodeObservability) bool {
-	for _, t := range nodeObs.Spec.Types {
-		if t == v1alpha1.CrioNodeObservabilityType {
-			return true
-		}
+	if nodeObs.Spec.Type == v1alpha1.CrioKubeletNodeObservabilityType {
+		return true
 	}
 	return false
 }

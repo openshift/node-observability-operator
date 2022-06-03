@@ -23,14 +23,11 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// +kubebuilder:validation:Enum=crio;kubelet;ebpf;custom
+// +kubebuilder:validation:Enum=crio-kubelet;
 type NodeObservabilityType string
 
 const (
-	CrioNodeObservabilityType    NodeObservabilityType = "crio"
-	KubeletNodeObservabilityType NodeObservabilityType = "kubelet"
-	EbpfNodeObservabilityType    NodeObservabilityType = "ebpf"
-	CustomNodeObservabilityType  NodeObservabilityType = "custom"
+	CrioKubeletNodeObservabilityType NodeObservabilityType = "crio-kubelet"
 )
 
 // NodeObservabilitySpec defines the desired state of NodeObservability
@@ -40,11 +37,10 @@ type NodeObservabilitySpec struct {
 	// Image is the container (pod) image to execute specific scripts on each node
 	Image string `json:"image"`
 	// +kubebuilder:validation:Required
-	// Types defines the type of profiling queries, which will be enabled
+	// Type defines the type of profiling queries, which will be enabled
 	// The following types are supported:
-	//   * crio - 30s of /pprof data, requesting this type might cause node restart
-	//   * kubelet - 30s of /pprof data, requesting this type might cause node restart
-	Types []NodeObservabilityType `json:"types"`
+	//   * crio-kubelet - 30s of /pprof data, requesting this type might cause node restart
+	Type NodeObservabilityType `json:"type"`
 }
 
 // NodeObservabilityStatus defines the observed state of NodeObservability
@@ -56,7 +52,7 @@ type NodeObservabilityStatus struct {
 	ConditionalStatus `json:"conditions,omitempty"`
 }
 
-//+kubebuilder:resource:scope=Cluster
+//+kubebuilder:resource:scope=Cluster,shortName=nob
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 

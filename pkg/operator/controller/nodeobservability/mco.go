@@ -69,12 +69,10 @@ func (r *NodeObservabilityReconciler) desiredNOMC(instance *v1alpha1.NodeObserva
 // desiredNOMCSpec returns a NodeObservabilityMachineConfigSpec object
 func (r *NodeObservabilityReconciler) desiredNOMCSpec(instance *v1alpha1.NodeObservability) v1alpha1.NodeObservabilityMachineConfigSpec {
 	s := v1alpha1.NodeObservabilityMachineConfigSpec{}
-	for _, t := range instance.Spec.Types {
-		if t == v1alpha1.CrioNodeObservabilityType {
-			s.Debug.EnableCrioProfiling = true
-		}
-		// TODO: ebpf, custom will go here
+	if instance.Spec.Type == v1alpha1.CrioKubeletNodeObservabilityType {
+		s.Debug.EnableCrioProfiling = true
 	}
+	// TODO: ebpf, custom will go here
 	return s
 }
 
