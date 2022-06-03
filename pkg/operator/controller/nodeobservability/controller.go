@@ -298,10 +298,7 @@ func (r *NodeObservabilityReconciler) ensureNodeObservabilityDeleted(ctx context
 }
 
 // machineConfigChangeRequested returns true, when a given NodeObservabilityType needs
-// machine config change. Only CrioNodeObservabilityType requires a MC change, false otherwise
+// machine config change. Only CrioKubeletNodeObservabilityType requires a MC change, false otherwise
 func machineConfigChangeRequested(nodeObs *operatorv1alpha1.NodeObservability) bool {
-	if nodeObs.Spec.Type == v1alpha1.CrioKubeletNodeObservabilityType {
-		return true
-	}
-	return false
+	return nodeObs.Spec.Type == v1alpha1.CrioKubeletNodeObservabilityType
 }
