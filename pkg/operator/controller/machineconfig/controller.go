@@ -80,7 +80,7 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return
 	}
 
-	r.Log.Info("Reconciling NodeObservabilityMachineConfig of Nodeobservability operator")
+	r.Log.V(3).Info("Reconciling NodeObservabilityMachineConfig of Nodeobservability operator")
 
 	// Fetch the nodeobservability.olm.openshift.io/nodeobservabilitymachineconfig CR
 	r.CtrlConfig = &v1alpha1.NodeObservabilityMachineConfig{}
@@ -149,7 +149,7 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// and allow MCO to pick the changes and update correct state
 	if requeue {
 		r.Log.Info("updated configurations, reconcile again in a minute")
-		return ctrl.Result{RequeueAfter: time.Minute}, nil
+		return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
 	}
 
 	return r.monitorProgress(ctx)
@@ -159,9 +159,9 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 func (r *MachineConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.NodeObservabilityMachineConfig{}).
-		WithEventFilter(ignoreNOMCStatusUpdates()).
 		Owns(&mcv1.MachineConfig{}).
 		Owns(&mcv1.MachineConfigPool{}).
+		WithEventFilter(ignoreNOMCStatusUpdates()).
 		Complete(r)
 }
 
@@ -170,7 +170,18 @@ func (r *MachineConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func ignoreNOMCStatusUpdates() predicate.Predicate {
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			fmt.Printf("Update event for type: %T:%v\n", e.ObjectOld, e.ObjectOld.GetName())
+			// old object does not exist, nothing to update
+			if e.ObjectOld == nil {
+				return false
+			}
+			// new object does not exist, nothing to update
+			if e.ObjectNew == nil {
+				return false
+			}
+
+			// if NOMC resource version is not changed, it indicates
+			// spec or metadata has not changed and the event could be for
+			// status update which need not be queued for reconciliation
 			if _, ok := e.ObjectOld.(*v1alpha1.NodeObservabilityMachineConfig); ok {
 				return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration()
 			}

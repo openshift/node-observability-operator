@@ -109,7 +109,7 @@ func (r *MachineConfigReconciler) createCrioProfConf(ctx context.Context) error 
 		return err
 	}
 
-	if err := ctrlutil.SetOwnerReference(r.CtrlConfig, criomc, r.Scheme); err != nil {
+	if err := ctrlutil.SetControllerReference(r.CtrlConfig, criomc, r.Scheme); err != nil {
 		r.Log.Error(err, "failed to update owner info in CRI-O profiling MC resource")
 	}
 

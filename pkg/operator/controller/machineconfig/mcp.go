@@ -133,7 +133,7 @@ func (r *MachineConfigReconciler) GetProfilingMCP(name string) *mcv1.MachineConf
 func (r *MachineConfigReconciler) createMCP(ctx context.Context, name string) error {
 	mcp := r.GetProfilingMCP(name)
 
-	if err := ctrlutil.SetOwnerReference(r.CtrlConfig, mcp, r.Scheme); err != nil {
+	if err := ctrlutil.SetControllerReference(r.CtrlConfig, mcp, r.Scheme); err != nil {
 		r.Log.Error(err, "failed to update owner info in MCP", "MCP", name)
 	}
 
