@@ -672,7 +672,7 @@ func TestMonitorProgress(t *testing.T) {
 	}
 }
 
-func TestReconcileNegativeScenarios(t *testing.T) {
+func TestReconcileClientFakes(t *testing.T) {
 
 	ctx := log.IntoContext(context.TODO(), zap.New(zap.UseDevMode(true)))
 	r := testReconciler()
@@ -1092,6 +1092,106 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 				return true
 			},
 			wantErr: false,
+		},
+		{
+			name: "inspectProfilingMCReq - mcp delete failure",
+			arg1: ctx,
+			arg2: request,
+			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
+					switch o := obj.(type) {
+					case *mcv1.MachineConfigPool:
+						return testError
+					case *mcv1.MachineConfig:
+						mc, _ := r.getCrioConfig()
+						mc.DeepCopyInto(o)
+					case *v1alpha1.NodeObservabilityMachineConfig:
+						nomc := testNodeObsMC()
+						nomc.DeepCopyInto(o)
+					case *corev1.Node:
+						nodes := testWorkerNodes()
+						for _, node := range nodes {
+							if ns.Name == node.(*corev1.Node).GetName() {
+								node.(*corev1.Node).DeepCopyInto(o)
+							}
+						}
+					}
+					return nil
+				})
+				m.ClientDeleteCalls(func(
+					ctx context.Context,
+					obj client.Object,
+					opts ...client.DeleteOption) error {
+					switch obj.(type) {
+					case *mcv1.MachineConfigPool:
+						return testError
+					}
+					return nil
+				})
+			},
+			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+				if result.RequeueAfter != 1*time.Minute ||
+					status.IsDebuggingEnabled() ||
+					status.IsMachineConfigInProgress() ||
+					status.IsDebuggingFailed() {
+					return false
+				}
+				return true
+			},
+			wantErr: true,
+		},
+		{
+			name: "inspectProfilingMCReq - mc delete failure",
+			arg1: ctx,
+			arg2: request,
+			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
+					switch o := obj.(type) {
+					case *mcv1.MachineConfigPool:
+						var mcp *mcv1.MachineConfigPool
+						if ns.Name == "worker" {
+							mcp = testWorkerMCP()
+						}
+						if ns.Name == "nodeobservability" {
+							mcp = testNodeObsMCP(r)
+						}
+						mcp.DeepCopyInto(o)
+					case *mcv1.MachineConfig:
+						return testError
+					case *v1alpha1.NodeObservabilityMachineConfig:
+						nomc := testNodeObsMC()
+						nomc.DeepCopyInto(o)
+					case *corev1.Node:
+						nodes := testWorkerNodes()
+						for _, node := range nodes {
+							if ns.Name == node.(*corev1.Node).GetName() {
+								node.(*corev1.Node).DeepCopyInto(o)
+							}
+						}
+					}
+					return nil
+				})
+				m.ClientDeleteCalls(func(
+					ctx context.Context,
+					obj client.Object,
+					opts ...client.DeleteOption) error {
+					switch obj.(type) {
+					case *mcv1.MachineConfig:
+						return testError
+					}
+					return nil
+				})
+			},
+			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+				if result.RequeueAfter != 1*time.Minute ||
+					status.IsDebuggingEnabled() ||
+					status.IsMachineConfigInProgress() ||
+					status.IsDebuggingFailed() {
+					return false
+				}
+				return true
+			},
+			wantErr: true,
 		},
 	}
 
