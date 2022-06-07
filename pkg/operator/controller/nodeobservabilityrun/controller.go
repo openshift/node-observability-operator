@@ -86,7 +86,7 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 			err = nil
 			return
 		}
-		r.Log.Error(err, "failed to get NodeObservabilityRun")
+		err = fmt.Errorf("failed to get NodeObservabilityRun: %w", err)
 		return
 	}
 
@@ -98,7 +98,7 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 	defer func() {
 		errUpdate := r.updateStatus(ctx, instance)
 		if errUpdate != nil {
-			r.Log.Error(errUpdate, "failed to update status")
+			errUpdate = fmt.Errorf("failed to update status: %w", errUpdate)
 			err = utilerrors.NewAggregate([]error{err, errUpdate})
 		}
 	}()
@@ -106,7 +106,7 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 	var isAdopted bool
 	if isAdopted, err = r.adoptResource(ctx, instance); !isAdopted {
 		if err != nil {
-			r.Log.Error(err, "Error while setting owner reference NodeObservabilityRun->NodeObservability")
+			err = fmt.Errorf("error while setting owner reference NodeObservabilityRun->NodeObservability: %w", err)
 			return
 		}
 		res = ctrl.Result{Requeue: true}
@@ -116,7 +116,7 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 	var canProceed bool
 	if canProceed, err = r.preconditionsMet(ctx, instance); !canProceed {
 		if err != nil {
-			r.Log.Error(err, "preconditions not met")
+			err = fmt.Errorf("preconditions not met: %w", err)
 			return
 		}
 		msg = fmt.Sprintf("Waiting for NodeObservability %s to become ready", instance.Spec.NodeObservabilityRef.Name)
@@ -144,7 +144,7 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 
 	err = r.startRun(ctx, instance)
 	if err != nil {
-		msg = fmt.Sprintf("Failed to initiated profiling query: %s", err.Error())
+		msg = fmt.Sprintf("Failed to initiate profiling query: %s", err.Error())
 		instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonFailed, msg)
 		return ctrl.Result{}, err
 	}
@@ -189,8 +189,7 @@ func (r *NodeObservabilityRunReconciler) handleInProgress(instance *nodeobservab
 				r.Log.V(3).Info("Received 407:StatusConflict, job still running")
 				return true, nil
 			}
-			r.Log.Error(err, "failed to get agent status", "name", agent.Name, "IP", agent.IP)
-			errors = append(errors, err)
+			errors = append(errors, fmt.Errorf("failed to get the status of the agent named %q with %q IP: %w", agent.Name, agent.IP, err))
 			handleFailingAgent(instance, agent)
 			continue
 		}
@@ -214,10 +213,10 @@ func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance 
 
 	for _, a := range subset.Addresses {
 		url := r.format(a.IP, r.AgentName, r.Namespace, pprofPath, port)
-		r.Log.V(3).Info("Initiating new run for node", "IP", a.IP, "port", port, "URL", url)
+		r.Log.V(3).Info("Initiating new run for node", "Name", a.TargetRef.Name, "IP", a.IP, "port", port, "URL", url)
 		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityRunErrorRetriable, r.httpGetCall(url))
 		if err != nil {
-			r.Log.Error(err, "failed to start profiling", "removing node from list", a.TargetRef.Name, "IP", a.IP)
+			r.Log.V(3).Info("Failed to start profiling, removing node from list", "Name", a.TargetRef.Name, "IP", a.IP, "Error", err)
 			failedTargets = append(failedTargets, nodeobservabilityv1alpha1.AgentNode{Name: a.TargetRef.Name, IP: a.IP, Port: port})
 			continue
 		}

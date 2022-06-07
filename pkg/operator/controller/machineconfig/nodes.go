@@ -107,7 +107,7 @@ func (r *MachineConfigReconciler) ensureReqNodeLabelExists(ctx context.Context) 
 		if err := r.ClientPatch(ctx, &nodeList.Items[i], client.RawPatch(types.JSONPatchType, patch)); err != nil {
 			return updNodeCount, err
 		}
-		r.Log.Info("successfully added label", "node", node.Name, "label", NodeObservabilityNodeRoleLabelName)
+		r.Log.Info("Successfully added label", "Node", node.Name, "Label", NodeObservabilityNodeRoleLabelName)
 
 		updNodeCount++
 		r.Node.PrevReconcileUpd[node.Name] = LabelInfo{
@@ -125,7 +125,7 @@ func (r *MachineConfigReconciler) ensureReqNodeLabelExists(ctx context.Context) 
 	}
 
 	if updNodeCount > 0 {
-		r.Log.Info("successfully added nodeobservability role to nodes with worker role", "node count", updNodeCount)
+		r.Log.Info("Successfully added nodeobservability role to nodes with worker role", "NodeCount", updNodeCount)
 	}
 	return updNodeCount, nil
 }
@@ -154,7 +154,7 @@ func (r *MachineConfigReconciler) revertNodeLabeling(ctx context.Context) error 
 			}
 			return err
 		}
-		r.Log.Info("successfully reverted label add", "node", name, "label", label.key)
+		r.Log.Info("Successfully reverted label add", "Node", name, "Label", label.key)
 
 		if err := r.ClientPatch(ctx, node, client.RawPatch(types.JSONPatchType, patch)); err != nil {
 			return err
@@ -190,7 +190,7 @@ func (r *MachineConfigReconciler) ensureReqNodeLabelNotExists(ctx context.Contex
 		if err := r.ClientPatch(ctx, &nodeList.Items[i], client.RawPatch(types.JSONPatchType, patch)); err != nil {
 			return updNodeCount, err
 		}
-		r.Log.Info("successfully removed label", "node", node.Name, "label", NodeObservabilityNodeRoleLabelName)
+		r.Log.Info("Successfully removed label", "Node", node.Name, "Label", NodeObservabilityNodeRoleLabelName)
 
 		updNodeCount++
 		r.Node.PrevReconcileUpd[node.Name] = LabelInfo{
@@ -208,7 +208,7 @@ func (r *MachineConfigReconciler) ensureReqNodeLabelNotExists(ctx context.Contex
 	}
 
 	if updNodeCount > 0 {
-		r.Log.Info("successfully removed nodeobservability role from nodes with worker role", "node count", updNodeCount)
+		r.Log.Info("Successfully removed nodeobservability role from nodes with worker role", "NodeCount", updNodeCount)
 	}
 	return updNodeCount, nil
 }
@@ -241,7 +241,7 @@ func (r *MachineConfigReconciler) revertNodeUnlabeling(ctx context.Context) erro
 		if err := r.ClientPatch(ctx, node, client.RawPatch(types.JSONPatchType, patch)); err != nil {
 			return err
 		}
-		r.Log.Info("successfully reverted label delete", "node", name, "label", label.key)
+		r.Log.Info("Successfully reverted label delete", "Node", name, "Label", label.key)
 
 		delete(r.Node.PrevReconcileUpd, name)
 	}
@@ -256,8 +256,7 @@ func (r *MachineConfigReconciler) listWorkerNodes(ctx context.Context, nodeList 
 	}
 
 	if err := r.listNodes(ctx, nodeList, workerNodeLabel); err != nil {
-		r.Log.Error(err, "failed to get the list of nodes with worker role")
-		return err
+		return fmt.Errorf("failed to get the list of nodes with worker role: %w", err)
 	}
 
 	return nil
@@ -270,8 +269,7 @@ func (r *MachineConfigReconciler) listNoObsLabeledNodes(ctx context.Context, nod
 	}
 
 	if err := r.listNodes(ctx, nodeList, nodeLabel); err != nil {
-		r.Log.Error(err, "failed to get the list of nodes labeled nodeobservability")
-		return err
+		return fmt.Errorf("failed to get the list of nodes labeled nodeobservability: %w", err)
 	}
 
 	return nil

@@ -110,14 +110,14 @@ func (r *MachineConfigReconciler) createCrioProfConf(ctx context.Context) error 
 	}
 
 	if err := ctrlutil.SetControllerReference(r.CtrlConfig, criomc, r.Scheme); err != nil {
-		r.Log.Error(err, "failed to update owner info in CRI-O profiling MC resource")
+		return fmt.Errorf("failed to update owner info in CRI-O profiling MC resource: %w", err)
 	}
 
 	if err := r.ClientCreate(ctx, criomc); err != nil {
 		return fmt.Errorf("failed to create crio profiling config %s: %w", criomc.Name, err)
 	}
 
-	r.Log.Info("successfully created CRI-O MC for enabling profiling", "CrioProfilingConfigName", CrioProfilingConfigName)
+	r.Log.Info("Successfully created CRI-O MC for enabling profiling", "CrioProfilingConfigName", CrioProfilingConfigName)
 	return nil
 }
 
@@ -127,7 +127,7 @@ func (r *MachineConfigReconciler) deleteCrioProfConf(ctx context.Context, criomc
 		return fmt.Errorf("failed to remove crio profiling config %s: %w", criomc.Name, err)
 	}
 
-	r.Log.Info("successfully removed CRI-O MC to disable profiling", "CrioProfilingConfigName", CrioProfilingConfigName)
+	r.Log.Info("Successfully removed CRI-O MC to disable profiling", "CrioProfilingConfigName", CrioProfilingConfigName)
 	return nil
 }
 
