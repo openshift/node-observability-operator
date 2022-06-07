@@ -30,15 +30,15 @@ const (
 // ensureDaemonSet ensures that the daemonset exists
 // Returns a Boolean value indicating whether it exists, a pointer to the
 // daemonset and an error when relevant
-func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeObs *v1alpha1.NodeObservability, sa *corev1.ServiceAccount) (bool, *appsv1.DaemonSet, error) {
-	nameSpace := types.NamespacedName{Namespace: nodeObs.Namespace, Name: daemonSetName}
-	desired := r.desiredDaemonSet(nodeObs, sa)
+func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeObs *v1alpha1.NodeObservability, sa *corev1.ServiceAccount, ns string) (bool, *appsv1.DaemonSet, error) {
+	nameSpace := types.NamespacedName{Namespace: ns, Name: daemonSetName}
+	desired := r.desiredDaemonSet(nodeObs, sa, ns)
 	exist, current, err := r.currentDaemonSet(ctx, nameSpace)
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to get DaemonSet: %w", err)
 	}
 	if !exist {
-		cmExists, err := r.createConfigMap(ctx, nodeObs)
+		cmExists, err := r.createConfigMap(ctx, nodeObs, ns)
 		if err != nil {
 			return false, nil, fmt.Errorf("failed to create the configMap for kubelet-serving-ca: %w", err)
 		}
@@ -78,7 +78,7 @@ func (r *NodeObservabilityReconciler) createDaemonSet(ctx context.Context, ds *a
 }
 
 // desiredDaemonSet returns a DaemonSet object
-func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObservability, sa *corev1.ServiceAccount) *appsv1.DaemonSet {
+func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObservability, sa *corev1.ServiceAccount, ns string) *appsv1.DaemonSet {
 
 	ls := labelsForNodeObservability(nodeObs.Name)
 	tgp := int64(30)
@@ -88,7 +88,7 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      daemonSetName,
-			Namespace: nodeObs.Namespace,
+			Namespace: ns,
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					Name:       nodeObs.Name,

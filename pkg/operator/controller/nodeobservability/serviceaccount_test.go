@@ -75,7 +75,7 @@ func TestEnsureServiceAccount(t *testing.T) {
 			}
 			nodeObs := &operatorv1alpha1.NodeObservability{}
 
-			gotExist, _, err := r.ensureServiceAccount(context.TODO(), nodeObs)
+			gotExist, _, err := r.ensureServiceAccount(context.TODO(), nodeObs, test.TestNamespace)
 			if err != nil {
 				if !tc.errExpected {
 					t.Fatalf("unexpected error received: %v", err)

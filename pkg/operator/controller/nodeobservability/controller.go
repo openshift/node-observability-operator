@@ -22,7 +22,6 @@ import (
 
 	logr "github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -31,6 +30,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/node-observability-operator/api/v1alpha1"
 	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
@@ -48,6 +48,7 @@ type NodeObservabilityReconciler struct {
 	ClusterWideClient client.Client
 	Log               logr.Logger
 	Scheme            *runtime.Scheme
+	Namespace         string
 	// Used to inject errors for testing
 	Err ErrTestObject
 }
@@ -108,7 +109,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	r.Log.Info(fmt.Sprintf("NodeObservability resource found : Namespace %s : Name %s ", req.NamespacedName.Namespace, nodeObs.Name))
 
 	// Set finalizers on the NodeObservability resource
-	updated, err := r.withFinalizers(nodeObs)
+	updated, err := r.withFinalizers(ctx, nodeObs)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update NodeObservability with finalizers:, %w", err)
 	}
@@ -130,7 +131,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	r.Log.Info(fmt.Sprintf("SecurityContextConstraints : %s", scc.Name))
 
 	// ensure serviceaccount
-	haveSA, sa, err := r.ensureServiceAccount(ctx, nodeObs)
+	haveSA, sa, err := r.ensureServiceAccount(ctx, nodeObs, r.Namespace)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure serviceaccount : %w", err)
 	} else if !haveSA {
@@ -139,7 +140,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	r.Log.Info(fmt.Sprintf("ServiceAccount : %s", sa.Name))
 
 	// ensure service
-	haveSvc, svc, err := r.ensureService(ctx, nodeObs)
+	haveSvc, svc, err := r.ensureService(ctx, nodeObs, r.Namespace)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure service : %w", err)
 	} else if !haveSvc {
@@ -157,7 +158,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	r.Log.Info(fmt.Sprintf("ClusterRole : %s", cr.Name))
 
 	// check clusterolebinding with serviceaccount
-	haveCRB, crb, err := r.ensureClusterRoleBinding(ctx, nodeObs, sa.Name)
+	haveCRB, crb, err := r.ensureClusterRoleBinding(ctx, nodeObs, sa.Name, r.Namespace)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure clusterrolebinding : %w", err)
 	} else if !haveCRB {
@@ -166,7 +167,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	r.Log.Info(fmt.Sprintf("ClusterRoleBinding : %s", crb.Name))
 
 	// check daemonset
-	haveDS, ds, err := r.ensureDaemonSet(ctx, nodeObs, sa)
+	haveDS, ds, err := r.ensureDaemonSet(ctx, nodeObs, sa, r.Namespace)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure daemonset : %w", err)
 	} else if !haveDS {
@@ -174,31 +175,36 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	}
 	r.Log.Info(fmt.Sprintf("DaemonSet : %s", ds.Name))
 
-	podList := &corev1.PodList{}
-	listOpts := []client.ListOption{
-		client.InNamespace(nodeObs.Namespace),
-		client.MatchingLabels(labelsForNodeObservability(nodeObs.Name)),
+	dsReady := ds.Status.NumberReady == ds.Status.DesiredNumberScheduled
+
+	// if machine config change is not requested, we can mark it as ready
+	var nomcReady bool = true
+	if machineConfigChangeRequested(nodeObs) {
+		haveNOMC, nomc, err := r.ensureNOMC(ctx, nodeObs)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to ensure nodeobservabilitymachineconfig : %w", err)
+		} else if !haveNOMC {
+			return ctrl.Result{}, fmt.Errorf("failed to get nodeobservabilitymachineconfig")
+		}
+		r.Log.Info(fmt.Sprintf("NodeObservabilityMachineConfig : %s", nomc.Name))
+		nomcReady = nomc.Status.IsReady()
 	}
 
-	// list pods to ensure that the agents get deployed
-	if err = r.List(ctx, podList, listOpts...); err != nil {
-		r.Log.Error(err, "Failed to list pods", "NodeObservability.Namespace", nodeObs.Namespace, "NodeObservability.Name", nodeObs.Name)
-		return ctrl.Result{}, err
+	msg := fmt.Sprintf("DaemonSet %s ready: %t NodeObservabilityMachineConfig ready: %t", ds.Name, dsReady, nomcReady)
+	if dsReady && nomcReady {
+		nodeObs.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionTrue, v1alpha1.ReasonReady, msg)
+	} else {
+		nodeObs.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, msg)
 	}
-	count := 0
-	for x, pod := range podList.Items {
-		r.Log.Info(fmt.Sprintf("Pod item : %d phase status : %s", x, pod.Status.Phase))
-		if pod.Status.Phase == corev1.PodRunning {
-			count++
-		}
-	}
+
 	// ignore when testing
-	if count == 0 && !r.Err.Enabled {
+	if ds.Status.NumberReady == 0 && !r.Err.Enabled {
+		// FIXME: this is not an error, pods will eventually come up
+		// FIXME: call r.Status().Update() before returning (eg deferred call)
 		return ctrl.Result{}, fmt.Errorf("agent pods are not deployed correctly with status 'Running'")
 	}
-	r.Log.Info(fmt.Sprintf("Agent pods deployed : count %d", len(podList.Items)))
-
-	nodeObs.Status.Count = len(podList.Items)
+	r.Log.Info(fmt.Sprintf("Agent pods deployed : count %d", ds.Status.NumberReady))
+	nodeObs.Status.Count = ds.Status.NumberReady
 	now := metav1.NewTime(clock.Now())
 	nodeObs.Status.LastUpdate = &now
 	err = r.Status().Update(ctx, nodeObs)
@@ -206,7 +212,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		r.Log.Error(err, "failed to update status")
 		return ctrl.Result{}, err
 	}
-	r.Log.Info(fmt.Sprintf("Status updated count : %d lastUpdated : %v", len(podList.Items), now))
+	r.Log.Info(fmt.Sprintf("Status updated count : %d lastUpdated : %v", ds.Status.NumberReady, now))
 
 	return ctrl.Result{}, nil
 }
@@ -216,7 +222,7 @@ func (r *NodeObservabilityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&operatorv1alpha1.NodeObservability{}).
 		Owns(&appsv1.DaemonSet{}).
-		Owns(&corev1.Service{}).
+		Owns(&operatorv1alpha1.NodeObservabilityMachineConfig{}).
 		Complete(r)
 }
 
@@ -253,14 +259,14 @@ func (r *NodeObservabilityReconciler) withoutFinalizers(ctx context.Context, nod
 	return withoutFinalizers, nil
 }
 
-func (r *NodeObservabilityReconciler) withFinalizers(nodeObs *operatorv1alpha1.NodeObservability) (*operatorv1alpha1.NodeObservability, error) {
+func (r *NodeObservabilityReconciler) withFinalizers(ctx context.Context, nodeObs *operatorv1alpha1.NodeObservability) (*operatorv1alpha1.NodeObservability, error) {
 	withFinalizers := nodeObs.DeepCopy()
 
 	if !hasFinalizer(withFinalizers) {
 		withFinalizers.Finalizers = append(withFinalizers.Finalizers, finalizer)
 	}
 
-	if err := r.Update(context.TODO(), withFinalizers); err != nil {
+	if err := r.Update(ctx, withFinalizers); err != nil {
 		return withFinalizers, fmt.Errorf("failed to update finalizers: %w", err)
 	}
 	return withFinalizers, nil
@@ -278,6 +284,9 @@ func (r *NodeObservabilityReconciler) ensureNodeObservabilityDeleted(ctx context
 	if err := r.deleteSecurityContextConstraints(nodeObs); err != nil {
 		errs = append(errs, fmt.Errorf("failed to delete SCC : %w", err))
 	}
+	if err := r.deleteNOMC(ctx, nodeObs); err != nil {
+		errs = append(errs, fmt.Errorf("failed to delete nodeobservabilitymachineconfig : %w", err))
+	}
 	if len(errs) == 0 && hasFinalizer(nodeObs) {
 		// Remove the finalizer.
 		_, err := r.withoutFinalizers(ctx, nodeObs, finalizer)
@@ -286,4 +295,10 @@ func (r *NodeObservabilityReconciler) ensureNodeObservabilityDeleted(ctx context
 		}
 	}
 	return utilerrors.NewAggregate(errs)
+}
+
+// machineConfigChangeRequested returns true, when a given NodeObservabilityType needs
+// machine config change. Only CrioKubeletNodeObservabilityType requires a MC change, false otherwise
+func machineConfigChangeRequested(nodeObs *operatorv1alpha1.NodeObservability) bool {
+	return nodeObs.Spec.Type == v1alpha1.CrioKubeletNodeObservabilityType
 }

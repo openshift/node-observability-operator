@@ -132,6 +132,7 @@ func main() {
 		ClusterWideClient: clusterWideCli,
 		Scheme:            mgr.GetScheme(),
 		Log:               ctrl.Log.WithName("controller").WithName("NodeObservability"),
+		Namespace:         operatorNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "NodeObservability")
 		os.Exit(1)
@@ -147,14 +148,13 @@ func main() {
 	}
 
 	if err = (&nodeobservabilityrun.NodeObservabilityRunReconciler{
-		Client:        mgr.GetClient(),
-		Scheme:        mgr.GetScheme(),
-		Log:           ctrl.Log.WithName("controller").WithName("NodeObservabilityRun"),
-		Namespace:     operatorNamespace,
-		MCOReconciler: nodeObsMCOReconciler,
-		AgentName:     agentName,
-		AuthToken:     token,
-		CACert:        ca,
+		Client:    mgr.GetClient(),
+		Scheme:    mgr.GetScheme(),
+		Log:       ctrl.Log.WithName("controller").WithName("NodeObservabilityRun"),
+		Namespace: operatorNamespace,
+		AgentName: agentName,
+		AuthToken: token,
+		CACert:    ca,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "NodeObservabilityRun")
 		os.Exit(1)

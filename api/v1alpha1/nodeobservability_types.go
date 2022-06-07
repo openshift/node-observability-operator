@@ -23,21 +23,36 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+// +kubebuilder:validation:Enum=crio-kubelet;
+type NodeObservabilityType string
+
+const (
+	CrioKubeletNodeObservabilityType NodeObservabilityType = "crio-kubelet"
+)
+
 // NodeObservabilitySpec defines the desired state of NodeObservability
 type NodeObservabilitySpec struct {
 	// Labels is map of key:value pairs that are used to match against node labels
 	Labels map[string]string `json:"labels,omitempty"`
 	// Image is the container (pod) image to execute specific scripts on each node
 	Image string `json:"image"`
+	// +kubebuilder:validation:Required
+	// Type defines the type of profiling queries, which will be enabled
+	// The following types are supported:
+	//   * crio-kubelet - 30s of /pprof data, requesting this type might cause node restart
+	Type NodeObservabilityType `json:"type"`
 }
 
 // NodeObservabilityStatus defines the observed state of NodeObservability
 type NodeObservabilityStatus struct {
 	// Count is the number of pods (one for each node) the daemon is deployed to
-	Count      int          `json:"count"`
+	Count      int32        `json:"count"`
 	LastUpdate *metav1.Time `json:"lastUpdated,omitempty"`
+	// Conditions contain details for aspects of the current state of this API Resource.
+	ConditionalStatus `json:"conditions,omitempty"`
 }
 
+//+kubebuilder:resource:scope=Cluster,shortName=nob
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
@@ -57,6 +72,14 @@ type NodeObservabilityList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []NodeObservability `json:"items"`
+}
+
+// IsDebuggingFailed returns true if Debugging has failed
+func (s *NodeObservabilityStatus) IsReady() bool {
+	if cond := s.GetCondition(DebugReady); cond != nil && cond.Status == metav1.ConditionTrue {
+		return true
+	}
+	return false
 }
 
 func init() {

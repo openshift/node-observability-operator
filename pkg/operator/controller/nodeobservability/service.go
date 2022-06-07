@@ -28,9 +28,9 @@ var (
 // ensureService ensures that the service exists
 // Returns a Boolean value indicating whether it exists, a pointer to the
 // service and an error when relevant
-func (r *NodeObservabilityReconciler) ensureService(ctx context.Context, nodeObs *v1alpha1.NodeObservability) (bool, *corev1.Service, error) {
-	nameSpace := types.NamespacedName{Namespace: nodeObs.Namespace, Name: serviceName}
-	desired := r.desiredService(nodeObs)
+func (r *NodeObservabilityReconciler) ensureService(ctx context.Context, nodeObs *v1alpha1.NodeObservability, ns string) (bool, *corev1.Service, error) {
+	nameSpace := types.NamespacedName{Namespace: ns, Name: serviceName}
+	desired := r.desiredService(nodeObs, ns)
 	exist, current, err := r.currentService(ctx, nameSpace)
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to get Service: %v", err)
@@ -69,11 +69,11 @@ func (r *NodeObservabilityReconciler) createService(ctx context.Context, svc *co
 }
 
 // desiredService returns a service object
-func (r *NodeObservabilityReconciler) desiredService(nodeObs *v1alpha1.NodeObservability) *corev1.Service {
+func (r *NodeObservabilityReconciler) desiredService(nodeObs *v1alpha1.NodeObservability, ns string) *corev1.Service {
 	ls := labelsForNodeObservability(nodeObs.Name)
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   nodeObs.Namespace,
+			Namespace:   ns,
 			Name:        serviceName,
 			Annotations: requestCerts,
 			Labels:      ls,

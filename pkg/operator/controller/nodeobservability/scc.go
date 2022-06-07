@@ -37,7 +37,7 @@ func (r *NodeObservabilityReconciler) ensureSecurityContextConstraints(ctx conte
 
 // currentSecurityContextConstraints checks that the securitycontextconstraints exists
 func (r *NodeObservabilityReconciler) currentSecurityContextConstraints(ctx context.Context, nodeObs *v1alpha1.NodeObservability) (bool, *securityv1.SecurityContextConstraints, error) {
-	nameSpace := types.NamespacedName{Namespace: nodeObs.Namespace, Name: sccName}
+	nameSpace := types.NamespacedName{Name: sccName}
 	scc := &securityv1.SecurityContextConstraints{}
 	if err := r.Get(ctx, nameSpace, scc); err != nil || r.Err.Set[sccObj] {
 		if errors.IsNotFound(err) || r.Err.NotFound[sccObj] {
@@ -67,8 +67,7 @@ func (r *NodeObservabilityReconciler) desiredSecurityContextConstraints(nodeObs 
 
 	scc := &securityv1.SecurityContextConstraints{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      sccName,
-			Namespace: nodeObs.Namespace,
+			Name: sccName,
 		},
 		AllowPrivilegedContainer: true,
 		AllowHostIPC:             false,

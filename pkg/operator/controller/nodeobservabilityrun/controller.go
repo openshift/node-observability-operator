@@ -27,6 +27,7 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,9 +36,9 @@ import (
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	nodeobservabilityv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
-	machineconfigcontroller "github.com/openshift/node-observability-operator/pkg/operator/controller/machineconfig"
 )
 
 const (
@@ -55,8 +56,7 @@ var (
 // NodeObservabilityRunReconciler reconciles a NodeObservabilityRun object
 type NodeObservabilityRunReconciler struct {
 	client.Client
-	Log           logr.Logger
-	MCOReconciler *machineconfigcontroller.MachineConfigReconciler
+	Log logr.Logger
 	URL
 	Scheme    *runtime.Scheme
 	Namespace string
@@ -72,6 +72,7 @@ type NodeObservabilityRunReconciler struct {
 
 // Reconcile manages NodeObservabilityRuns
 func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
+	var msg string
 	r.Log, err = logr.FromContext(ctx)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -89,90 +90,93 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 		return
 	}
 
-	// interact with MCO only if we are executing CrioKubeletProfile runs
-	// also bypass if the runtype is e2e-test
-	if instance.Spec.RunType == nodeobservabilityv1alpha1.CrioKubeletProfile {
-		if err := r.ensureNOMC(ctx); err != nil {
-			return ctrl.Result{}, err
-		}
-		// this will ensure we dont trigger the agent call
-		// until the mco and mcp have been updated successfully
-
-		enabled, err := r.checkNOMCStatus(ctx, true)
-		if err != nil {
-			r.Log.Error(err, "NodeObservabilityMachineConfig enable status check failed")
-			return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
-		}
-		if enabled {
-			r.Log.V(3).Info("NodeObservabilityMachineConfig CrioKubeletProfile enabled")
-		} else {
-			r.Log.Info("NodeObservabilityMachineConfig CrioKubeletProfile not enabled yet")
-			return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
-		}
-	}
-
-	// this code should be included in the 'if' statement above
-	// as it is specific to CrioKubeletProfiling
-	// once new profiling features are added it can be moved
-
-	// continue once machineconfigpool has been updated successfully
 	if finished(instance) {
 		r.Log.V(3).Info("Run for this instance has been completed already")
-		// check the CR if the RestoreMCOStateAfterRun flag is set
-		if instance.Spec.RestoreMCOStateAfterRun {
-			err := r.disableCrioKubeletProfile(ctx)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-
-			disabled, err := r.checkNOMCStatus(ctx, false)
-			if err != nil {
-				r.Log.Error(err, "NodeObservabilityMachineConfig disable status check failed")
-				return ctrl.Result{}, err
-			}
-			if disabled {
-				r.Log.Info("NodeObservabilityMachineConfig CrioKubeletProfile disabled")
-				nomc := r.desiredMCO()
-				if err := r.deleteNOMC(ctx, nomc); err != nil {
-					if !errors.IsNotFound(err) {
-						return ctrl.Result{}, err
-					}
-				}
-			} else {
-				r.Log.Info("NodeObservabilityMachineConfig CrioKubeletProfile not disabled yet")
-				return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
-			}
-		}
 		return
 	}
 
 	defer func() {
-		errUpdate := r.Status().Update(ctx, instance, &client.UpdateOptions{})
+		errUpdate := r.updateStatus(ctx, instance)
 		if errUpdate != nil {
-			r.Log.Error(err, "failed to update status")
+			r.Log.Error(errUpdate, "failed to update status")
 			err = utilerrors.NewAggregate([]error{err, errUpdate})
 		}
 	}()
+
+	var isAdopted bool
+	if isAdopted, err = r.adoptResource(ctx, instance); !isAdopted {
+		if err != nil {
+			r.Log.Error(err, "Error while setting owner reference NodeObservabilityRun->NodeObservability")
+			return
+		}
+		res = ctrl.Result{Requeue: true}
+		return
+	}
+
+	var canProceed bool
+	if canProceed, err = r.preconditionsMet(ctx, instance); !canProceed {
+		if err != nil {
+			r.Log.Error(err, "preconditions not met")
+			return
+		}
+		msg = fmt.Sprintf("Waiting for NodeObservability %s to become ready", instance.Spec.NodeObservabilityRef.Name)
+		instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugReady, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonInProgress, msg)
+		return ctrl.Result{RequeueAfter: pollingPeriod}, err
+	}
+	msg = "Ready to start profiling"
+	instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugReady, metav1.ConditionTrue, nodeobservabilityv1alpha1.ReasonReady, msg)
 
 	if inProgress(instance) {
 		r.Log.V(3).Info("Run is in progress")
 		var requeue bool
 		requeue, err = r.handleInProgress(instance)
 		if requeue {
+			msg = "Profiling query in progress"
+			instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonInProgress, msg)
 			return ctrl.Result{RequeueAfter: pollingPeriod}, err
 		}
 		t := metav1.Now()
 		instance.Status.FinishedTimestamp = &t
+		msg = "Profiling query done"
+		instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugFinished, metav1.ConditionTrue, nodeobservabilityv1alpha1.ReasonFinished, msg)
 		return
 	}
 
 	err = r.startRun(ctx, instance)
 	if err != nil {
+		msg = fmt.Sprintf("Failed to initiated profiling query: %s", err.Error())
+		instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonFailed, msg)
 		return ctrl.Result{}, err
 	}
 
+	msg = "Profiling query initiated"
+	instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonInProgress, msg)
+
 	// one cycle takes cca 30s
 	return ctrl.Result{RequeueAfter: time.Second * 30}, err
+}
+
+// adoptResource sets OwnerReference to point to NodeObservability from .spec.ref.name
+// returns true if already adopted, false otherwise
+func (r *NodeObservabilityRunReconciler) adoptResource(ctx context.Context, instance *nodeobservabilityv1alpha1.NodeObservabilityRun) (bool, error) {
+	for _, ref := range instance.OwnerReferences {
+		// FIXME: check kind as well?
+		if ref.Name == instance.Spec.NodeObservabilityRef.Name {
+			return true, nil
+		}
+	}
+	nodeObs := &nodeobservabilityv1alpha1.NodeObservability{}
+	if err := r.Get(ctx, types.NamespacedName{Name: instance.Spec.NodeObservabilityRef.Name}, nodeObs); err != nil {
+		return false, err
+	}
+	cpy := instance.DeepCopy()
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, corErr := ctrlutil.CreateOrUpdate(ctx, r.Client, cpy, func() error {
+			return ctrlutil.SetOwnerReference(nodeObs, cpy, r.Scheme)
+		})
+		return corErr
+	})
+	return false, err
 }
 
 func (r *NodeObservabilityRunReconciler) handleInProgress(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) (bool, error) {
@@ -225,6 +229,30 @@ func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance 
 	instance.Status.Agents = targets
 	instance.Status.FailedAgents = failedTargets
 	return nil
+}
+
+func (r *NodeObservabilityRunReconciler) updateStatus(ctx context.Context, instance *nodeobservabilityv1alpha1.NodeObservabilityRun) error {
+	key := types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}
+	freshRun := &nodeobservabilityv1alpha1.NodeObservabilityRun{}
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := r.Get(ctx, key, freshRun); err != nil {
+			return err
+		}
+		if equality.Semantic.DeepEqual(freshRun.Status, instance.Status) {
+			return nil
+		}
+		freshRun.Status = instance.Status
+		return r.Status().Update(ctx, freshRun, &client.UpdateOptions{})
+	})
+}
+
+func (r *NodeObservabilityRunReconciler) preconditionsMet(ctx context.Context, instance *nodeobservabilityv1alpha1.NodeObservabilityRun) (bool, error) {
+	no := &nodeobservabilityv1alpha1.NodeObservability{}
+	key := types.NamespacedName{Name: instance.Spec.NodeObservabilityRef.Name}
+	if err := r.Get(ctx, key, no); err != nil {
+		return false, err
+	}
+	return no.Status.IsReady(), nil
 }
 
 func finished(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) bool {

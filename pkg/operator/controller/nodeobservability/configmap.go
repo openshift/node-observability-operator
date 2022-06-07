@@ -17,7 +17,7 @@ const (
 	srcKbltCAConfigMapNameSpace = "openshift-config-managed"
 )
 
-func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeObs *v1alpha1.NodeObservability) (bool, error) {
+func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeObs *v1alpha1.NodeObservability, ns string) (bool, error) {
 	kbltCACM := &corev1.ConfigMap{}
 	kbltCACMName := types.NamespacedName{
 		Name:      srcKbltCAConfigMapName,
@@ -40,7 +40,7 @@ func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeO
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      nodeObs.Name,
-			Namespace: nodeObs.Namespace,
+			Namespace: ns,
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					Name:       nodeObs.Name,

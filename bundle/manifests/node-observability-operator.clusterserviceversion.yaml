@@ -11,11 +11,16 @@ metadata:
             "name": "nodeobservability-sample"
           },
           "spec": {
-            "expectedcount": 1,
-            "image": "quay.io/prometheus/busybox",
+            "image": "registry.ci.openshift.org/ocp/4.11:node-observability-agent",
             "labels": {
               "node-role.kubernetes.io/worker": ""
-            }
+            },
+            "types": [
+              "crio",
+              "kubelet",
+              "ebpf",
+              "custom"
+            ]
           }
         },
         {
@@ -39,9 +44,7 @@ metadata:
           "spec": {
             "nodeObservabilityRef": {
               "name": "nodeobservability-sample"
-            },
-            "restoreMCOStateAfterRun": true,
-            "runType": "crioKubeletProfile"
+            }
           }
         }
       ]
