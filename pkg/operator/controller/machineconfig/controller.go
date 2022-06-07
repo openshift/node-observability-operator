@@ -27,6 +27,7 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
@@ -179,7 +180,7 @@ func ignoreNOMCStatusUpdates() predicate.Predicate {
 				return false
 			}
 
-			// if NOMC resource version is not changed, it indicates
+			// if NOMC generated count is unchanged, it indicates
 			// spec or metadata has not changed and the event could be for
 			// status update which need not be queued for reconciliation
 			if _, ok := e.ObjectOld.(*v1alpha1.NodeObservabilityMachineConfig); ok {
