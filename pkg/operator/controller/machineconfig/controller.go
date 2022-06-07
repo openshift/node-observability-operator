@@ -162,7 +162,6 @@ func (r *MachineConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&v1alpha1.NodeObservabilityMachineConfig{}, builder.WithPredicates(ignoreNOMCStatusUpdates())).
 		Owns(&mcv1.MachineConfig{}).
 		Owns(&mcv1.MachineConfigPool{}).
-		WithEventFilter(ignoreNOMCStatusUpdates()).
 		Complete(r)
 }
 
