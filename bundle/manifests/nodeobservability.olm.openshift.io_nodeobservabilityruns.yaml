@@ -147,8 +147,6 @@ spec:
                       - type
                       type: object
                     type: array
-                required:
-                - conditions
                 type: object
               failedAgents:
                 description: FailedAgents represents the list of Nodes that could
