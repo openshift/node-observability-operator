@@ -37,8 +37,8 @@ import (
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 
 	"github.com/openshift/node-observability-operator/api/v1alpha1"
-	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 	"github.com/openshift/node-observability-operator/pkg/operator/controller/machineconfig/machineconfigfakes"
+	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
 const (
@@ -309,7 +309,7 @@ func TestReconcile(t *testing.T) {
 			reqObjs: append([]runtime.Object{workerMCP}, nodes...),
 			wantErr: false,
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
+				if result.RequeueAfter != 2*time.Minute ||
 					!status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
@@ -326,7 +326,7 @@ func TestReconcile(t *testing.T) {
 			},
 			wantErr: false,
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter > defaultRequeueTime ||
+				if result.RequeueAfter > 1*time.Minute ||
 					!status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
@@ -356,11 +356,11 @@ func TestReconcile(t *testing.T) {
 			name:    "controller resource reconcile request too soon, low boundary value",
 			reqObjs: append([]runtime.Object{mcp, criomc, workerMCP}, labeledNodes...),
 			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				r.CtrlConfig.Status.LastReconcile = metav1.Time{Time: metav1.Now().Time.Add(-defaultRequeueTime)}
+				r.CtrlConfig.Status.LastReconcile = metav1.Time{Time: metav1.Now().Time.Add(-60 * time.Second)}
 			},
 			wantErr: false,
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 0 ||
+				if result.RequeueAfter != 3*time.Minute ||
 					!status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
@@ -399,7 +399,7 @@ func TestReconcile(t *testing.T) {
 			},
 			wantErr: false,
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
+				if result.RequeueAfter != 2*time.Minute ||
 					status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
@@ -432,7 +432,7 @@ func TestReconcile(t *testing.T) {
 			},
 			wantErr: false,
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
+				if result.RequeueAfter != 1*time.Minute ||
 					status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
@@ -693,10 +693,10 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 			arg2: request,
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != 0 ||
-						status.IsDebuggingEnabled() ||
+					status.IsDebuggingEnabled() ||
 					status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
-				return false
+					return false
 				}
 				return true
 			},
@@ -726,19 +726,19 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 			arg2: request,
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
 				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
-					switch obj.(type) {
+					switch o := obj.(type) {
 					case *mcv1.MachineConfigPool:
 						if ns.Name == "worker" {
 							mcp := testWorkerMCP()
-							mcp.DeepCopyInto(obj.(*mcv1.MachineConfigPool))
+							mcp.DeepCopyInto(o)
 						}
 						if ns.Name == "nodeobservability" {
 							mcp := testNodeObsMCP(r)
-							mcp.DeepCopyInto(obj.(*mcv1.MachineConfigPool))
+							mcp.DeepCopyInto(o)
 						}
 					case *mcv1.MachineConfig:
 						mc, _ := r.getCrioConfig()
-						mc.DeepCopyInto(obj.(*mcv1.MachineConfig))
+						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
 						now := metav1.Now()
@@ -747,14 +747,14 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 							metav1.ConditionTrue, v1alpha1.ReasonEnabled, "")
 						nomc.Status.SetCondition(v1alpha1.DebugReady,
 							metav1.ConditionFalse, v1alpha1.ReasonInProgress, "")
-						nomc.DeepCopyInto(obj.(*v1alpha1.NodeObservabilityMachineConfig))
+						nomc.DeepCopyInto(o)
 					}
 					return nil
 				})
 				m.ClientStatusUpdateReturns(testError)
 			},
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
+				if result.RequeueAfter != 1*time.Minute ||
 					!status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
@@ -770,22 +770,22 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 			arg2: request,
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
 				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
-					switch obj.(type) {
+					switch o := obj.(type) {
 					case *mcv1.MachineConfigPool:
 						if ns.Name == "worker" {
 							mcp := testWorkerMCP()
-							mcp.DeepCopyInto(obj.(*mcv1.MachineConfigPool))
+							mcp.DeepCopyInto(o)
 						}
 						if ns.Name == "nodeobservability" {
 							mcp := testNodeObsMCP(r)
-							mcp.DeepCopyInto(obj.(*mcv1.MachineConfigPool))
+							mcp.DeepCopyInto(o)
 						}
 					case *mcv1.MachineConfig:
 						mc, _ := r.getCrioConfig()
-						mc.DeepCopyInto(obj.(*mcv1.MachineConfig))
+						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
-						nomc.DeepCopyInto(obj.(*v1alpha1.NodeObservabilityMachineConfig))
+						nomc.DeepCopyInto(o)
 					}
 					return nil
 				})
@@ -808,29 +808,29 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 			arg2: request,
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
 				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
-					switch obj.(type) {
+					switch o := obj.(type) {
 					case *mcv1.MachineConfigPool:
 						if ns.Name == "worker" {
 							mcp := testWorkerMCP()
-							mcp.DeepCopyInto(obj.(*mcv1.MachineConfigPool))
+							mcp.DeepCopyInto(o)
 						}
 						if ns.Name == "nodeobservability" {
 							mcp := testNodeObsMCP(r)
-							mcp.DeepCopyInto(obj.(*mcv1.MachineConfigPool))
+							mcp.DeepCopyInto(o)
 						}
 					case *mcv1.MachineConfig:
 						mc, _ := r.getCrioConfig()
-						mc.DeepCopyInto(obj.(*mcv1.MachineConfig))
+						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
-						nomc.DeepCopyInto(obj.(*v1alpha1.NodeObservabilityMachineConfig))
+						nomc.DeepCopyInto(o)
 					}
 					return nil
 				})
 				m.ClientStatusUpdateReturns(testError)
 			},
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
+				if result.RequeueAfter != 1*time.Minute ||
 					!status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
@@ -846,7 +846,7 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 			arg2: request,
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
 				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
-					switch obj.(type) {
+					switch o := obj.(type) {
 					case *mcv1.MachineConfigPool:
 						var mcp *mcv1.MachineConfigPool
 						if ns.Name == "worker" {
@@ -855,13 +855,13 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 						if ns.Name == "nodeobservability" {
 							mcp = testNodeObsMCP(r)
 						}
-						mcp.DeepCopyInto(obj.(*mcv1.MachineConfigPool))
+						mcp.DeepCopyInto(o)
 					case *mcv1.MachineConfig:
 						mc, _ := r.getCrioConfig()
-						mc.DeepCopyInto(obj.(*mcv1.MachineConfig))
+						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
-						nomc.DeepCopyInto(obj.(*v1alpha1.NodeObservabilityMachineConfig))
+						nomc.DeepCopyInto(o)
 					case *corev1.Node:
 						nodes := testWorkerNodes()
 						for _, node := range nodes {
@@ -869,7 +869,7 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 								return kerrors.NewNotFound(corev1.Resource(""), ns.Name)
 							}
 							if ns.Name == node.(*corev1.Node).GetName() {
-								node.(*corev1.Node).DeepCopyInto(obj.(*corev1.Node))
+								node.(*corev1.Node).DeepCopyInto(o)
 							}
 						}
 					}
@@ -879,7 +879,7 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 					ctx context.Context,
 					list client.ObjectList,
 					opts ...client.ListOption) error {
-					switch list.(type) {
+					switch o := list.(type) {
 					case *corev1.NodeList:
 						n := &corev1.NodeList{}
 						nodes := testWorkerNodes()
@@ -887,7 +887,7 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 						for _, node := range nodes {
 							n.Items = append(n.Items, *node.(*corev1.Node))
 						}
-						n.DeepCopyInto(list.(*corev1.NodeList))
+						n.DeepCopyInto(o)
 					}
 					return nil
 				})
@@ -906,7 +906,7 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 				})
 			},
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
+				if result.RequeueAfter != 2*time.Minute ||
 					status.IsDebuggingEnabled() ||
 					status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
@@ -922,20 +922,20 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 			arg2: request,
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
 				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
-					switch obj.(type) {
+					switch o := obj.(type) {
 					case *mcv1.MachineConfigPool:
 						return testError
 					case *mcv1.MachineConfig:
 						mc, _ := r.getCrioConfig()
-						mc.DeepCopyInto(obj.(*mcv1.MachineConfig))
+						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
-						nomc.DeepCopyInto(obj.(*v1alpha1.NodeObservabilityMachineConfig))
+						nomc.DeepCopyInto(o)
 					case *corev1.Node:
 						nodes := testWorkerNodes()
 						for _, node := range nodes {
 							if ns.Name == node.(*corev1.Node).GetName() {
-								node.(*corev1.Node).DeepCopyInto(obj.(*corev1.Node))
+								node.(*corev1.Node).DeepCopyInto(o)
 							}
 						}
 					}
@@ -953,7 +953,7 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 				})
 			},
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
+				if result.RequeueAfter != 1*time.Minute ||
 					status.IsDebuggingEnabled() ||
 					status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
@@ -969,7 +969,7 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 			arg2: request,
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
 				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
-					switch obj.(type) {
+					switch o := obj.(type) {
 					case *mcv1.MachineConfigPool:
 						var mcp *mcv1.MachineConfigPool
 						if ns.Name == "worker" {
@@ -978,17 +978,17 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 						if ns.Name == "nodeobservability" {
 							mcp = testNodeObsMCP(r)
 						}
-						mcp.DeepCopyInto(obj.(*mcv1.MachineConfigPool))
+						mcp.DeepCopyInto(o)
 					case *mcv1.MachineConfig:
 						return testError
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
-						nomc.DeepCopyInto(obj.(*v1alpha1.NodeObservabilityMachineConfig))
+						nomc.DeepCopyInto(o)
 					case *corev1.Node:
 						nodes := testWorkerNodes()
 						for _, node := range nodes {
 							if ns.Name == node.(*corev1.Node).GetName() {
-								node.(*corev1.Node).DeepCopyInto(obj.(*corev1.Node))
+								node.(*corev1.Node).DeepCopyInto(o)
 							}
 						}
 					}
@@ -1006,7 +1006,7 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 				})
 			},
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
+				if result.RequeueAfter != 1*time.Minute ||
 					status.IsDebuggingEnabled() ||
 					status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
@@ -1022,7 +1022,7 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 			arg2: request,
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
 				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
-					switch obj.(type) {
+					switch o := obj.(type) {
 					case *mcv1.MachineConfigPool:
 						var mcp *mcv1.MachineConfigPool
 						if ns.Name == "worker" {
@@ -1031,14 +1031,14 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 						if ns.Name == "nodeobservability" {
 							mcp = testNodeObsMCP(r)
 						}
-						mcp.DeepCopyInto(obj.(*mcv1.MachineConfigPool))
+						mcp.DeepCopyInto(o)
 					case *mcv1.MachineConfig:
 						mc, _ := r.getCrioConfig()
-						mc.DeepCopyInto(obj.(*mcv1.MachineConfig))
+						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
 						nomc.Spec.Debug.EnableCrioProfiling = false
-						nomc.DeepCopyInto(obj.(*v1alpha1.NodeObservabilityMachineConfig))
+						nomc.DeepCopyInto(o)
 					case *corev1.Node:
 						nodes := testNodeObsNodes()
 						for _, node := range nodes {
@@ -1046,7 +1046,7 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 								return kerrors.NewNotFound(corev1.Resource(""), ns.Name)
 							}
 							if ns.Name == node.(*corev1.Node).GetName() {
-								node.(*corev1.Node).DeepCopyInto(obj.(*corev1.Node))
+								node.(*corev1.Node).DeepCopyInto(o)
 							}
 						}
 					}
@@ -1056,7 +1056,7 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 					ctx context.Context,
 					list client.ObjectList,
 					opts ...client.ListOption) error {
-					switch list.(type) {
+					switch o := list.(type) {
 					case *corev1.NodeList:
 						n := &corev1.NodeList{}
 						nodes := testNodeObsNodes()
@@ -1064,7 +1064,7 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 						for _, node := range nodes {
 							n.Items = append(n.Items, *node.(*corev1.Node))
 						}
-						n.DeepCopyInto(list.(*corev1.NodeList))
+						n.DeepCopyInto(o)
 					}
 					return nil
 				})
@@ -1083,7 +1083,7 @@ func TestReconcileNegativeScenarios(t *testing.T) {
 				})
 			},
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
+				if result.RequeueAfter != 2*time.Minute ||
 					status.IsDebuggingEnabled() ||
 					status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
