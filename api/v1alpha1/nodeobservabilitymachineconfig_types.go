@@ -48,7 +48,7 @@ type NodeObservabilityMachineConfigStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
-//+kubebuilder:resource:scope=Cluster
+//+kubebuilder:resource:scope=Cluster,shortName=nobmc
 
 // NodeObservabilityMachineConfig is the Schema for the nodeobservabilitymachineconfigs API
 type NodeObservabilityMachineConfig struct {
@@ -79,6 +79,14 @@ func (s *NodeObservabilityMachineConfigStatus) IsMachineConfigInProgress() bool 
 // IsDebuggingFailed returns true if Debugging has failed
 func (s *NodeObservabilityMachineConfigStatus) IsDebuggingFailed() bool {
 	if cond := s.GetCondition(DebugReady); cond != nil && cond.Status == metav1.ConditionFalse && cond.Reason == ReasonFailed {
+		return true
+	}
+	return false
+}
+
+// IsReady returns true if debugging configuration is successfully applied and ready
+func (s *NodeObservabilityMachineConfigStatus) IsReady() bool {
+	if cond := s.GetCondition(DebugReady); cond != nil && cond.Status == metav1.ConditionTrue {
 		return true
 	}
 	return false

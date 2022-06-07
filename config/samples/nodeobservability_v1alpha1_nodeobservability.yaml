@@ -5,5 +5,9 @@ metadata:
 spec:
   labels: 
     node-role.kubernetes.io/worker: ""
-  image: "quay.io/prometheus/busybox"
-  expectedcount: 1
+  image: "registry.ci.openshift.org/ocp/4.11:node-observability-agent"
+  types:
+  - crio
+  - kubelet
+  - ebpf
+  - custom

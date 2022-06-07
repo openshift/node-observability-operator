@@ -249,6 +249,7 @@ func TestReconcile(t *testing.T) {
 		{
 			name: "start new run",
 			existingObjects: []runtime.Object{
+				testNodeObservability(),
 				testNodeObservabilityRun(),
 				&corev1.Endpoints{
 					ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
@@ -267,6 +268,7 @@ func TestReconcile(t *testing.T) {
 		{
 			name: "run in progress",
 			existingObjects: []runtime.Object{
+				testNodeObservability(),
 				testNodeObservabilityRunWithStatus(operatorv1alpha1.NodeObservabilityRunStatus{
 					StartTimestamp: &now,
 				}),
@@ -319,12 +321,17 @@ func TestReconcile(t *testing.T) {
 
 }
 
-// testNodeObservability - minimal CR for the test
+// testNodeObservabilityRun - minimal CR for the test
 func testNodeObservabilityRun() *operatorv1alpha1.NodeObservabilityRun {
 	return &operatorv1alpha1.NodeObservabilityRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					Name: name,
+				},
+			},
 		},
 		Spec: operatorv1alpha1.NodeObservabilityRunSpec{
 			NodeObservabilityRef: &operatorv1alpha1.NodeObservabilityRef{
@@ -332,6 +339,26 @@ func testNodeObservabilityRun() *operatorv1alpha1.NodeObservabilityRun {
 			},
 		},
 		Status: operatorv1alpha1.NodeObservabilityRunStatus{},
+	}
+}
+
+// testNodeObservability - minimal CR for the test
+func testNodeObservability() *operatorv1alpha1.NodeObservability {
+	return &operatorv1alpha1.NodeObservability{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Spec: operatorv1alpha1.NodeObservabilitySpec{},
+		Status: operatorv1alpha1.NodeObservabilityStatus{
+			ConditionalStatus: operatorv1alpha1.ConditionalStatus{
+				Conditions: []metav1.Condition{
+					{
+						Type:   operatorv1alpha1.DebugReady,
+						Status: metav1.ConditionTrue,
+					},
+				},
+			},
+		},
 	}
 }
 

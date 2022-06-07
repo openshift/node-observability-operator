@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package nodeobservabilityruncontroller
+package nodeobservabilitycontroller
 
 import (
 	"context"
@@ -35,11 +35,7 @@ const (
 )
 
 func TestEnsureMCO(t *testing.T) {
-	makeMCO := &v1alpha1.NodeObservabilityMachineConfig{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "NodeObservabilityMachineConfig",
-			APIVersion: "nodeobservability.olm.openshift.io/v1alpha1",
-		},
+	nomc := &v1alpha1.NodeObservabilityMachineConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: NodeObservabilityMachineConfigTest,
 		},
@@ -48,6 +44,9 @@ func TestEnsureMCO(t *testing.T) {
 				EnableCrioProfiling: true,
 			},
 		},
+	}
+	nodeObs := &v1alpha1.NodeObservability{
+		ObjectMeta: metav1.ObjectMeta{Name: NodeObservabilityMachineConfigTest},
 	}
 
 	testCases := []struct {
@@ -66,22 +65,22 @@ func TestEnsureMCO(t *testing.T) {
 		{
 			name: "Exists",
 			existingObjects: []runtime.Object{
-				makeMCO,
+				nomc,
 			},
 			expectedExist: true,
-			expectedMCO:   makeMCO,
+			expectedMCO:   nomc,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			cl := fake.NewClientBuilder().WithScheme(test.Scheme).WithRuntimeObjects(tc.existingObjects...).Build()
-			r := &NodeObservabilityRunReconciler{
+			r := &NodeObservabilityReconciler{
 				Client: cl,
 				Scheme: test.Scheme,
 				Log:    zap.New(zap.UseDevMode(true)),
 			}
 
-			gotExist, _, err := r.ensureMCO(context.TODO())
+			gotExist, obj, err := r.ensureNOMC(context.TODO(), nodeObs)
 			if err != nil {
 				if !tc.errExpected {
 					t.Fatalf("unexpected error received: %v", err)
@@ -94,6 +93,14 @@ func TestEnsureMCO(t *testing.T) {
 			}
 			if gotExist != tc.expectedExist {
 				t.Errorf("expected machineconfig exist to be %t, got %t", tc.expectedExist, gotExist)
+			}
+			if gotExist {
+				for _, ref := range obj.GetOwnerReferences() {
+					if ref.Name == NodeObservabilityMachineConfigTest {
+						return
+					}
+				}
+				t.Errorf("expected OwnerReference to point to: %s", NodeObservabilityMachineConfigTest)
 			}
 		})
 	}

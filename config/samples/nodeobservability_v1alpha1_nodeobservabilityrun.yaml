@@ -5,5 +5,4 @@ metadata:
 spec:
   nodeObservabilityRef:
     name: nodeobservability-sample
-  runType : crioKubeletProfile
-  restoreMCOStateAfterRun : true
+
