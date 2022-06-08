@@ -39,7 +39,7 @@ type NodeObservabilityDebug struct {
 type NodeObservabilityMachineConfigStatus struct {
 	// conditions represents the latest available observations of current operator state.
 	// +optional
-	ConditionalStatus `json:"conditions"`
+	ConditionalStatus `json:",inline,omitempty"`
 
 	// lastReconcile is the time of last reconciliation
 	// +nullable

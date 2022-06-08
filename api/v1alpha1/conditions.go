@@ -70,7 +70,7 @@ const (
 )
 
 type ConditionalStatus struct {
-	Conditions []metav1.Condition `json:"conditions"`
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 func (c *ConditionalStatus) GetCondition(t string) *metav1.Condition {
