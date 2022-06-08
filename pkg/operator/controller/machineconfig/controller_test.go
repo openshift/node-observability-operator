@@ -309,7 +309,7 @@ func TestReconcile(t *testing.T) {
 			reqObjs: append([]runtime.Object{workerMCP}, nodes...),
 			wantErr: false,
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 2*time.Minute ||
+				if result.RequeueAfter != defaultRequeueTime ||
 					!status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
@@ -326,7 +326,7 @@ func TestReconcile(t *testing.T) {
 			},
 			wantErr: false,
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter > 1*time.Minute ||
+				if result.RequeueAfter > defaultRequeueTime ||
 					!status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
@@ -356,11 +356,11 @@ func TestReconcile(t *testing.T) {
 			name:    "controller resource reconcile request too soon, low boundary value",
 			reqObjs: append([]runtime.Object{mcp, criomc, workerMCP}, labeledNodes...),
 			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				r.CtrlConfig.Status.LastReconcile = metav1.Time{Time: metav1.Now().Time.Add(-60 * time.Second)}
+				r.CtrlConfig.Status.LastReconcile = metav1.Time{Time: metav1.Now().Time.Add(-defaultRequeueTime)}
 			},
 			wantErr: false,
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 3*time.Minute ||
+				if result.RequeueAfter != 0 ||
 					!status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
@@ -399,7 +399,7 @@ func TestReconcile(t *testing.T) {
 			},
 			wantErr: false,
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 2*time.Minute ||
+				if result.RequeueAfter != defaultRequeueTime ||
 					status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
@@ -432,7 +432,7 @@ func TestReconcile(t *testing.T) {
 			},
 			wantErr: false,
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 1*time.Minute ||
+				if result.RequeueAfter != defaultRequeueTime ||
 					status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
