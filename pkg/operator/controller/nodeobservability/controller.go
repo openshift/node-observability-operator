@@ -91,21 +91,21 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
-			r.Log.Info("NodeObservability resource not found. Ignoring since object must be deleted")
+			r.Log.V(3).Info("NodeObservability resource not found. Ignoring since object must be deleted")
 			return ctrl.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
 		return ctrl.Result{}, fmt.Errorf("failed to get NodeObservability: %w", err)
 	}
 	if nodeObs.DeletionTimestamp != nil {
-		r.Log.Info("NodeObservability resource is going to be deleted. Taking action")
+		r.Log.V(2).Info("NodeObservability resource is going to be deleted. Taking action")
 		if err := r.ensureNodeObservabilityDeleted(ctx, nodeObs); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to ensure nodeobservability deletion: %w", err)
 		}
 		return ctrl.Result{}, nil
 
 	}
-	r.Log.Info("NodeObservability resource found", "Namespace", req.NamespacedName.Namespace, "Name", nodeObs.Name)
+	r.Log.V(3).Info("NodeObservability resource found", "Namespace", req.NamespacedName.Namespace, "Name", nodeObs.Name)
 
 	// Set finalizers on the NodeObservability resource
 	updated, err := r.withFinalizers(ctx, nodeObs)
@@ -127,7 +127,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	} else if !haveSCC {
 		return ctrl.Result{}, fmt.Errorf("failed to get securitycontextconstraints")
 	}
-	r.Log.Info("SecurityContextConstraints ensured", "Name", scc.Name)
+	r.Log.V(3).Info("SecurityContextConstraints ensured", "Name", scc.Name)
 
 	// ensure serviceaccount
 	haveSA, sa, err := r.ensureServiceAccount(ctx, nodeObs, r.Namespace)
@@ -136,7 +136,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	} else if !haveSA {
 		return ctrl.Result{}, fmt.Errorf("failed to get serviceaccount")
 	}
-	r.Log.Info("ServiceAccount ensured", "Namespace", sa.Namespace, "Name", sa.Name)
+	r.Log.V(3).Info("ServiceAccount ensured", "Namespace", sa.Namespace, "Name", sa.Name)
 
 	// ensure service
 	haveSvc, svc, err := r.ensureService(ctx, nodeObs, r.Namespace)
@@ -145,7 +145,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	} else if !haveSvc {
 		return ctrl.Result{}, fmt.Errorf("failed to get service")
 	}
-	r.Log.Info("Service ensured", "Namespace", svc.Namespace, "Name", svc.Name)
+	r.Log.V(3).Info("Service ensured", "Namespace", svc.Namespace, "Name", svc.Name)
 
 	// check clusterrole
 	haveCR, cr, err := r.ensureClusterRole(ctx, nodeObs)
@@ -154,7 +154,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	} else if !haveCR {
 		return ctrl.Result{}, fmt.Errorf("failed to get clusterrole")
 	}
-	r.Log.Info("ClusterRole ensured", "Name", cr.Name)
+	r.Log.V(3).Info("ClusterRole ensured", "Name", cr.Name)
 
 	// check clusterolebinding with serviceaccount
 	haveCRB, crb, err := r.ensureClusterRoleBinding(ctx, nodeObs, sa.Name, r.Namespace)
@@ -163,7 +163,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	} else if !haveCRB {
 		return ctrl.Result{}, fmt.Errorf("failed to get clusterrolebinding")
 	}
-	r.Log.Info("ClusterRoleBinding ensured", "Name", crb.Name)
+	r.Log.V(3).Info("ClusterRoleBinding ensured", "Name", crb.Name)
 
 	// check daemonset
 	haveDS, ds, err := r.ensureDaemonSet(ctx, nodeObs, sa, r.Namespace)
@@ -172,7 +172,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	} else if !haveDS {
 		return ctrl.Result{}, fmt.Errorf("failed to get daemonset")
 	}
-	r.Log.Info("DaemonSet ensured", "Namespace", ds.Namespace, "Name", ds.Name)
+	r.Log.V(3).Info("DaemonSet ensured", "Namespace", ds.Namespace, "Name", ds.Name)
 
 	dsReady := ds.Status.NumberReady == ds.Status.DesiredNumberScheduled
 
@@ -185,7 +185,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		} else if !haveNOMC {
 			return ctrl.Result{}, fmt.Errorf("failed to get nodeobservabilitymachineconfig")
 		}
-		r.Log.Info("NodeObservabilityMachineConfig ensured", "Name", nomc.Name)
+		r.Log.V(3).Info("NodeObservabilityMachineConfig ensured", "Name", nomc.Name)
 		nomcReady = nomc.Status.IsReady()
 	}
 
@@ -203,7 +203,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	r.Log.Info("Status updated", "Count", ds.Status.NumberReady, "LastUpdated", now)
+	r.Log.V(3).Info("Status updated", "Count", ds.Status.NumberReady, "LastUpdated", now)
 
 	return ctrl.Result{}, nil
 }
