@@ -25,7 +25,7 @@ const (
 	finalizer = "NodeObservabilityMachineConfig"
 
 	// defaultRequeueTime is the default reconcile requeue time
-	defaultRequeueTime = 3 * time.Minute
+	defaultRequeueTime = time.Minute
 
 	// Empty is defined for empty string
 	Empty = ""
