@@ -502,10 +502,11 @@ func TestMonitorProgress(t *testing.T) {
 	workerMCP := testWorkerMCP()
 
 	tests := []struct {
-		name    string
-		reqObjs []runtime.Object
-		preReq  func(*MachineConfigReconciler, *[]runtime.Object)
-		wantErr bool
+		name       string
+		reqObjs    []runtime.Object
+		preReq     func(*MachineConfigReconciler, *[]runtime.Object)
+		asExpected func(v1alpha1.NodeObservabilityMachineConfigStatus, ctrl.Result) bool
+		wantErr    bool
 	}{
 		{
 			name: "nodeobservability MCP does not exist",
@@ -514,6 +515,15 @@ func TestMonitorProgress(t *testing.T) {
 					metav1.ConditionTrue, v1alpha1.ReasonEnabled, "")
 				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady,
 					metav1.ConditionFalse, v1alpha1.ReasonInProgress, "")
+			},
+			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+				if result.RequeueAfter != 0 ||
+					!status.IsDebuggingEnabled() ||
+					!status.IsMachineConfigInProgress() ||
+					status.IsDebuggingFailed() {
+					return false
+				}
+				return true
 			},
 			wantErr: false,
 		},
@@ -526,6 +536,15 @@ func TestMonitorProgress(t *testing.T) {
 				testUpdateMCPCondition(&mcp.Status.Conditions,
 					mcv1.MachineConfigPoolUpdating, corev1.ConditionTrue)
 				*o = append(*o, mcp)
+			},
+			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+				if result.RequeueAfter != 3*time.Minute ||
+					!status.IsDebuggingEnabled() ||
+					!status.IsMachineConfigInProgress() ||
+					status.IsDebuggingFailed() {
+					return false
+				}
+				return true
 			},
 			wantErr: false,
 		},
@@ -541,6 +560,15 @@ func TestMonitorProgress(t *testing.T) {
 					mcv1.MachineConfigPoolDegraded, corev1.ConditionTrue)
 				*o = append(*o, mcp)
 			},
+			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+				if result.RequeueAfter != 0 ||
+					!status.IsDebuggingEnabled() ||
+					status.IsMachineConfigInProgress() ||
+					!status.IsDebuggingFailed() {
+					return false
+				}
+				return true
+			},
 			wantErr: false,
 		},
 		{
@@ -551,6 +579,15 @@ func TestMonitorProgress(t *testing.T) {
 					metav1.ConditionFalse, v1alpha1.ReasonDisabled, "")
 				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady,
 					metav1.ConditionFalse, v1alpha1.ReasonInProgress, "")
+			},
+			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+				if result.RequeueAfter != 0 ||
+					status.IsDebuggingEnabled() ||
+					!status.IsMachineConfigInProgress() ||
+					status.IsDebuggingFailed() {
+					return false
+				}
+				return true
 			},
 			wantErr: true,
 		},
@@ -568,6 +605,15 @@ func TestMonitorProgress(t *testing.T) {
 					mcv1.MachineConfigPoolUpdating, corev1.ConditionTrue)
 				*o = append(*o, workerMCP)
 			},
+			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+				if result.RequeueAfter != 3*time.Minute ||
+					status.IsDebuggingEnabled() ||
+					!status.IsMachineConfigInProgress() ||
+					status.IsDebuggingFailed() {
+					return false
+				}
+				return true
+			},
 			wantErr: false,
 		},
 		{
@@ -580,6 +626,15 @@ func TestMonitorProgress(t *testing.T) {
 				testUpdateMCPCondition(&workerMCP.Status.Conditions,
 					mcv1.MachineConfigPoolDegraded, corev1.ConditionTrue)
 				*o = append(*o, workerMCP)
+			},
+			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+				if result.RequeueAfter != 3*time.Minute ||
+					status.IsDebuggingEnabled() ||
+					!status.IsMachineConfigInProgress() ||
+					status.IsDebuggingFailed() {
+					return false
+				}
+				return true
 			},
 			wantErr: false,
 		},
@@ -599,6 +654,15 @@ func TestMonitorProgress(t *testing.T) {
 					mcv1.MachineConfigPoolUpdating, corev1.ConditionTrue)
 				*o = append(*o, workerMCP)
 			},
+			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+				if result.RequeueAfter != 3*time.Minute ||
+					status.IsDebuggingEnabled() ||
+					!status.IsMachineConfigInProgress() ||
+					status.IsDebuggingFailed() {
+					return false
+				}
+				return true
+			},
 			wantErr: false,
 		},
 		{
@@ -611,6 +675,15 @@ func TestMonitorProgress(t *testing.T) {
 				testUpdateMCPCondition(&workerMCP.Status.Conditions,
 					mcv1.MachineConfigPoolDegraded, corev1.ConditionTrue)
 				*o = append(*o, workerMCP)
+			},
+			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+				if result.RequeueAfter != 0 ||
+					status.IsDebuggingEnabled() ||
+					status.IsMachineConfigInProgress() ||
+					status.IsDebuggingFailed() {
+					return false
+				}
+				return true
 			},
 			wantErr: false,
 		},
@@ -630,6 +703,15 @@ func TestMonitorProgress(t *testing.T) {
 					mcv1.MachineConfigPoolUpdated, corev1.ConditionFalse)
 				*o = append(*o, wmcp)
 			},
+			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+				if result.RequeueAfter != 3*time.Minute ||
+					status.IsDebuggingEnabled() ||
+					status.IsMachineConfigInProgress() ||
+					status.IsDebuggingFailed() {
+					return false
+				}
+				return true
+			},
 			wantErr: false,
 		},
 		{
@@ -648,6 +730,15 @@ func TestMonitorProgress(t *testing.T) {
 					mcv1.MachineConfigPoolUpdated, corev1.ConditionFalse)
 				*o = append(*o, wmcp)
 			},
+			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+				if result.RequeueAfter != 3*time.Minute ||
+					status.IsDebuggingEnabled() ||
+					status.IsMachineConfigInProgress() ||
+					!status.IsDebuggingFailed() {
+					return false
+				}
+				return true
+			},
 			wantErr: false,
 		},
 	}
@@ -664,9 +755,15 @@ func TestMonitorProgress(t *testing.T) {
 				Build()
 			r.impl = &defaultImpl{Client: c}
 
-			_, err := r.monitorProgress(ctx)
+			result, err := r.monitorProgress(ctx)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("monitorProgress() err: %v, wantErr: %v", err, tt.wantErr)
+			}
+			if tt.asExpected != nil {
+				if !tt.asExpected(r.CtrlConfig.Status, result) {
+					t.Errorf("monitorProgress() result: %+v", result)
+					t.Errorf("monitorProgress() status: %+v", r.CtrlConfig.Status)
+				}
 			}
 		})
 	}
