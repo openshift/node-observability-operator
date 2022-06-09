@@ -25,6 +25,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -161,7 +162,7 @@ func TestReconcile(t *testing.T) {
 		ObjType:   "nodeobservability",
 		NamespacedName: types.NamespacedName{
 			Namespace: "",
-			Name:      "test",
+			Name:      "cluster",
 		},
 	}
 
@@ -170,38 +171,54 @@ func TestReconcile(t *testing.T) {
 		ObjType:   "nodeobservability",
 		NamespacedName: types.NamespacedName{
 			Namespace: "",
-			Name:      "test",
+			Name:      "cluster",
 		},
 	}
 
 	testCases := []struct {
-		name            string
-		existingObjects []runtime.Object
-		Image           string
-		Labels          []string
-		inputRequest    ctrl.Request
-		expectedResult  reconcile.Result
-		expectedEvents  []test.Event
-		errExpected     bool
+		name                 string
+		existingObjects      []runtime.Object
+		Image                string
+		Labels               []string
+		inputRequest         ctrl.Request
+		expectedResult       reconcile.Result
+		expectedEvents       []test.Event
+		errExpected          bool
+		expectReadyCondition metav1.ConditionStatus
 	}{
 		{
-			name:            "Bootstrapping",
-			existingObjects: []runtime.Object{testNodeObservability(), makeKubeletCACM()},
-			inputRequest:    testRequest(),
-			expectedResult:  reconcile.Result{},
-			expectedEvents:  []test.Event{},
+			name:                 "Bootstrapping",
+			existingObjects:      []runtime.Object{testNodeObservability(), makeKubeletCACM()},
+			inputRequest:         testRequest(),
+			expectedResult:       reconcile.Result{},
+			expectedEvents:       []test.Event{},
+			expectReadyCondition: metav1.ConditionTrue,
 		},
 		{
-			name:            "Deleted",
-			existingObjects: []runtime.Object{makeKubeletCACM()},
-			inputRequest:    testRequest(),
-			expectedResult:  reconcile.Result{},
+			name:                 "Deleted",
+			existingObjects:      []runtime.Object{makeKubeletCACM()},
+			inputRequest:         testRequest(),
+			expectedResult:       reconcile.Result{},
+			expectReadyCondition: metav1.ConditionTrue,
 		},
 		{
-			name:            "Deleting",
-			existingObjects: []runtime.Object{testNodeObservabilityToBeDeleted(), makeKubeletCACM()},
-			inputRequest:    testRequest(),
-			expectedResult:  reconcile.Result{},
+			name:                 "Deleting",
+			existingObjects:      []runtime.Object{testNodeObservabilityToBeDeleted(), makeKubeletCACM()},
+			inputRequest:         testRequest(),
+			expectedResult:       reconcile.Result{},
+			expectReadyCondition: metav1.ConditionTrue,
+		},
+		{
+			name:            "InvalidName",
+			existingObjects: []runtime.Object{},
+			inputRequest: ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: "",
+					Name:      "xxx",
+				},
+			},
+			expectedResult:       reconcile.Result{},
+			expectReadyCondition: metav1.ConditionFalse,
 		},
 	}
 
@@ -234,7 +251,7 @@ func TestReconcile(t *testing.T) {
 					//update status
 					tc.expectedEvents = append(tc.expectedEvents, teMod)
 				}
-				if /*(errTest.Set == nil && errTest.NotFound == nil) &&*/ tc.name == "Deleting" {
+				if tc.name == "Deleting" {
 					//update finalizer
 					tc.expectedEvents = append(tc.expectedEvents, teDel)
 				}
@@ -250,12 +267,27 @@ func TestReconcile(t *testing.T) {
 
 				c := test.NewEventCollector(t, cl, managedTypesList, len(tc.expectedEvents))
 
+				ctx := context.TODO()
 				// get watch interfaces from all the types managed by the operator
-				c.Start(context.TODO())
+				c.Start(ctx)
 				defer c.Stop()
 
 				// TEST FUNCTION
-				gotResult, err := r.Reconcile(context.TODO(), tc.inputRequest)
+				gotResult, err := r.Reconcile(ctx, tc.inputRequest)
+
+				res := &operatorv1alpha1.NodeObservability{}
+				if err := cl.Get(ctx, tc.inputRequest.NamespacedName, res); err != nil && !kerrors.IsNotFound(err) {
+					t.Fatalf("unexpected error while getting %v", tc.inputRequest.NamespacedName)
+				}
+				if err != nil { // nodeObs is found
+					cnd := res.Status.ConditionalStatus.GetCondition(operatorv1alpha1.DebugReady)
+					if cnd != nil {
+						isReady := cnd.Status
+						if tc.expectReadyCondition != isReady {
+							t.Fatalf("expecting condition Discarded %v but was %v", tc.expectReadyCondition, isReady)
+						}
+					}
+				}
 
 				// error check
 				if err != nil {
@@ -285,12 +317,58 @@ func TestReconcile(t *testing.T) {
 	}
 }
 
+func TestIsClusterNodeObservability(t *testing.T) {
+
+	testCases := []struct {
+		name            string
+		existingObjects []runtime.Object
+		nodeObsToTest   *operatorv1alpha1.NodeObservability
+		errExpected     bool
+	}{
+		{
+			name:            "new NodeObservability cluster passes",
+			existingObjects: []runtime.Object{},
+			nodeObsToTest:   testNodeObservability(),
+			errExpected:     false,
+		},
+		{
+			name:            "new NodeObservability xxx fails",
+			existingObjects: []runtime.Object{testNodeObservability()},
+			nodeObsToTest:   testNodeObservabilityInvalidName(),
+			errExpected:     true,
+		},
+		{
+			name:            "NodeObservability cluster, in update, passes",
+			existingObjects: []runtime.Object{testNodeObservability()},
+			nodeObsToTest:   testNodeObservability(),
+			errExpected:     false,
+		},
+		{
+			name:            "NodeObservability xxx, with existing NodeObservability, fails",
+			existingObjects: []runtime.Object{testNodeObservability()},
+			nodeObsToTest:   testNodeObservabilityInvalidName(),
+			errExpected:     true,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := isClusterNodeObservability(context.TODO(), tc.nodeObsToTest)
+			if err != nil && !tc.errExpected {
+				t.Fatalf("unexpected error : %v", err)
+			}
+			if tc.errExpected && err == nil {
+				t.Fatal("expecting error but found none")
+			}
+		})
+	}
+}
+
 // testRquest - used to create request
 func testRequest() ctrl.Request {
 	return ctrl.Request{
 		NamespacedName: types.NamespacedName{
 			Namespace: "",
-			Name:      "test",
+			Name:      "cluster",
 		},
 	}
 }
@@ -300,7 +378,7 @@ func testNodeObservability() *operatorv1alpha1.NodeObservability {
 	return &operatorv1alpha1.NodeObservability{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "",
-			Name:      "test",
+			Name:      "cluster",
 		},
 		Spec: operatorv1alpha1.NodeObservabilitySpec{
 			Image: "test",
@@ -316,4 +394,10 @@ func testNodeObservabilityToBeDeleted() *operatorv1alpha1.NodeObservability {
 		Time: time.Now(),
 	}
 	return nobs
+}
+
+func testNodeObservabilityInvalidName() *operatorv1alpha1.NodeObservability {
+	o := testNodeObservability()
+	o.Name = "xxx"
+	return o
 }

@@ -36,7 +36,7 @@ var _ = Describe("Node Observability Operator end-to-end test suite", Ordered, f
 	)
 
 	BeforeAll(func() {
-		nodeobservability = testNodeObservability(defaultTestName)
+		nodeobservability = testNodeObservability()
 		By("deploying Node Observability Agents", func() {
 			Expect(k8sClient.Create(ctx, nodeobservability)).To(Succeed(), "test NodeObservability resource created")
 			Eventually(func() bool {

@@ -30,12 +30,13 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/openshift/node-observability-operator/api/v1alpha1"
 	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
 const (
 	finalizer = "NodeObservability"
+	// the name of the NodeObservability resource which will be reconciled
+	nodeObsCRName = "cluster"
 )
 
 var (
@@ -98,6 +99,30 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		r.Log.Error(err, "Failed to get NodeObservability")
 		return ctrl.Result{}, err
 	}
+	r.Log.V(3).Info("Reconciling:", "NodeObservability", nodeObs)
+
+	err = isClusterNodeObservability(ctx, nodeObs)
+	if err != nil {
+		// Update nodeObs Status
+		nodeObs.Status.SetCondition(operatorv1alpha1.DebugReady, metav1.ConditionFalse, operatorv1alpha1.ReasonInvalid, err.Error())
+
+		nodeObs.Status.Count = 0
+		now := metav1.NewTime(clock.Now())
+		nodeObs.Status.LastUpdate = &now
+
+		// Call API Update Status
+		errUpdate := r.Status().Update(ctx, nodeObs)
+		if errUpdate != nil {
+			errUpdate = fmt.Errorf("failed to update status for NodeObservability %v: %w", nodeObs, errUpdate)
+			return ctrl.Result{}, utilerrors.NewAggregate([]error{err, errUpdate})
+		}
+		r.Log.V(3).Info("Status updated ", "Count", "0", "LastUpdated", now, "Ready", false)
+		r.Log.Error(err, "Exiting reconcile")
+		// Return without err, to prevent requeuing
+		return ctrl.Result{}, nil
+	}
+
+	// nodeObs is named cluster: proceed
 	if nodeObs.DeletionTimestamp != nil {
 		r.Log.Info("NodeObservability resource is going to be deleted. Taking action")
 		if err := r.ensureNodeObservabilityDeleted(ctx, nodeObs); err != nil {
@@ -192,9 +217,9 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	msg := fmt.Sprintf("DaemonSet %s ready: %t NodeObservabilityMachineConfig ready: %t", ds.Name, dsReady, nomcReady)
 	if dsReady && nomcReady {
-		nodeObs.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionTrue, v1alpha1.ReasonReady, msg)
+		nodeObs.Status.SetCondition(operatorv1alpha1.DebugReady, metav1.ConditionTrue, operatorv1alpha1.ReasonReady, msg)
 	} else {
-		nodeObs.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, msg)
+		nodeObs.Status.SetCondition(operatorv1alpha1.DebugReady, metav1.ConditionFalse, operatorv1alpha1.ReasonInProgress, msg)
 	}
 
 	// ignore when testing
@@ -300,5 +325,14 @@ func (r *NodeObservabilityReconciler) ensureNodeObservabilityDeleted(ctx context
 // machineConfigChangeRequested returns true, when a given NodeObservabilityType needs
 // machine config change. Only CrioKubeletNodeObservabilityType requires a MC change, false otherwise
 func machineConfigChangeRequested(nodeObs *operatorv1alpha1.NodeObservability) bool {
-	return nodeObs.Spec.Type == v1alpha1.CrioKubeletNodeObservabilityType
+	return nodeObs.Spec.Type == operatorv1alpha1.CrioKubeletNodeObservabilityType
+}
+
+func isClusterNodeObservability(ctx context.Context, nodeObs *operatorv1alpha1.NodeObservability) error {
+
+	if nodeObs.Name == nodeObsCRName {
+		return nil
+	}
+
+	return fmt.Errorf("a single NodeObservability with name 'cluster' is authorized. Resource %s will be ignored", nodeObs.Name)
 }

@@ -72,7 +72,8 @@ type AgentNode struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// NodeObservabilityRun is the Schema for the nodeobservabilityruns API
+// NodeObservabilityRun is a request to run observability actions on the
+// nodes previously selected in NodeObservability resource
 type NodeObservabilityRun struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
