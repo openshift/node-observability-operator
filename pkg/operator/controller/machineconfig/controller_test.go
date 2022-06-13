@@ -1037,7 +1037,7 @@ func TestReconcileClientFakes(t *testing.T) {
 				}
 				return true
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name: "inspectProfilingMCReq - mcp create failure",
@@ -1218,7 +1218,7 @@ func TestReconcileClientFakes(t *testing.T) {
 				}
 				return true
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name: "inspectProfilingMCReq - mcp delete failure",
@@ -1422,7 +1422,7 @@ func TestCleanUp(t *testing.T) {
 				m.ClientListReturns(testError)
 				m.ClientPatchReturns(testError)
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name: "worker mcp fetch fails",
@@ -1725,16 +1725,16 @@ func TestEnsureProfConfEnabled(t *testing.T) {
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
 				r.CtrlConfig.SetNamespace("test")
 			},
-			requeue: true,
-			wantErr: false,
+			requeue: false,
+			wantErr: true,
 		},
 		{
 			name: "ensureReqMCExists failure",
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
 				r.CtrlConfig.SetNamespace("test")
 			},
-			requeue: true,
-			wantErr: false,
+			requeue: false,
+			wantErr: true,
 		},
 	}
 
