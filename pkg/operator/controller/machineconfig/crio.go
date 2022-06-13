@@ -117,7 +117,7 @@ func (r *MachineConfigReconciler) createCrioProfConf(ctx context.Context) error 
 		return fmt.Errorf("failed to create crio profiling config %s: %w", criomc.Name, err)
 	}
 
-	r.Log.V(3).Info("Successfully created CRI-O MC for enabling profiling", "CrioProfilingConfigName", CrioProfilingConfigName)
+	r.Log.V(1).Info("Successfully created CRI-O MC for enabling profiling", "CrioProfilingConfigName", CrioProfilingConfigName)
 	return nil
 }
 
@@ -127,7 +127,7 @@ func (r *MachineConfigReconciler) deleteCrioProfConf(ctx context.Context, criomc
 		return fmt.Errorf("failed to remove crio profiling config %s: %w", criomc.Name, err)
 	}
 
-	r.Log.V(3).Info("Successfully removed CRI-O MC to disable profiling", "CrioProfilingConfigName", CrioProfilingConfigName)
+	r.Log.V(1).Info("Successfully removed CRI-O MC to disable profiling", "CrioProfilingConfigName", CrioProfilingConfigName)
 	return nil
 }
 

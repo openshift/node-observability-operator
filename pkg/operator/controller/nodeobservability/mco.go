@@ -85,6 +85,6 @@ func (r *NodeObservabilityReconciler) deleteNOMC(ctx context.Context, nodeObs *v
 		}
 		return fmt.Errorf("failed to delete NodeObservabilityMachineConfig %s: %w", mc.Name, err)
 	}
-	r.Log.Info("deleted NodeObservabilityMachinConfig", "name", mc.Name)
+	r.Log.Info("Deleted NodeObservabilityMachinConfig", "name", mc.Name)
 	return nil
 }
