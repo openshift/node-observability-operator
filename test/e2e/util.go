@@ -14,10 +14,10 @@ const (
 )
 
 // testNodeObservability - minimal CR for the test
-func testNodeObservability(testName string) *operatorv1alpha1.NodeObservability {
+func testNodeObservability() *operatorv1alpha1.NodeObservability {
 	return &operatorv1alpha1.NodeObservability{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      testName,
+			Name:      "cluster",
 			Namespace: testNamespace,
 		},
 		Spec: operatorv1alpha1.NodeObservabilitySpec{
@@ -39,7 +39,7 @@ func testNodeObservabilityRun(testName string) *operatorv1alpha1.NodeObservabili
 		},
 		Spec: operatorv1alpha1.NodeObservabilityRunSpec{
 			NodeObservabilityRef: &operatorv1alpha1.NodeObservabilityRef{
-				Name: defaultTestName,
+				Name: "cluster",
 			},
 		},
 	}

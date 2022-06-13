@@ -103,12 +103,12 @@ pod on each of those nodes using the image given in `.spec.image`.
 apiVersion: nodeobservability.olm.openshift.io/v1alpha1
 kind: NodeObservability
 metadata:
-  name: nodeobservability-sample
-  namespace: node-observability-operator
+  name: cluster
 spec:
   labels:
     "node-role.kubernetes.io/worker": ""
   image: "brew.registry.redhat.io/rh-osbs/node-observability-agent:0.1.0-3"
+  type: crio-kubelet
 ```
 
 The CRIO unix socket of the underlying node is mounted on the agent pod,
@@ -116,6 +116,33 @@ thus allowing the agent to communicate with CRIO to run the pprof request.
 
 The `kubelet-serving-ca` certificate chain is also mounted on the agent pod,
 which allows secure communication between agent and node's kubelet endpoint.
+
+__Important__: The `NodeObservability` custom resource (CR) is unique cluster-wide. 
+The operator expects the CR's name to be `cluster`, and ignores `NodeObservability` 
+resources created with a different name.
+
+`NodeObservability` resources created with a different name will be ignored
+by the operator with `Ready` condition set to false in its `Status`:
+```yaml
+apiVersion: nodeobservability.olm.openshift.io/v1alpha1
+kind: NodeObservability
+metadata:
+  name: anything-but-cluster
+spec:
+  labels:
+    "node-role.kubernetes.io/worker": ""
+  image: "brew.registry.redhat.io/rh-osbs/node-observability-agent:0.1.0-3"
+  type: crio-kubelet
+status:
+  conditions:
+    conditions:
+    - lastTransitionTime: "2022-06-08T12:17:15Z"
+      message: a single NodeObservability with name 'cluster' is authorized. Resource
+        clustxxer will be discarded
+      reason: Invalid
+      status: "False"
+      type: Ready
+```
 
 ## Run profiling queries
 
@@ -132,7 +159,7 @@ metadata:
   name: nodeobservabilityrun-sample
 spec:
   nodeObservabilityRef:
-    name: nodeobservability-sample
+    name: cluster
 ```
 
 _Note: `NodeObservability` resource has to exist and referenced from the Run_
@@ -150,7 +177,7 @@ metadata:
   name: nodeobservabilityrun-sample
 spec:
   nodeObservabilityRef:
-    name: nodeobservability-sample
+    name: cluster
 ...
 apiVersion: nodeobservability.olm.openshift.io/v1alpha1
 kind: NodeObservabilityRun
@@ -158,7 +185,7 @@ metadata:
   name: nodeobservabilityrun-sample
 spec:
   nodeObservabilityRef:
-    name: nodeobservability-sample
+    name: cluster
 status:
   startTimestamp: 2022-05-12T15:25:54.192343392+02:00
   agents:
@@ -175,7 +202,7 @@ metadata:
   name: nodeobservabilityrun-sample
 spec:
   nodeObservabilityRef:
-    name: nodeobservability-sample
+    name: cluster
 status:
   startTimestamp: 2022-05-12T15:25:54.192343392+02:00
   finishedTimestamp 2022-05-12T15:26:25.192343392+02:00

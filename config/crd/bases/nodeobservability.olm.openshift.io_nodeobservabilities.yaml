@@ -20,7 +20,8 @@ spec:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: NodeObservability is the Schema for the nodeobservabilities API
+        description: NodeObservability prepares a subset of worker nodes (identified
+          by a label) for running node observability queries, such as profiling
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation

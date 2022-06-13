@@ -67,6 +67,8 @@ const (
 	ReasonFailed string = "Failed"
 
 	ReasonInProgress string = "Progressing"
+
+	ReasonInvalid string = "Invalid"
 )
 
 type ConditionalStatus struct {
