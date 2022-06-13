@@ -23,8 +23,8 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: NodeObservabilityRun is the Schema for the nodeobservabilityruns
-          API
+        description: NodeObservabilityRun is a request to run observability actions
+          on the nodes previously selected in NodeObservability resource
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation

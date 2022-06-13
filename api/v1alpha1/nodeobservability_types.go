@@ -56,7 +56,8 @@ type NodeObservabilityStatus struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
-// NodeObservability is the Schema for the nodeobservabilities API
+// NodeObservability prepares a subset of worker nodes (identified
+// by a label) for running node observability queries, such as profiling
 type NodeObservability struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

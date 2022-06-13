@@ -28,11 +28,12 @@ import (
 )
 
 const (
-	name      = "agent"
-	namespace = "test"
-	CAPath    = "../../../../hack/certs/serving-ca.crt"
-	certPath  = "../../../../hack/certs/serving-localhost.crt"
-	keyPath   = "../../../../hack/certs/serving-localhost.key"
+	name        = "agent"
+	nodeObsName = "cluster"
+	namespace   = "test"
+	CAPath      = "../../../../hack/certs/serving-ca.crt"
+	certPath    = "../../../../hack/certs/serving-localhost.crt"
+	keyPath     = "../../../../hack/certs/serving-localhost.key"
 )
 
 func TestGetAgentEndpoints(t *testing.T) {
@@ -329,13 +330,13 @@ func testNodeObservabilityRun() *operatorv1alpha1.NodeObservabilityRun {
 			Namespace: namespace,
 			OwnerReferences: []metav1.OwnerReference{
 				{
-					Name: name,
+					Name: nodeObsName,
 				},
 			},
 		},
 		Spec: operatorv1alpha1.NodeObservabilityRunSpec{
 			NodeObservabilityRef: &operatorv1alpha1.NodeObservabilityRef{
-				Name: name,
+				Name: nodeObsName,
 			},
 		},
 		Status: operatorv1alpha1.NodeObservabilityRunStatus{},
@@ -346,7 +347,7 @@ func testNodeObservabilityRun() *operatorv1alpha1.NodeObservabilityRun {
 func testNodeObservability() *operatorv1alpha1.NodeObservability {
 	return &operatorv1alpha1.NodeObservability{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
+			Name: nodeObsName,
 		},
 		Spec: operatorv1alpha1.NodeObservabilitySpec{},
 		Status: operatorv1alpha1.NodeObservabilityStatus{

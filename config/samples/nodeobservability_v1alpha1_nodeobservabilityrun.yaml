@@ -4,5 +4,5 @@ metadata:
   name: nodeobservabilityrun-sample
 spec:
   nodeObservabilityRef:
-    name: nodeobservability-sample
+    name: cluster
 
