@@ -105,6 +105,6 @@ var (
 	// MachineConfigLabels is for storing the labels to
 	// add in machine config resources
 	MachineConfigLabels = map[string]string{
-		MCRoleLabelName: Empty,
+		MCRoleLabelName: NodeObservabilityNodeRoleName,
 	}
 )
