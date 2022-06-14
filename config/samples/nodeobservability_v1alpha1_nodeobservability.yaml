@@ -3,7 +3,7 @@ kind: NodeObservability
 metadata:
   name: cluster
 spec:
-  labels: 
+  labels:
     node-role.kubernetes.io/worker: ""
   image: "registry.ci.openshift.org/ocp/4.11:node-observability-agent"
   type: crio-kubelet

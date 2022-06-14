@@ -4,6 +4,7 @@ metadata:
   annotations:
     alm-examples: '[]'
     capabilities: Basic Install
+    operatorframework.io/suggested-namespace: node-observability-operator
   name: node-observability-operator.v0.0.1
   namespace: placeholder
 spec:

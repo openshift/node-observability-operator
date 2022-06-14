@@ -73,11 +73,10 @@ type NodeObservabilityRunReconciler struct {
 // Reconcile manages NodeObservabilityRuns
 func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
 	var msg string
-	r.Log, err = logr.FromContext(ctx)
-	if err != nil {
-		return ctrl.Result{}, err
+	if ctxLog, err := logr.FromContext(ctx); err == nil {
+		r.Log = ctxLog
 	}
-	r.Log.V(3).Info("Beginning Reconciliation")
+	r.Log.V(1).Info("Beginning Reconciliation")
 
 	instance := &nodeobservabilityv1alpha1.NodeObservabilityRun{}
 	err = r.Get(ctx, req.NamespacedName, instance)
@@ -91,7 +90,7 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 	}
 
 	if finished(instance) {
-		r.Log.V(3).Info("Run for this instance has been completed already")
+		r.Log.V(1).Info("Run for this instance has been completed already")
 		return
 	}
 
@@ -127,7 +126,7 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 	instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugReady, metav1.ConditionTrue, nodeobservabilityv1alpha1.ReasonReady, msg)
 
 	if inProgress(instance) {
-		r.Log.V(3).Info("Run is in progress")
+		r.Log.V(1).Info("Run is in progress")
 		var requeue bool
 		requeue, err = r.handleInProgress(instance)
 		if requeue {
@@ -186,7 +185,7 @@ func (r *NodeObservabilityRunReconciler) handleInProgress(instance *nodeobservab
 		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityRunErrorRetriable, r.httpGetCall(url))
 		if err != nil {
 			if e, ok := err.(NodeObservabilityRunError); ok && e.HttpCode == http.StatusConflict {
-				r.Log.V(3).Info("Received 407:StatusConflict, job still running")
+				r.Log.V(1).Info("Received 407:StatusConflict, job still running")
 				return true, nil
 			}
 			errors = append(errors, fmt.Errorf("failed to get the status of the agent named %q with %q IP: %w", agent.Name, agent.IP, err))
@@ -213,10 +212,10 @@ func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance 
 
 	for _, a := range subset.Addresses {
 		url := r.format(a.IP, r.AgentName, r.Namespace, pprofPath, port)
-		r.Log.V(3).Info("Initiating new run for node", "Name", a.TargetRef.Name, "IP", a.IP, "port", port, "URL", url)
+		r.Log.V(1).Info("Initiating new run for node", "Name", a.TargetRef.Name, "IP", a.IP, "port", port, "URL", url)
 		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityRunErrorRetriable, r.httpGetCall(url))
 		if err != nil {
-			r.Log.V(3).Info("Failed to start profiling, removing node from list", "Name", a.TargetRef.Name, "IP", a.IP, "Error", err)
+			r.Log.V(1).Info("Failed to start profiling, removing node from list", "Name", a.TargetRef.Name, "IP", a.IP, "Error", err)
 			failedTargets = append(failedTargets, nodeobservabilityv1alpha1.AgentNode{Name: a.TargetRef.Name, IP: a.IP, Port: port})
 			continue
 		}
