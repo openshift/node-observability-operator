@@ -807,7 +807,7 @@ func TestReconcileClientFakes(t *testing.T) {
 				}
 				return true
 			},
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			name: "NOMC fetch failure",
