@@ -4,5 +4,4 @@ metadata:
   name: cluster
 spec:
   labels:
-  image: "registry.ci.openshift.org/ocp/4.11:node-observability-agent"
   type: crio-kubelet

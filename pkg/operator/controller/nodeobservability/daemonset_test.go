@@ -67,7 +67,6 @@ func TestEnsureDaemonset(t *testing.T) {
 					},
 					Spec: corev1.PodSpec{
 						Containers: []corev1.Container{{
-							Image:           nodeObs.Spec.Image,
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Name:            podName,
 							// TODO - this will change once the shell script in the node-observability-agent is
@@ -147,14 +146,12 @@ func TestEnsureDaemonset(t *testing.T) {
 				ClusterWideClient: cl,
 				Scheme:            test.Scheme,
 				Log:               zap.New(zap.UseDevMode(true)),
+				AgentImage:        "node-observability-agent:latest",
 			}
 			nodeObs := &operatorv1alpha1.NodeObservability{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "nodeobservability-sample",
 					Namespace: "node-observability-operator",
-				},
-				Spec: operatorv1alpha1.NodeObservabilitySpec{
-					Image: "node-observability-agent:latest",
 				},
 			}
 			_, serviceAccount, err := r.ensureServiceAccount(context.TODO(), nodeObs, test.TestNamespace)

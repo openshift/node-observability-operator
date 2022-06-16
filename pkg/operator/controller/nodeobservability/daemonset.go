@@ -109,7 +109,7 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Image:           nodeObs.Spec.Image,
+							Image:           r.AgentImage,
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Name:            podName,
 							Command:         []string{"node-observability-agent"},

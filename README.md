@@ -23,6 +23,10 @@ You can install the NodeObservability Operator by building and pushing the Opera
     ```
     $ make deploy
     ```
+    If you want to specify the agent image of your choice, patch the operator deployment with the following command:
+    ```sh
+    $ oc set env deployment/node-observability-operator --containers=manager RELATED_IMAGE_AGENT=${MY_IMAGE_AGENT} -n node-observability-operator
+    ```
 
 ### Creating the local NodeObservability
 
@@ -130,6 +134,27 @@ You can install the NodeObservability Operator by building and pushing the Opera
       sourceNamespace: openshift-marketplace
     EOF
     ```
+    If you want to specify the agent image of your choice, use the following subscription:
+    ```
+    cat <<EOF | oc apply -f -
+    apiVersion: operators.coreos.com/v1alpha1
+    kind: Subscription
+    metadata:
+      name: node-observability-operator
+      namespace: node-observability-operator
+    spec:
+      channel: alpha
+      name: node-observability-operator
+      source: node-observability-operator
+      sourceNamespace: openshift-marketplace
+      env:
+      config:
+        env:
+          - name: RELATED_IMAGE_AGENT
+            value: ${MY_IMAGE_AGENT}
+    EOF
+    ```
+
 **From the UI**
 
 To install the Node Observability Operator from the web console, follow these steps:
@@ -142,7 +167,7 @@ To install the Node Observability Operator from the web console, follow these st
 
 4. Click **Install**.
 
-5. On the Install Operator page, select A specific namespace on the cluster. Select **node-observability-operator** from the drop-down menu.
+5. On the Install Operator page, select a specific namespace on the cluster. Select **node-observability-operator** from the drop-down menu.
 
 
 Once finished, the Node Observability Operator will be listed in the Installed Operators section of the web console.
