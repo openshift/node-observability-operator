@@ -107,6 +107,7 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 					Labels: ls,
 				},
 				Spec: corev1.PodSpec{
+					HostNetwork: true,
 					Containers: []corev1.Container{
 						{
 							Image:           nodeObs.Spec.Image,
