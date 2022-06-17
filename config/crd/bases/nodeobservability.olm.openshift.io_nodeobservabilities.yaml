@@ -38,10 +38,6 @@ spec:
           spec:
             description: NodeObservabilitySpec defines the desired state of NodeObservability
             properties:
-              image:
-                description: Image is the container (pod) image to execute specific
-                  scripts on each node
-                type: string
               labels:
                 additionalProperties:
                   type: string
@@ -56,7 +52,6 @@ spec:
                 - crio-kubelet
                 type: string
             required:
-            - image
             - type
             type: object
           status:

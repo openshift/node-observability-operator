@@ -238,6 +238,7 @@ func TestReconcile(t *testing.T) {
 					Scheme:            test.Scheme,
 					Log:               zap.New(zap.UseDevMode(true)),
 					Err:               errTest,
+					AgentImage:        "test",
 				}
 				// only check for errors when the ErrorTestObject Set and NotFound maps are nill
 				tc.errExpected = (errTest.Set != nil || errTest.NotFound != nil) && tc.name == "Bootstrapping"
@@ -379,9 +380,6 @@ func testNodeObservability() *operatorv1alpha1.NodeObservability {
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "",
 			Name:      "cluster",
-		},
-		Spec: operatorv1alpha1.NodeObservabilitySpec{
-			Image: "test",
 		},
 	}
 }

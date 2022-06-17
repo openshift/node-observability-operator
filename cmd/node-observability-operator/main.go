@@ -74,12 +74,12 @@ func main() {
 	var enableLeaderElection bool
 	var probeAddr string
 	var operatorNamespace string
-	var operandImage string
+	var agentImage string
 	var tokenFile string
 	var caCertFile string
 
 	flag.StringVar(&operatorNamespace, "operator-namespace", "node-observability-operator", "The node observability operator namespace.")
-	flag.StringVar(&operandImage, "operand-image", "quay.io/openshift/node-observability-operator:latest", "The operand container image to use.")
+	flag.StringVar(&agentImage, "agent-image", "quay.io/node-observability-operator/node-observability-agent:latest", "The node observability agent container image to use.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.StringVar(&tokenFile, "token-file", defaultTokenFile, "The path of the service account token.")
@@ -138,6 +138,7 @@ func main() {
 		Scheme:            mgr.GetScheme(),
 		Log:               ctrl.Log.WithName("controller").WithName("NodeObservability"),
 		Namespace:         operatorNamespace,
+		AgentImage:        agentImage,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "NodeObservability")
 		os.Exit(1)

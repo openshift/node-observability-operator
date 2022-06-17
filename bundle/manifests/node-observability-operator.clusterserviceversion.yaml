@@ -11,7 +11,6 @@ metadata:
             "name": "cluster"
           },
           "spec": {
-            "image": "registry.ci.openshift.org/ocp/4.11:node-observability-agent",
             "labels": {
               "node-role.kubernetes.io/worker": ""
             },
@@ -345,6 +344,7 @@ spec:
                 - --leader-elect
                 - --zap-log-level=$(LOG_LEVEL)
                 - --operator-namespace=$(OPERATOR_NAMESPACE)
+                - --agent-image=$(RELATED_IMAGE_AGENT)
                 command:
                 - /manager
                 env:
@@ -354,6 +354,8 @@ spec:
                   valueFrom:
                     fieldRef:
                       fieldPath: metadata.namespace
+                - name: RELATED_IMAGE_AGENT
+                  value: registry.ci.openshift.org/ocp/4.11:node-observability-agent
                 image: quay.io/openshift/node-observability-operator:v0.0.1
                 imagePullPolicy: Always
                 livenessProbe:
@@ -520,4 +522,7 @@ spec:
   minKubeVersion: 1.23.0
   provider:
     name: Red Hat, Inc.
+  relatedImages:
+  - image: registry.ci.openshift.org/ocp/4.11:node-observability-agent
+    name: agent
   version: 0.0.1

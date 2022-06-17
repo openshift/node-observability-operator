@@ -20,9 +20,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // +kubebuilder:validation:Enum=crio-kubelet;
 type NodeObservabilityType string
 
@@ -34,8 +31,6 @@ const (
 type NodeObservabilitySpec struct {
 	// Labels is map of key:value pairs that are used to match against node labels
 	Labels map[string]string `json:"labels,omitempty"`
-	// Image is the container (pod) image to execute specific scripts on each node
-	Image string `json:"image"`
 	// +kubebuilder:validation:Required
 	// Type defines the type of profiling queries, which will be enabled
 	// The following types are supported:

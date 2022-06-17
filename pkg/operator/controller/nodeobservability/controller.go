@@ -50,6 +50,7 @@ type NodeObservabilityReconciler struct {
 	Log               logr.Logger
 	Scheme            *runtime.Scheme
 	Namespace         string
+	AgentImage        string
 	// Used to inject errors for testing
 	Err ErrTestObject
 }

@@ -10,7 +10,6 @@ import (
 const (
 	defaultTestName = "test-instance"
 	testNamespace   = "node-observability-operator"
-	image           = "registry.ci.openshift.org/ocp/4.11:node-observability-agent"
 )
 
 // testNodeObservability - minimal CR for the test
@@ -24,8 +23,7 @@ func testNodeObservability() *operatorv1alpha1.NodeObservability {
 			Labels: map[string]string{
 				"node-role.kubernetes.io/worker": "",
 			},
-			Image: image,
-			Type:  operatorv1alpha1.CrioKubeletNodeObservabilityType,
+			Type: operatorv1alpha1.CrioKubeletNodeObservabilityType,
 		},
 	}
 }

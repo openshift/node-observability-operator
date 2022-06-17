@@ -5,5 +5,4 @@ metadata:
 spec:
   labels:
     node-role.kubernetes.io/worker: ""
-  image: "registry.ci.openshift.org/ocp/4.11:node-observability-agent"
   type: crio-kubelet
