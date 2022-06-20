@@ -110,10 +110,7 @@ spec:
   type: crio-kubelet
 ```
 
-The CRIO unix socket of the underlying node is mounted on the agent pod,
-thus allowing the agent to communicate with CRIO to run the pprof request.
-
-The `kubelet-serving-ca` certificate chain is also mounted on the agent pod,
+The `kubelet-serving-ca` certificate chain is mounted on the agent pod,
 which allows secure communication between agent and node's kubelet endpoint.
 
 __Important__: The `NodeObservability` custom resource (CR) is unique cluster-wide.

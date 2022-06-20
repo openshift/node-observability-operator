@@ -1,7 +1,6 @@
 package nodeobservabilitycontroller
 
 const (
-	sccObj = "securitycontextconstraint"
 	crObj  = "clusterrole"
 	crbObj = "clusterrolebinding"
 )

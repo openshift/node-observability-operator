@@ -3,6 +3,8 @@ package nodeobservabilitycontroller
 import (
 	"context"
 	"fmt"
+	"net"
+	"strconv"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -18,9 +20,6 @@ import (
 
 const (
 	podName           = "node-observability-agent"
-	socketName        = "socket"
-	socketPath        = "/var/run/crio/crio.sock"
-	socketMountPath   = "/var/run/crio/crio.sock"
 	kbltCAMountPath   = "/var/run/secrets/kubelet-serving-ca/"
 	kbltCAMountedFile = "ca-bundle.crt"
 	kbltCAName        = "kubelet-ca"
@@ -28,6 +27,18 @@ const (
 	daemonSetName     = "node-observability-ds"
 	certsName         = "certs"
 	certsMountPath    = "/var/run/secrets/openshift.io/certs"
+	// kubeRBACProxyAddr binds on the any address to accept the connections from everywhere.
+	kubeRBACProxyHost = "0.0.0.0"
+	// kubeBRACProxyPort uses a port from 9000-9999 range.
+	// More info on the port registry: https://github.com/openshift/enhancements/blob/master/dev-guide/host-port-registry.md
+	kubeRBACProxyPort = 9743
+	// agentHost binds on the localhost to be available only for the connections from the host.
+	agentHost = "127.0.0.1"
+	// localhost ports are not necessary to be from 9000-9999 range.
+	// TODO: make agent unix socket targetable to using the hostport,
+	// depends on kube-rbac-proxy upstream forwarding
+	// (currently not possible with Unix domain socket)
+	agentPort = 29740
 )
 
 // ensureDaemonSet ensures that the daemonset exists
@@ -131,8 +142,6 @@ func (r *NodeObservabilityReconciler) updateDaemonset(ctx context.Context, curre
 func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObservability, sa *corev1.ServiceAccount, ns string) *appsv1.DaemonSet {
 	ls := labelsForNodeObservability(nodeObs.Name)
 	tgp := int64(30)
-	vst := corev1.HostPathSocket
-	privileged := true
 
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -158,28 +167,27 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 								"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
 								"--storage=/run/node-observability",
 								fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
+								fmt.Sprintf("--port=%d", agentPort),
+								"--crioPreferUnixSocket=false",
 							},
 							Resources:                corev1.ResourceRequirements{},
 							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
-							SecurityContext: &corev1.SecurityContext{
-								Privileged: &privileged,
-							},
-							Env: []corev1.EnvVar{
-								{
-									Name: "NODE_IP",
-									ValueFrom: &corev1.EnvVarSource{
-										FieldRef: &corev1.ObjectFieldSelector{
-											FieldPath: "status.hostIP",
-										},
+							Env: []corev1.EnvVar{{
+								Name: "NODE_IP",
+								ValueFrom: &corev1.EnvVarSource{
+									FieldRef: &corev1.ObjectFieldSelector{
+										FieldPath: "status.hostIP",
 									},
+								},
+							}},
+							Ports: []corev1.ContainerPort{
+								{
+									ContainerPort: agentPort,
+									HostPort:      agentPort,
+									Protocol:      corev1.ProtocolTCP,
 								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
-								{
-									MountPath: socketMountPath,
-									Name:      socketName,
-									ReadOnly:  false,
-								},
 								{
 									MountPath: kbltCAMountPath,
 									Name:      kbltCAName,
@@ -192,12 +200,19 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 							Image:           "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0",
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Args: []string{
-								"--secure-listen-address=0.0.0.0:8443",
-								"--upstream=http://127.0.0.1:9000/",
+								fmt.Sprintf("--secure-listen-address=%s", net.JoinHostPort(kubeRBACProxyHost, strconv.Itoa(kubeRBACProxyPort))),
+								fmt.Sprintf("--upstream=http://%s/", net.JoinHostPort(agentHost, strconv.Itoa(agentPort))),
 								fmt.Sprintf("--tls-cert-file=%s/tls.crt", certsMountPath),
 								fmt.Sprintf("--tls-private-key-file=%s/tls.key", certsMountPath),
 								"--logtostderr=true",
 								"--v=2",
+							},
+							Ports: []corev1.ContainerPort{
+								{
+									ContainerPort: kubeRBACProxyPort,
+									HostPort:      kubeRBACProxyPort,
+									Protocol:      corev1.ProtocolTCP,
+								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
@@ -214,15 +229,6 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 					ServiceAccountName:            sa.Name,
 					TerminationGracePeriodSeconds: &tgp,
 					Volumes: []corev1.Volume{
-						{
-							Name: socketName,
-							VolumeSource: corev1.VolumeSource{
-								HostPath: &corev1.HostPathVolumeSource{
-									Path: socketPath,
-									Type: &vst,
-								},
-							},
-						},
 						{
 							Name: kbltCAName,
 							VolumeSource: corev1.VolumeSource{
@@ -243,6 +249,7 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 						},
 					},
 					NodeSelector: nodeObs.Spec.NodeSelector,
+					HostNetwork:  true,
 				},
 			},
 		},

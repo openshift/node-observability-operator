@@ -121,6 +121,7 @@ func (b *testDaemonsetBuilder) build() *appsv1.DaemonSet {
 					Volumes:                       b.volumes,
 					NodeSelector:                  b.nodeSelector,
 					TerminationGracePeriodSeconds: pointer.Int64(30),
+					HostNetwork:                   true,
 				},
 			},
 		},
@@ -140,6 +141,7 @@ type testContainerBuilder struct {
 	command                  []string
 	env                      []corev1.EnvVar
 	volumeMounts             []corev1.VolumeMount
+	ports                    []corev1.ContainerPort
 	securityContext          *corev1.SecurityContext
 	terminationMessagePolicy corev1.TerminationMessagePolicy
 }
@@ -181,6 +183,11 @@ func (b *testContainerBuilder) withSecurityContext(securityContext corev1.Securi
 	return b
 }
 
+func (b *testContainerBuilder) withHostPort(port int32, protocol corev1.Protocol) *testContainerBuilder {
+	b.ports = append(b.ports, corev1.ContainerPort{ContainerPort: port, HostPort: port, Protocol: protocol})
+	return b
+}
+
 func (b *testContainerBuilder) build() corev1.Container {
 	return corev1.Container{
 		Name:                     b.name,
@@ -192,11 +199,11 @@ func (b *testContainerBuilder) build() corev1.Container {
 		VolumeMounts:             b.volumeMounts,
 		TerminationMessagePolicy: b.terminationMessagePolicy,
 		SecurityContext:          b.securityContext,
+		Ports:                    b.ports,
 	}
 }
 
 func TestEnsureDaemonset(t *testing.T) {
-	vst := corev1.HostPathSocket
 	testCases := []struct {
 		name            string
 		existingObjects []runtime.Object
@@ -232,27 +239,22 @@ func TestEnsureDaemonset(t *testing.T) {
 							"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
 							"--storage=/run/node-observability",
 							fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
+							"--port=29740",
+							"--crioPreferUnixSocket=false",
 						}...).
-						withSecurityContext(corev1.SecurityContext{
-							Privileged: pointer.Bool(true),
-						}).
 						withVolumeMounts([]corev1.VolumeMount{
-							{
-								MountPath: socketMountPath,
-								Name:      socketName,
-								ReadOnly:  false,
-							},
 							{
 								MountPath: kbltCAMountPath,
 								Name:      kbltCAName,
 								ReadOnly:  true,
 							},
 						}...).
+						withHostPort(29740, corev1.ProtocolTCP).
 						build(),
 					testContainer("kube-rbac-proxy", "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0").
 						withArgs([]string{
-							"--secure-listen-address=0.0.0.0:8443",
-							"--upstream=http://127.0.0.1:9000/",
+							"--secure-listen-address=0.0.0.0:9743",
+							"--upstream=http://127.0.0.1:29740/",
 							fmt.Sprintf("--tls-cert-file=%s/tls.crt", certsMountPath),
 							fmt.Sprintf("--tls-private-key-file=%s/tls.key", certsMountPath),
 							"--logtostderr=true",
@@ -265,18 +267,10 @@ func TestEnsureDaemonset(t *testing.T) {
 								ReadOnly:  true,
 							},
 						}...).
+						withHostPort(9743, corev1.ProtocolTCP).
 						build(),
 				).
 				withVolumes([]corev1.Volume{
-					{
-						Name: socketName,
-						VolumeSource: corev1.VolumeSource{
-							HostPath: &corev1.HostPathVolumeSource{
-								Path: socketPath,
-								Type: &vst,
-							},
-						},
-					},
 					{
 						Name: kbltCAName,
 						VolumeSource: corev1.VolumeSource{
@@ -328,15 +322,7 @@ func TestEnsureDaemonset(t *testing.T) {
 								"--storage=/run/node-observability",
 								fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
 							}...).
-							withSecurityContext(corev1.SecurityContext{
-								Privileged: pointer.Bool(true),
-							}).
 							withVolumeMounts([]corev1.VolumeMount{
-								{
-									MountPath: socketMountPath,
-									Name:      socketName,
-									ReadOnly:  true,
-								},
 								{
 									MountPath: kbltCAMountPath,
 									Name:      kbltCAName,
@@ -346,15 +332,6 @@ func TestEnsureDaemonset(t *testing.T) {
 							build(),
 					).
 					withVolumes([]corev1.Volume{
-						{
-							Name: socketName,
-							VolumeSource: corev1.VolumeSource{
-								HostPath: &corev1.HostPathVolumeSource{
-									Path: socketPath,
-									Type: &vst,
-								},
-							},
-						},
 						{
 							Name: kbltCAName,
 							VolumeSource: corev1.VolumeSource{
@@ -401,27 +378,22 @@ func TestEnsureDaemonset(t *testing.T) {
 							"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
 							"--storage=/run/node-observability",
 							fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
+							"--port=29740",
+							"--crioPreferUnixSocket=false",
 						}...).
-						withSecurityContext(corev1.SecurityContext{
-							Privileged: pointer.Bool(true),
-						}).
 						withVolumeMounts([]corev1.VolumeMount{
-							{
-								MountPath: socketMountPath,
-								Name:      socketName,
-								ReadOnly:  false,
-							},
 							{
 								MountPath: kbltCAMountPath,
 								Name:      kbltCAName,
 								ReadOnly:  true,
 							},
 						}...).
+						withHostPort(29740, corev1.ProtocolTCP).
 						build(),
 					testContainer("kube-rbac-proxy", "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0").
 						withArgs([]string{
-							"--secure-listen-address=0.0.0.0:8443",
-							"--upstream=http://127.0.0.1:9000/",
+							"--secure-listen-address=0.0.0.0:9743",
+							"--upstream=http://127.0.0.1:29740/",
 							fmt.Sprintf("--tls-cert-file=%s/tls.crt", certsMountPath),
 							fmt.Sprintf("--tls-private-key-file=%s/tls.key", certsMountPath),
 							"--logtostderr=true",
@@ -434,18 +406,10 @@ func TestEnsureDaemonset(t *testing.T) {
 								ReadOnly:  true,
 							},
 						}...).
+						withHostPort(9743, corev1.ProtocolTCP).
 						build(),
 				).
 				withVolumes([]corev1.Volume{
-					{
-						Name: socketName,
-						VolumeSource: corev1.VolumeSource{
-							HostPath: &corev1.HostPathVolumeSource{
-								Path: socketPath,
-								Type: &vst,
-							},
-						},
-					},
 					{
 						Name: kbltCAName,
 						VolumeSource: corev1.VolumeSource{
@@ -498,27 +462,22 @@ func TestEnsureDaemonset(t *testing.T) {
 							"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
 							"--storage=/run/node-observability",
 							fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
+							"--port=29740",
+							"--crioPreferUnixSocket=false",
 						}...).
-						withSecurityContext(corev1.SecurityContext{
-							Privileged: pointer.Bool(true),
-						}).
 						withVolumeMounts([]corev1.VolumeMount{
-							{
-								MountPath: socketMountPath,
-								Name:      socketName,
-								ReadOnly:  false,
-							},
 							{
 								MountPath: kbltCAMountPath,
 								Name:      kbltCAName,
 								ReadOnly:  true,
 							},
 						}...).
+						withHostPort(29740, corev1.ProtocolTCP).
 						build(),
 					testContainer("kube-rbac-proxy", "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0").
 						withArgs([]string{
-							"--secure-listen-address=0.0.0.0:8443",
-							"--upstream=http://127.0.0.1:9000/",
+							"--secure-listen-address=0.0.0.0:9743",
+							"--upstream=http://127.0.0.1:29740/",
 							fmt.Sprintf("--tls-cert-file=%s/tls.crt", certsMountPath),
 							fmt.Sprintf("--tls-private-key-file=%s/tls.key", certsMountPath),
 							"--logtostderr=true",
@@ -531,18 +490,10 @@ func TestEnsureDaemonset(t *testing.T) {
 								ReadOnly:  true,
 							},
 						}...).
+						withHostPort(9743, corev1.ProtocolTCP).
 						build(),
 				).
 				withVolumes([]corev1.Volume{
-					{
-						Name: socketName,
-						VolumeSource: corev1.VolumeSource{
-							HostPath: &corev1.HostPathVolumeSource{
-								Path: socketPath,
-								Type: &vst,
-							},
-						},
-					},
 					{
 						Name: kbltCAName,
 						VolumeSource: corev1.VolumeSource{

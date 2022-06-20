@@ -49,8 +49,8 @@ func testControllerService(name, namespace string, selector, annotations map[str
 			Ports: []corev1.ServicePort{
 				{
 					Protocol:   corev1.ProtocolTCP,
-					Port:       port,
-					TargetPort: intstr.FromInt(targetPort),
+					Port:       kubeRBACProxyPort,
+					TargetPort: intstr.FromInt(kubeRBACProxyPort),
 				},
 			},
 			Selector: selector,
@@ -149,8 +149,8 @@ func TestEnsureService(t *testing.T) {
 						Ports: []corev1.ServicePort{
 							{
 								Protocol:   corev1.ProtocolTCP,
-								Port:       port,
-								TargetPort: intstr.FromInt(targetPort),
+								Port:       kubeRBACProxyPort,
+								TargetPort: intstr.FromInt(kubeRBACProxyPort),
 							},
 						},
 						Selector: map[string]string{"app": "nodeobservability", "nodeobs_cr": "test"},

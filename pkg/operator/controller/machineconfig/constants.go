@@ -39,10 +39,10 @@ const (
 	// CrioUnixSocketConfData contains the configuration required
 	// for enabling CRI-O profiling
 	CrioUnixSocketConfData = `[Service]
-Environment="ENABLE_PROFILE_UNIX_SOCKET=true"`
+Environment="CONTAINER_PROFILE=true"`
 
 	// CrioUnixSocketConfFile is the name of the CRI-O config file
-	CrioUnixSocketConfFile = "10-mco-profile-unix-socket.conf"
+	CrioUnixSocketConfFile = "10-mco-profile.conf"
 
 	// MCAPIVersion is the machine config API version
 	MCAPIVersion = "machineconfiguration.openshift.io/v1"

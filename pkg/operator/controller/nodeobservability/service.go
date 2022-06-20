@@ -23,8 +23,6 @@ const (
 	serviceName    = podName
 	secretName     = podName
 	injectCertsKey = "service.beta.openshift.io/serving-cert-secret-name"
-	port           = 8443
-	targetPort     = port
 )
 
 var (
@@ -130,8 +128,8 @@ func (r *NodeObservabilityReconciler) desiredService(nodeObs *v1alpha2.NodeObser
 			Ports: []corev1.ServicePort{
 				{
 					Protocol:   corev1.ProtocolTCP,
-					Port:       port,
-					TargetPort: intstr.FromInt(targetPort),
+					Port:       kubeRBACProxyPort,
+					TargetPort: intstr.FromInt(kubeRBACProxyPort),
 				},
 			},
 		},
