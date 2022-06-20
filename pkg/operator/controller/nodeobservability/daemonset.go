@@ -15,9 +15,6 @@ import (
 
 const (
 	podName           = "node-observability-agent"
-	socketName        = "socket"
-	socketPath        = "/var/run/crio/crio.sock"
-	socketMountPath   = "/var/run/crio/crio.sock"
 	kbltCAMountPath   = "/var/run/secrets/kubelet-serving-ca/"
 	kbltCAMountedFile = "ca-bundle.crt"
 	kbltCAName        = "kubelet-ca"
@@ -82,8 +79,6 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 
 	ls := labelsForNodeObservability(nodeObs.Name)
 	tgp := int64(30)
-	vst := corev1.HostPathSocket
-	privileged := true
 
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -115,14 +110,11 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 							Command:         []string{"node-observability-agent"},
 							Args: []string{
 								"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
-								"--storage=/run",
+								"--storage=/run/node-observability",
 								fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
 							},
 							Resources:                corev1.ResourceRequirements{},
 							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
-							SecurityContext: &corev1.SecurityContext{
-								Privileged: &privileged,
-							},
 							Env: []corev1.EnvVar{{
 								Name: "NODE_IP",
 								ValueFrom: &corev1.EnvVarSource{
@@ -132,11 +124,6 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 								},
 							}},
 							VolumeMounts: []corev1.VolumeMount{
-								{
-									MountPath: socketMountPath,
-									Name:      socketName,
-									ReadOnly:  false,
-								},
 								{
 									MountPath: kbltCAMountPath,
 									Name:      kbltCAName,
@@ -172,15 +159,6 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 					TerminationGracePeriodSeconds: &tgp,
 					Volumes: []corev1.Volume{
 						{
-							Name: socketName,
-							VolumeSource: corev1.VolumeSource{
-								HostPath: &corev1.HostPathVolumeSource{
-									Path: socketPath,
-									Type: &vst,
-								},
-							},
-						},
-						{
 							Name: kbltCAName,
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
@@ -200,6 +178,7 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 						},
 					},
 					NodeSelector: nodeObs.Spec.Labels,
+					HostNetwork:  true,
 				},
 			},
 		},
