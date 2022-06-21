@@ -27,20 +27,20 @@ func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeO
 	// As the default client will only look for configmaps inside the namespace
 	if err := r.ClusterWideClient.Get(ctx, kbltCACMName, kbltCACM); err != nil {
 		if errors.IsNotFound(err) {
-			return false, fmt.Errorf("unable to find configMap %v: %w", kbltCACMName, err)
+			return false, fmt.Errorf("unable to find source configMap %v: %w", kbltCACMName, err)
 		}
-		return false, fmt.Errorf("error getting configMap %v, %w", kbltCACMName, err)
+		return false, fmt.Errorf("error getting source configMap %v, %w", kbltCACMName, err)
 	}
 
-	// Copy the configmap into the namespace
-	caChain := kbltCACM.Data[kbltCAMountedFile]
-	newDataMap := make(map[string]string, 1)
-	newDataMap[kbltCAMountedFile] = caChain
-
+	// Copy the configmap into the operator namespace
+	configMapName := types.NamespacedName{
+		Name:      nodeObs.Name,
+		Namespace: ns,
+	}
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      nodeObs.Name,
-			Namespace: ns,
+			Name:      configMapName.Name,
+			Namespace: configMapName.Namespace,
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					Name:       nodeObs.Name,
@@ -50,12 +50,21 @@ func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeO
 				},
 			},
 		},
-		Data: newDataMap,
+		Data: map[string]string{
+			kbltCAMountedFile: kbltCACM.Data[kbltCAMountedFile],
+		},
 	}
 
-	if err := r.Create(context.TODO(), configMap); err != nil {
-		return false, fmt.Errorf("failed to create configMap %s/%s: %w", configMap.Namespace, configMap.Name, err)
+	if err := r.Get(ctx, configMapName, &corev1.ConfigMap{}); err == nil {
+		return true, nil
+	} else if !errors.IsNotFound(err) {
+		return false, fmt.Errorf("error getting target configMap %s, %w", configMapName, err)
 	}
-	r.Log.Info("created ConfigMap", "ConfigMap.Namespace", configMap.Namespace, "ConfigMap.Name", configMap.Name)
+
+	if err := r.Create(ctx, configMap); err != nil {
+		return false, fmt.Errorf("failed to create target configMap %s: %w", configMapName, err)
+	}
+
+	r.Log.Info("created ConfigMap", "ConfigMap.Namespace", configMapName.Namespace, "ConfigMap.Name", configMapName.Name)
 	return true, nil
 }
