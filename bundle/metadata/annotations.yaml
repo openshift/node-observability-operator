@@ -12,3 +12,8 @@ annotations:
   # Annotations for testing.
   operators.operatorframework.io.test.mediatype.v1: scorecard+v1
   operators.operatorframework.io.test.config.v1: tests/scorecard/
+
+  # should this operator be supported on OCP 4.4 and earlier (old appregistry format)
+  com.redhat.delivery.backport: false
+  # this is a bundle image and should be delivered via an index image
+  com.redhat.delivery.operator.bundle: true
