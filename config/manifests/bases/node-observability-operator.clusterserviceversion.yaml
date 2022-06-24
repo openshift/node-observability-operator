@@ -5,6 +5,7 @@ metadata:
     alm-examples: '[]'
     capabilities: Basic Install
     operatorframework.io/suggested-namespace: node-observability-operator
+    operators.openshift.io/valid-subscription: '["OpenShift Container Platform"]'
   name: node-observability-operator.v0.0.1
   namespace: placeholder
 spec:
