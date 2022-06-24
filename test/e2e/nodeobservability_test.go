@@ -140,6 +140,6 @@ var _ = Describe("Node Observability Operator end-to-end test suite", Ordered, f
 
 	})
 	AfterAll(func() {
-		Expect(k8sClient.Delete(ctx, nodeobservability)).To(Succeed())
+		//Expect(k8sClient.Delete(ctx, nodeobservability)).To(Succeed())
 	})
 })

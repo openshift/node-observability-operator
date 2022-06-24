@@ -89,6 +89,7 @@ func main() {
 		TimeEncoder: zapcore.TimeEncoder(func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 			enc.AppendString(t.UTC().Format("2006-01-02T15:04:05.000Z"))
 		}),
+		Level: zapcore.DebugLevel,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
