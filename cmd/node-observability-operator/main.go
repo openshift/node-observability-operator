@@ -79,7 +79,7 @@ func main() {
 	var caCertFile string
 
 	flag.StringVar(&operatorNamespace, "operator-namespace", "node-observability-operator", "The node observability operator namespace.")
-	flag.StringVar(&agentImage, "agent-image", "quay.io/node-observability-operator/node-observability-agent:latest", "The node observability agent container image to use.")
+	flag.StringVar(&agentImage, "agent-image", "quay.io/openshift/origin-node-observability-agent:latest", "The node observability agent container image to use.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.StringVar(&tokenFile, "token-file", defaultTokenFile, "The path of the service account token.")
@@ -89,6 +89,7 @@ func main() {
 		TimeEncoder: zapcore.TimeEncoder(func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 			enc.AppendString(t.UTC().Format("2006-01-02T15:04:05.000Z"))
 		}),
+		Level: zapcore.DebugLevel,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -113,7 +114,7 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "94c735b6.olm.openshift.io",
-		Namespace:              "node-observability-operator",
+		Namespace:              operatorNamespace,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

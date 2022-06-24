@@ -50,8 +50,6 @@ func TestEnsureDaemonset(t *testing.T) {
 		nodeObs := &operatorv1alpha1.NodeObservability{}
 		ls := labelsForNodeObservability(daemonSetName)
 		tgp := int64(30)
-		vst := corev1.HostPathSocket
-		privileged := true
 		ds := appsv1.DaemonSet{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      daemonSetName,
@@ -67,16 +65,10 @@ func TestEnsureDaemonset(t *testing.T) {
 					},
 					Spec: corev1.PodSpec{
 						Containers: []corev1.Container{{
-							ImagePullPolicy: corev1.PullIfNotPresent,
-							Name:            podName,
-							// TODO - this will change once the shell script in the node-observability-agent is
-							// finalized
-							Command:                  []string{"/bin/sh", "-c", "curl --unix-socket /var/run/crio/crio.sock http://localhost/debug/pprof/profile > /mnt/crio-${NODE_IP}_$(date +\"%F-%T.%N\").out && sleep 3600"},
+							ImagePullPolicy:          corev1.PullIfNotPresent,
+							Name:                     podName,
 							Resources:                corev1.ResourceRequirements{},
 							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
-							SecurityContext: &corev1.SecurityContext{
-								Privileged: &privileged,
-							},
 							Env: []corev1.EnvVar{{
 								Name: "NODE_IP",
 								ValueFrom: &corev1.EnvVarSource{
@@ -85,27 +77,14 @@ func TestEnsureDaemonset(t *testing.T) {
 									},
 								},
 							}},
-							VolumeMounts: []corev1.VolumeMount{{
-								MountPath: socketMountPath,
-								Name:      socketName,
-								ReadOnly:  false,
-							}},
 						}},
 						DNSPolicy:                     corev1.DNSClusterFirst,
 						RestartPolicy:                 corev1.RestartPolicyAlways,
 						SchedulerName:                 defaultScheduler,
 						ServiceAccountName:            serviceAccountName,
 						TerminationGracePeriodSeconds: &tgp,
-						Volumes: []corev1.Volume{{
-							Name: socketName,
-							VolumeSource: corev1.VolumeSource{
-								HostPath: &corev1.HostPathVolumeSource{
-									Path: socketPath,
-									Type: &vst,
-								},
-							},
-						}},
-						NodeSelector: nodeObs.Spec.Labels,
+						NodeSelector:                  nodeObs.Spec.Labels,
+						HostNetwork:                   true,
 					},
 				},
 			},

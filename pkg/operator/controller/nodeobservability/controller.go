@@ -103,7 +103,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		// Error reading the object - requeue the request.
 		return ctrl.Result{}, fmt.Errorf("failed to get NodeObservability: %w", err)
 	}
-	r.Log.V(3).Info("Reconciling:", "NodeObservability", nodeObs)
+	r.Log.V(1).Info("Reconciling:", "NodeObservability", nodeObs)
 
 	err = isClusterNodeObservability(ctx, nodeObs)
 	if err != nil {
@@ -120,7 +120,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 			errUpdate = fmt.Errorf("failed to update status for NodeObservability %v: %w", nodeObs, errUpdate)
 			return ctrl.Result{}, utilerrors.NewAggregate([]error{err, errUpdate})
 		}
-		r.Log.V(3).Info("Status updated ", "Count", "0", "LastUpdated", now, "Ready", false)
+		r.Log.V(1).Info("Status updated ", "Count", "0", "LastUpdated", now, "Ready", false)
 		r.Log.Error(err, "Exiting reconcile")
 		// Return without err, to prevent requeuing
 		return ctrl.Result{}, nil
@@ -145,19 +145,9 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	nodeObs = updated
 
 	// For the pods to deploy on each node and execute the crio & kubelet script we need the following
-	// - custom scc (mainly allowHostPathDirPlugin set to true)
 	// - serviceaccount
-	// - clusterrole (use the scc)
+	// - clusterrole
 	// - clusterrolebinding (bind the sa to the role)
-
-	// ensure scc
-	haveSCC, scc, err := r.ensureSecurityContextConstraints(ctx, nodeObs)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to ensure securitycontectconstraints : %w", err)
-	} else if !haveSCC {
-		return ctrl.Result{}, fmt.Errorf("failed to get securitycontextconstraints")
-	}
-	r.Log.V(1).Info("SecurityContextConstraints ensured", "Name", scc.Name)
 
 	// ensure serviceaccount
 	haveSA, sa, err := r.ensureServiceAccount(ctx, nodeObs, r.Namespace)
@@ -301,9 +291,6 @@ func (r *NodeObservabilityReconciler) ensureNodeObservabilityDeleted(ctx context
 	}
 	if err := r.deleteClusterRoleBinding(nodeObs); err != nil {
 		errs = append(errs, fmt.Errorf("failed to delete clusterrolebinding : %w", err))
-	}
-	if err := r.deleteSecurityContextConstraints(nodeObs); err != nil {
-		errs = append(errs, fmt.Errorf("failed to delete SCC : %w", err))
 	}
 	if err := r.deleteNOMC(ctx, nodeObs); err != nil {
 		errs = append(errs, fmt.Errorf("failed to delete nodeobservabilitymachineconfig : %w", err))
