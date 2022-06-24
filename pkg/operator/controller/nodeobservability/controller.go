@@ -58,13 +58,8 @@ type NodeObservabilityReconciler struct {
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilities,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilities/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilities/finalizers,verbs=update
-//+kubebuilder:rbac:groups=apps,namespace=node-observability-operator,resources=daemonsets,verbs=list;get;create;watch;
-//+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=secrets,verbs=list;get;create;watch;delete;
-//+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=services,verbs=list;get;create;watch;delete;
-//+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=serviceaccounts,verbs=list;get;create;watch;delete;
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=list;get;watch
 //+kubebuilder:rbac:groups=core,resources=configmaps,resourceNames=kubelet-serving-ca,verbs=get;list;
-//+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=configmaps,verbs=list;get;create;watch;delete;update;
 //+kubebuilder:rbac:groups=core,resources=nodes,verbs=list;get;
 //+kubebuilder:rbac:groups=core,resources=nodes/proxy,verbs=list;get;
 //+kubebuilder:rbac:urls=/debug/*,verbs=get;
@@ -74,8 +69,6 @@ type NodeObservabilityReconciler struct {
 //+kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create;
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=list;get;create;watch;delete;
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,verbs=list;get;create;watch;delete;
-//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,namespace=node-observability-operator,resources=roles,verbs=list;get;create;watch;delete;
-//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,namespace=node-observability-operator,resources=rolebindings,verbs=list;get;create;watch;delete;
 //+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=list;get;create;watch;use;delete;
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to

@@ -226,6 +226,8 @@ olm-manifests: manifests
 	cp -f config/rbac/role_binding.yaml $(BUNDLE_MANIFEST_DIR)/node-observability-operator_rbac.authorization.k8s.io_v1_clusterrolebinding.yaml
 	cp -f config/rbac/auth_proxy_role.yaml $(BUNDLE_MANIFEST_DIR)/node-observability-operator-auth-proxy_rbac.authorization.k8s.io_v1_clusterrole.yaml
 	cp -f config/rbac/auth_proxy_role_binding.yaml $(BUNDLE_MANIFEST_DIR)/node-observability-operator-auth-proxy_rbac.authorization.k8s.io_v1_clusterrolebinding.yaml
+	cp -f config/rbac/local_manager_role.yaml $(BUNDLE_MANIFEST_DIR)/node-observability-operator_rbac.authorization.k8s.io_v1_role.yaml
+	cp -f config/rbac/local_role_binding.yaml $(BUNDLE_MANIFEST_DIR)/node-observability-operator_rbac.authorization.k8s.io_v1_rolebinding.yaml
 	cp -f config/rbac/auth_proxy_service.yaml $(BUNDLE_MANIFEST_DIR)/node-observability-operator-auth-proxy_v1_service.yaml
 	# opm is unable to find CRD if the standard yaml --- is at the top
 	sed -i -e '/^---$$/d' -e '/^$$/d' $(BUNDLE_MANIFEST_DIR)/*.yaml
