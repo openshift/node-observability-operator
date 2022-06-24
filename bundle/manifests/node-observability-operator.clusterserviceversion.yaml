@@ -357,7 +357,7 @@ spec:
                     fieldRef:
                       fieldPath: metadata.namespace
                 - name: RELATED_IMAGE_AGENT
-                  value: registry.ci.openshift.org/ocp/4.11:node-observability-agent
+                  value: quay.io/openshift/origin-node-observability-agent@sha256:84f7cada05376b915abcc1e79088c88685cbbb245aa8788673e67b9aa33a76ce
                 image: quay.io/openshift/node-observability-operator:v0.0.1
                 imagePullPolicy: Always
                 livenessProbe:
@@ -455,6 +455,6 @@ spec:
   provider:
     name: Red Hat, Inc.
   relatedImages:
-  - image: registry.ci.openshift.org/ocp/4.11:node-observability-agent
+  - image: quay.io/openshift/origin-node-observability-agent@sha256:84f7cada05376b915abcc1e79088c88685cbbb245aa8788673e67b9aa33a76ce
     name: agent
   version: 0.0.1
