@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
@@ -33,6 +34,9 @@ const (
 func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeObs *v1alpha1.NodeObservability, sa *corev1.ServiceAccount, ns string) (bool, *appsv1.DaemonSet, error) {
 	nameSpace := types.NamespacedName{Namespace: ns, Name: daemonSetName}
 	desired := r.desiredDaemonSet(nodeObs, sa, ns)
+	if err := controllerutil.SetControllerReference(nodeObs, desired, r.Scheme); err != nil {
+		return false, nil, fmt.Errorf("failed to set the controller reference for daemonset: %w", err)
+	}
 	exist, current, err := r.currentDaemonSet(ctx, nameSpace)
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to get DaemonSet: %w", err)
@@ -89,14 +93,6 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      daemonSetName,
 			Namespace: ns,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					Name:       nodeObs.Name,
-					Kind:       nodeObs.Kind,
-					UID:        nodeObs.UID,
-					APIVersion: nodeObs.APIVersion,
-				},
-			},
 		},
 		Spec: appsv1.DaemonSetSpec{
 			Selector: &metav1.LabelSelector{

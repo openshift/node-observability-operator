@@ -33,7 +33,8 @@ metadata:
           "apiVersion": "nodeobservability.olm.openshift.io/v1alpha1",
           "kind": "NodeObservabilityRun",
           "metadata": {
-            "name": "nodeobservabilityrun-sample"
+            "name": "nodeobservabilityrun-sample",
+            "namespace": "node-observability-operator"
           },
           "spec": {
             "nodeObservabilityRef": {

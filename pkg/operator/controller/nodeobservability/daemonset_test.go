@@ -18,7 +18,6 @@ package nodeobservabilitycontroller
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -33,21 +32,13 @@ import (
 	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
-func makeKubeletCACM() *corev1.ConfigMap {
-	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      srcKbltCAConfigMapName,
-			Namespace: srcKbltCAConfigMapNameSpace,
-		},
-		Data: map[string]string{
-			"ca-bundle.crt": "empty",
-		},
-	}
-}
+const (
+	nodeObsInstanceName = "nodeobservability-sample"
+)
+
 func TestEnsureDaemonset(t *testing.T) {
 
 	makeDaemonset := func() *appsv1.DaemonSet {
-		nodeObs := &operatorv1alpha1.NodeObservability{}
 		ls := labelsForNodeObservability(daemonSetName)
 		tgp := int64(30)
 		vst := corev1.HostPathSocket
@@ -55,7 +46,7 @@ func TestEnsureDaemonset(t *testing.T) {
 		ds := appsv1.DaemonSet{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      daemonSetName,
-				Namespace: nodeObs.Namespace,
+				Namespace: test.OperatorNamespace,
 			},
 			Spec: appsv1.DaemonSetSpec{
 				Selector: &metav1.LabelSelector{
@@ -105,7 +96,9 @@ func TestEnsureDaemonset(t *testing.T) {
 								},
 							},
 						}},
-						NodeSelector: nodeObs.Spec.Labels,
+						NodeSelector: map[string]string{
+							"node-role.kubernetes.io/worker": "",
+						},
 					},
 				},
 			},
@@ -137,6 +130,15 @@ func TestEnsureDaemonset(t *testing.T) {
 			expectedExist: true,
 			expectedDS:    makeDaemonset(),
 		},
+		{
+			name: "Does not exist but target CA configmap is there",
+			existingObjects: []runtime.Object{
+				makeKubeletCACM(),
+				makeTargetKubeletCACM(),
+			},
+			expectedExist: true,
+			expectedDS:    makeDaemonset(),
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -150,20 +152,17 @@ func TestEnsureDaemonset(t *testing.T) {
 			}
 			nodeObs := &operatorv1alpha1.NodeObservability{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nodeobservability-sample",
-					Namespace: "node-observability-operator",
+					Name: nodeObsInstanceName,
 				},
 			}
-			_, serviceAccount, err := r.ensureServiceAccount(context.TODO(), nodeObs, test.TestNamespace)
-			if err != nil {
-				if !tc.errExpected {
-					t.Fatalf("unexpected error received: %v", err)
-				}
-				return
+			sa := &corev1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: test.OperatorNamespace,
+					Name:      serviceAccountName,
+				},
 			}
-			r.Log.Info(fmt.Sprintf("Service Account : %s", serviceAccount.Name))
 
-			gotExist, _, err := r.ensureDaemonSet(context.TODO(), nodeObs, serviceAccount, test.TestNamespace)
+			gotExist, _, err := r.ensureDaemonSet(context.TODO(), nodeObs, sa, test.OperatorNamespace)
 			if err != nil {
 				if !tc.errExpected {
 					t.Fatalf("unexpected error received: %v", err)
@@ -179,5 +178,28 @@ func TestEnsureDaemonset(t *testing.T) {
 			}
 		})
 	}
+}
 
+func makeKubeletCACM() *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      srcKbltCAConfigMapName,
+			Namespace: srcKbltCAConfigMapNameSpace,
+		},
+		Data: map[string]string{
+			"ca-bundle.crt": "empty",
+		},
+	}
+}
+
+func makeTargetKubeletCACM() *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      nodeObsInstanceName,
+			Namespace: test.OperatorNamespace,
+		},
+		Data: map[string]string{
+			"ca-bundle.crt": "empty",
+		},
+	}
 }
