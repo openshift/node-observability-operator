@@ -97,7 +97,7 @@ you should create a `NodeObservability` custom resource (CR).
 
 The following `NodeObservability` Operator creates a daemonset to target
 all the nodes with label `app: example` by running a `node-observability-agent`
-pod on each of those nodes using the image given in `.spec.image`.
+pod on each of those nodes.
 
 ```yaml
 apiVersion: nodeobservability.olm.openshift.io/v1alpha1
@@ -107,7 +107,6 @@ metadata:
 spec:
   labels:
     "node-role.kubernetes.io/worker": ""
-  image: "brew.registry.redhat.io/rh-osbs/node-observability-agent:0.1.0-3"
   type: crio-kubelet
 ```
 
@@ -131,7 +130,6 @@ metadata:
 spec:
   labels:
     "node-role.kubernetes.io/worker": ""
-  image: "brew.registry.redhat.io/rh-osbs/node-observability-agent:0.1.0-3"
   type: crio-kubelet
 status:
   conditions:
