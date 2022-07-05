@@ -213,29 +213,6 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 	$(KUSTOMIZE) build config/default | oc delete --ignore-not-found=$(ignore-not-found) -f -
 
 
-.SILENT: olm-manifests
-.PHONY: olm-manifests
-# TODO: try to replace this rule with 'operator-sdk generate bundle'
-# A little helper command to generate the manifests of OLM bundle from the files in config/.
-# The idea is that config/ is the main directory for the manifests and OLM manifests are secondary
-# and is supposed to be updated afterwards.
-# Note that ClusterServiceVersion is not touched as is supposed to be verified manually.
-# The install strategy of ClusterServiceVersion contains the deployment which is not copied over from config/ either.
-olm-manifests: manifests
-	cp -f config/rbac/role.yaml $(BUNDLE_MANIFEST_DIR)/node-observability-operator_rbac.authorization.k8s.io_v1_clusterrole.yaml
-	cp -f config/rbac/role_binding.yaml $(BUNDLE_MANIFEST_DIR)/node-observability-operator_rbac.authorization.k8s.io_v1_clusterrolebinding.yaml
-	cp -f config/rbac/auth_proxy_role.yaml $(BUNDLE_MANIFEST_DIR)/node-observability-operator-auth-proxy_rbac.authorization.k8s.io_v1_clusterrole.yaml
-	cp -f config/rbac/auth_proxy_role_binding.yaml $(BUNDLE_MANIFEST_DIR)/node-observability-operator-auth-proxy_rbac.authorization.k8s.io_v1_clusterrolebinding.yaml
-	cp -f config/rbac/local_manager_role.yaml $(BUNDLE_MANIFEST_DIR)/node-observability-operator_rbac.authorization.k8s.io_v1_role.yaml
-	cp -f config/rbac/local_role_binding.yaml $(BUNDLE_MANIFEST_DIR)/node-observability-operator_rbac.authorization.k8s.io_v1_rolebinding.yaml
-	cp -f config/rbac/auth_proxy_service.yaml $(BUNDLE_MANIFEST_DIR)/node-observability-operator-auth-proxy_v1_service.yaml
-	# opm is unable to find CRD if the standard yaml --- is at the top
-	sed -i -e '/^---$$/d' -e '/^$$/d' $(BUNDLE_MANIFEST_DIR)/*.yaml
-	# as per the recommendation of 'operator-sdk bundle validate' command
-	# doing the best (yaml regexp is far from perfect) to strip the metadata.namespace from the bundle manifests
-	# trying to not touch cluster level resources as they don't have the namespace
-	for f in $$(\grep -l 'kind: *\(Service\|ConfigMap\|Secret\|Role\) *$$' $(BUNDLE_MANIFEST_DIR)/*.yaml); do sed -i '/namespace:/d' $${f};done
-
 .PHONY: bundle
 bundle: operator-sdk manifests ## Generate bundle manifests and metadata, then validate generated files.
 	$(OPERATOR_SDK_BIN) generate kustomize manifests -q
@@ -248,7 +225,7 @@ validate-bundle:
 	$(OPERATOR_SDK_BIN) bundle validate $(BUNDLE_DIR) --select-optional suite=operatorframework
 
 .PHONY: bundle-build
-bundle-build: olm-manifests
+bundle-build: bundle
 	$(CONTAINER_ENGINE) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
