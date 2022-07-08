@@ -111,7 +111,7 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 							Command:         []string{"node-observability-agent"},
 							Args: []string{
 								"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
-								"--storage=/run",
+								"--storage=/run/node-observability",
 								fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
 							},
 							Resources:                corev1.ResourceRequirements{},

@@ -42,7 +42,8 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: RELATED_IMAGE_AGENT
-          value:  quay.io/openshift/origin-node-observability-agent@sha256:84f7cada05376b915abcc1e79088c88685cbbb245aa8788673e67b9aa33a76ce
+          # agent commit id: a380581b3f0fec4d35eeee4fb59ab4d83d2a989c
+          value: quay.io/openshift/origin-node-observability-agent@sha256:df9d74943a8ce23a7ef1b194e482697e8a550e1a98ba103f90ebdc869f3d5112
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

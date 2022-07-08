@@ -216,7 +216,7 @@ status:
 
 Data retrieval is currently in development.
 
-As of now the data is stored in the container file system under `/run`.
+As of now the data is stored in the container file system under `/run/node-observability`.
 
 With a nodeobservabilityrun called `nodeobservabilityrun-sample`:
 
@@ -224,7 +224,7 @@ With a nodeobservabilityrun called `nodeobservabilityrun-sample`:
 for i in `oc get nodeobservabilityrun.nodeobservability.olm.openshift.io/nodeobservabilityrun-sample -o yaml | yq .status.agents[].name | cut -d\" -f2`
   do
   echo $i
-  list=`oc exec $i -c node-observability-agent -- bash -c "ls /run/*.pprof"`
+  list=`oc exec $i -c node-observability-agent -- bash -c "ls /run/node-observability/*.pprof"`
   for j in $list
     do
     k=`echo $j|cut -d\/ -f3`
