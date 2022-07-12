@@ -221,16 +221,13 @@ As of now the data is stored in the container file system under `/run/node-obser
 With a nodeobservabilityrun called `nodeobservabilityrun-sample`:
 
 ```sh
-for i in `oc get nodeobservabilityrun.nodeobservability.olm.openshift.io/nodeobservabilityrun-sample -o yaml | yq .status.agents[].name | cut -d\" -f2`
-  do
-  echo $i
-  list=`oc exec $i -c node-observability-agent -- bash -c "ls /run/node-observability/*.pprof"`
-  for j in $list
-    do
-    k=`echo $j|cut -d\/ -f3`
-    mkdir -p /tmp/$i
-    echo copying $k to /tmp/$i/$k
-    kubectl exec $i -c node-observability-agent -- cat $j > /tmp/$i/$k
+for a in $(oc get nodeobservabilityrun nodeobservabilityrun-sample -o yaml | yq .status.agents[].name); do
+  echo "agent ${a}"
+  mkdir -p "/tmp/${a}"
+  for p in $(oc exec "${a}" -c node-observability-agent -- bash -c "ls /run/node-observability/*.pprof"); do
+    f="$(basename ${p})"
+    echo "copying ${f} to /tmp/${a}/${f}"
+    oc exec "${a}" -c node-observability-agent -- cat "${p}" > "/tmp/${a}/${f}"
   done
 done
 ```
