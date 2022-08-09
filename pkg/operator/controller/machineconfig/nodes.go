@@ -166,7 +166,8 @@ func (r *MachineConfigReconciler) revertNodeLabeling(ctx context.Context) error 
 	return nil
 }
 
-// ensureReqNodeLabelNotExists is for checking and removing the labels added to nodes
+// ensureReqNodeLabelNotExists removes the nodeobservability label from the nodes.
+// Returns the number of updated nodes.
 func (r *MachineConfigReconciler) ensureReqNodeLabelNotExists(ctx context.Context) (int, error) {
 	r.Lock()
 	defer r.Unlock()

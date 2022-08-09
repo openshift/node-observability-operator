@@ -19,12 +19,15 @@ package machineconfigcontroller
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -45,15 +48,28 @@ import (
 //+kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch;patch
 //+kubebuilder:rbac:groups="",resources=events,verbs=create
 
+// MachineConfigReconciler reconciles a NodeObservabilityMachineConfig object
+type MachineConfigReconciler struct {
+	impl
+	sync.RWMutex
+
+	Log           logr.Logger
+	Scheme        *runtime.Scheme
+	EventRecorder record.EventRecorder
+
+	Node          NodeSyncData
+	MachineConfig MachineConfigSyncData
+	CtrlConfig    *v1alpha1.NodeObservabilityMachineConfig
+}
+
 // New returns a new MachineConfigReconciler instance.
-func New(mgr ctrl.Manager, impls ...impl) (*MachineConfigReconciler, error) {
-	effectiveClient := NewClient(mgr, impls...)
+func New(mgr ctrl.Manager) *MachineConfigReconciler {
 	return &MachineConfigReconciler{
-		impl: effectiveClient,
+		impl: NewClient(mgr),
 
 		Log:           ctrl.Log.WithName("controller").WithName("NodeObservabilityMachineConfig"),
-		Scheme:        effectiveClient.ManagerGetScheme(mgr),
-		EventRecorder: effectiveClient.ManagerGetEventRecorderFor(mgr, "node-observability-operator"),
+		Scheme:        mgr.GetScheme(),
+		EventRecorder: mgr.GetEventRecorderFor("node-observability-operator"),
 
 		Node: NodeSyncData{
 			PrevReconcileUpd: make(map[string]LabelInfo),
@@ -61,7 +77,7 @@ func New(mgr ctrl.Manager, impls ...impl) (*MachineConfigReconciler, error) {
 		MachineConfig: MachineConfigSyncData{
 			PrevReconcileUpd: make(map[string]MachineConfigInfo),
 		},
-	}, nil
+	}
 }
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -81,16 +97,16 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		r.Log = ctxLog
 	}
 
-	r.Log.V(1).Info("Reconciling NodeObservabilityMachineConfig of Nodeobservability operator")
+	r.Log.V(1).Info("Reconciling NodeObservabilityMachineConfig")
 
-	// Fetch the nodeobservability.olm.openshift.io/nodeobservabilitymachineconfig CR
+	// Fetch the NodeObservabilityMachineConfig CR
 	r.CtrlConfig = &v1alpha1.NodeObservabilityMachineConfig{}
 	if err = r.ClientGet(ctx, req.NamespacedName, r.CtrlConfig); err != nil {
 		if kerrors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
-			r.Log.V(1).Info("NodeObservabilityMachineConfig resource not found. Ignoring could have been deleted", "Name", req.NamespacedName.Name)
+			r.Log.V(1).Info("NodeObservabilityMachineConfig resource not found. Ignoring as it could have been deleted")
 			return ctrl.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
@@ -125,7 +141,7 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		if diff < time.Minute && diff >= 0 {
 			next := time.Minute - diff
 			r.Log.V(1).Info("Reconciler called earlier than expected", "NextReconcileIn", next.String())
-			return ctrl.Result{Requeue: true, RequeueAfter: next}, nil
+			return ctrl.Result{RequeueAfter: next}, nil
 		}
 	}
 
@@ -137,7 +153,7 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}()
 
-	requeue, err := r.inspectProfilingMCReq(ctx)
+	requeue, err := r.handleProfilingRequest(ctx)
 	if err != nil {
 		return ctrl.Result{RequeueAfter: defaultRequeueTime}, fmt.Errorf("failed to reconcile requested configuration: %w", err)
 	}
@@ -186,15 +202,17 @@ func ignoreNOMCStatusUpdates() predicate.Predicate {
 	}
 }
 
-// cleanUp is handling deletion of NodeObservabilityMachineConfig resource
-// deletion. Reverts all the changes made when debugging is enabled and
+// cleanUp is handling the deletion of NodeObservabilityMachineConfig resource.
+// Reverts all the changes made when debugging is enabled and
 // restores the cluster to earlier state.
 func (r *MachineConfigReconciler) cleanUp(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	disabled, err := r.ensureProfConfDisabled(ctx)
+	nodesTouched, err := r.ensureProfConfDisabled(ctx)
 	if err != nil {
 		return ctrl.Result{RequeueAfter: defaultRequeueTime}, err
 	}
-	if disabled {
+	if nodesTouched {
+		// some nodes were updated (label removed),
+		// waiting for the reboot to take place on them: requeue
 		return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
 	}
 
@@ -309,7 +327,7 @@ func (r *MachineConfigReconciler) updateStatus(ctx context.Context) error {
 
 	namespace := types.NamespacedName{Name: r.CtrlConfig.Name}
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		r.Log.V(1).Info("Updating nodeobservabilitymachineconfig resource status")
+		r.Log.V(1).Info("Updating NodeObservabilityMachineConfig status")
 		nomc := &v1alpha1.NodeObservabilityMachineConfig{}
 		if err := r.ClientGet(ctx, namespace, nomc); err != nil {
 			return err
@@ -329,9 +347,9 @@ func (r *MachineConfigReconciler) updateStatus(ctx context.Context) error {
 	return nil
 }
 
-// inspectProfilingMCReq is for checking and creating required configs
-// if debugging is enabled
-func (r *MachineConfigReconciler) inspectProfilingMCReq(ctx context.Context) (bool, error) {
+// handleProfilingRequest checks the profiling setting and acts accordingly: enable/disable the profiling config.
+// Returns true if the requeue is needed.
+func (r *MachineConfigReconciler) handleProfilingRequest(ctx context.Context) (bool, error) {
 	if r.CtrlConfig.Status.IsMachineConfigInProgress() {
 		r.Log.V(1).Info("Previous reconcile initiated operation in progress, changes not applied")
 		return false, nil
@@ -378,7 +396,8 @@ func (r *MachineConfigReconciler) ensureProfConfEnabled(ctx context.Context) (bo
 	return false, nil
 }
 
-// ensureProfConfDisabled is for disabling the profiling of requested services
+// ensureProfConfDisabled disables the profiling on the requested nodes by removing the nodeobservability label.
+// Returns true if at least 1 node was touched, false otherwise.
 func (r *MachineConfigReconciler) ensureProfConfDisabled(ctx context.Context) (bool, error) {
 
 	modCount, err := r.ensureReqNodeLabelNotExists(ctx)
