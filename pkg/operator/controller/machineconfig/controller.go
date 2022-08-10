@@ -57,9 +57,8 @@ type MachineConfigReconciler struct {
 	Scheme        *runtime.Scheme
 	EventRecorder record.EventRecorder
 
-	Node          NodeSyncData
-	MachineConfig MachineConfigSyncData
-	CtrlConfig    *v1alpha1.NodeObservabilityMachineConfig
+	Node       NodeSyncData
+	CtrlConfig *v1alpha1.NodeObservabilityMachineConfig
 }
 
 // New returns a new MachineConfigReconciler instance.
@@ -73,9 +72,6 @@ func New(mgr ctrl.Manager) *MachineConfigReconciler {
 
 		Node: NodeSyncData{
 			PrevReconcileUpd: make(map[string]LabelInfo),
-		},
-		MachineConfig: MachineConfigSyncData{
-			PrevReconcileUpd: make(map[string]MachineConfigInfo),
 		},
 	}
 }
@@ -425,13 +421,11 @@ func (r *MachineConfigReconciler) ensureProfConfDisabled(ctx context.Context) (b
 func (r *MachineConfigReconciler) ensureReqMCExists(ctx context.Context) (int, error) {
 	updatedCount := 0
 	if r.CtrlConfig.Spec.Debug.EnableCrioProfiling {
-		updated, err := r.enableCrioProf(ctx)
+		err := r.enableCrioProf(ctx)
 		if err != nil {
 			return updatedCount, err
 		}
-		if updated {
-			updatedCount++
-		}
+		updatedCount++
 	}
 	return updatedCount, nil
 }

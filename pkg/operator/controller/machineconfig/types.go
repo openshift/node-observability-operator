@@ -38,19 +38,5 @@ type ResourcePatchValue struct {
 	Value interface{} `json:"value,omitempty"`
 }
 
-// MachineConfigSyncData is for storing the state
-// of the MC created for enabling profiling of
-// requested services
-type MachineConfigSyncData struct {
-	PrevReconcileUpd map[string]MachineConfigInfo
-}
-
-// MachineConfigInfo is for storing the state
-// data of MC operations
-type MachineConfigInfo struct {
-	op     string
-	config interface{}
-}
-
 // patchOp is defined for patch operation type
 type patchOp int

@@ -59,9 +59,6 @@ func testReconciler() *MachineConfigReconciler {
 		Node: NodeSyncData{
 			PrevReconcileUpd: make(map[string]LabelInfo),
 		},
-		MachineConfig: MachineConfigSyncData{
-			PrevReconcileUpd: make(map[string]MachineConfigInfo),
-		},
 	}
 }
 
@@ -294,7 +291,7 @@ func TestReconcile(t *testing.T) {
 	labeledNodes := testNodeObsNodes()
 	mcp := testNodeObsMCP(r)
 	workerMCP := testWorkerMCP()
-	criomc, _ := r.getCrioConfig()
+	criomc, _ := r.getCrioProfMachineConfig()
 
 	tests := []struct {
 		name       string
@@ -844,7 +841,7 @@ func TestReconcileClientFakes(t *testing.T) {
 						}
 						mcp.DeepCopyInto(o)
 					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioConfig()
+						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
@@ -888,7 +885,7 @@ func TestReconcileClientFakes(t *testing.T) {
 						}
 						mcp.DeepCopyInto(o)
 					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioConfig()
+						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
@@ -926,7 +923,7 @@ func TestReconcileClientFakes(t *testing.T) {
 						}
 						mcp.DeepCopyInto(o)
 					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioConfig()
+						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
@@ -977,7 +974,7 @@ func TestReconcileClientFakes(t *testing.T) {
 						}
 						mcp.DeepCopyInto(o)
 					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioConfig()
+						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
@@ -1049,7 +1046,7 @@ func TestReconcileClientFakes(t *testing.T) {
 					case *mcv1.MachineConfigPool:
 						return testError
 					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioConfig()
+						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
@@ -1157,7 +1154,7 @@ func TestReconcileClientFakes(t *testing.T) {
 						}
 						mcp.DeepCopyInto(o)
 					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioConfig()
+						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
@@ -1236,7 +1233,7 @@ func TestReconcileClientFakes(t *testing.T) {
 							mcv1.MachineConfigPoolUpdated, corev1.ConditionTrue)
 						mcp.DeepCopyInto(o)
 					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioConfig()
+						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
@@ -1308,7 +1305,7 @@ func TestReconcileClientFakes(t *testing.T) {
 							mcv1.MachineConfigPoolUpdated, corev1.ConditionTrue)
 						mcp.DeepCopyInto(o)
 					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioConfig()
+						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
