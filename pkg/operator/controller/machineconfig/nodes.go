@@ -24,10 +24,102 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// ensureReqNodeLabelExists is for checking the if the required labels exist on the nodes
+func (r *MachineConfigReconciler) ensureReqNodeLabelExists(ctx context.Context) (int, error) {
+
+	updNodeCount := 0
+	nodeList := &corev1.NodeList{}
+	if err := r.listNodes(ctx, nodeList, r.CtrlConfig.Spec.NodeSelector); err != nil {
+		return updNodeCount, err
+	}
+
+	for i, node := range nodeList.Items {
+		if _, exist := node.Labels[NodeObservabilityNodeRoleLabelName]; exist {
+			continue
+		}
+
+		patch, _ := newPatch(add,
+			ResourceLabelsPath,
+			map[string]interface{}{
+				NodeObservabilityNodeRoleLabelName: Empty,
+			})
+		if err := r.ClientPatch(ctx, &nodeList.Items[i], client.RawPatch(types.JSONPatchType, patch)); err != nil {
+			return updNodeCount, err
+		}
+		r.Log.V(1).Info("Successfully added label", "Node", node.Name, "Label", NodeObservabilityNodeRoleLabelName)
+
+		updNodeCount++
+	}
+
+	if updNodeCount > 0 {
+		r.Log.V(1).Info("Successfully added nodeobservability role to nodes with worker role", "NodeCount", updNodeCount)
+	}
+	return updNodeCount, nil
+}
+
+// ensureReqNodeLabelNotExists removes the nodeobservability label from the nodes.
+// Returns the number of updated nodes.
+func (r *MachineConfigReconciler) ensureReqNodeLabelNotExists(ctx context.Context) (int, error) {
+
+	updNodeCount := 0
+	nodeList := &corev1.NodeList{}
+	if err := r.listNoObsLabeledNodes(ctx, nodeList); err != nil {
+		return updNodeCount, err
+	}
+
+	for i, node := range nodeList.Items {
+		if _, exist := node.Labels[NodeObservabilityNodeRoleLabelName]; !exist {
+			continue
+		}
+
+		patch, _ := newPatch(remove,
+			ResourceLabelsPath,
+			map[string]interface{}{
+				NodeObservabilityNodeRoleLabelName: Empty,
+			})
+		if err := r.ClientPatch(ctx, &nodeList.Items[i], client.RawPatch(types.JSONPatchType, patch)); err != nil {
+			return updNodeCount, err
+		}
+		r.Log.V(1).Info("Successfully removed label", "Node", node.Name, "Label", NodeObservabilityNodeRoleLabelName)
+
+		updNodeCount++
+	}
+
+	if updNodeCount > 0 {
+		r.Log.V(1).Info("Successfully removed nodeobservability role from nodes with worker role", "NodeCount", updNodeCount)
+	}
+	return updNodeCount, nil
+}
+
+// listNoObsLabeledNodes returns the list of nodes having NodeObservability role label
+func (r *MachineConfigReconciler) listNoObsLabeledNodes(ctx context.Context, nodeList *corev1.NodeList) error {
+	nodeLabel := map[string]string{
+		NodeObservabilityNodeRoleLabelName: Empty,
+	}
+
+	if err := r.listNodes(ctx, nodeList, nodeLabel); err != nil {
+		return fmt.Errorf("failed to get the list of nodes labeled nodeobservability: %w", err)
+	}
+
+	return nil
+}
+
+// listNodes returns the list of nodes matching the labels
+func (r *MachineConfigReconciler) listNodes(ctx context.Context, nodeList *corev1.NodeList, matchLabels map[string]string) error {
+	listOpts := []client.ListOption{
+		client.MatchingLabels(matchLabels),
+	}
+
+	if err := r.ClientList(ctx, nodeList, listOpts...); err != nil {
+		return err
+	}
+
+	return nil
+}
 
 // escape replaces characters which would cause parsing issues with their escaped equivalent
 func escape(key string) string {
@@ -81,197 +173,4 @@ func getPatchValue(op, path string, value interface{}) ResourcePatchValue {
 		Path:  path,
 		Value: value,
 	}
-}
-
-// ensureReqNodeLabelExists is for checking the if the required labels exist on the nodes
-func (r *MachineConfigReconciler) ensureReqNodeLabelExists(ctx context.Context) (int, error) {
-	r.Lock()
-	defer r.Unlock()
-
-	updNodeCount := 0
-	nodeList := &corev1.NodeList{}
-	if err := r.listNodes(ctx, nodeList, r.CtrlConfig.Spec.NodeSelector); err != nil {
-		return updNodeCount, err
-	}
-
-	for i, node := range nodeList.Items {
-		if _, exist := node.Labels[NodeObservabilityNodeRoleLabelName]; exist {
-			continue
-		}
-
-		patch, _ := newPatch(add,
-			ResourceLabelsPath,
-			map[string]interface{}{
-				NodeObservabilityNodeRoleLabelName: Empty,
-			})
-		if err := r.ClientPatch(ctx, &nodeList.Items[i], client.RawPatch(types.JSONPatchType, patch)); err != nil {
-			return updNodeCount, err
-		}
-		r.Log.V(1).Info("Successfully added label", "Node", node.Name, "Label", NodeObservabilityNodeRoleLabelName)
-
-		updNodeCount++
-		r.Node.PrevReconcileUpd[node.Name] = LabelInfo{
-			NodeObservabilityNodeRoleLabelName,
-			Empty,
-			add,
-		}
-	}
-
-	// clean up any stale data
-	for k, v := range r.Node.PrevReconcileUpd {
-		if v.op == remove {
-			delete(r.Node.PrevReconcileUpd, k)
-		}
-	}
-
-	if updNodeCount > 0 {
-		r.Log.V(1).Info("Successfully added nodeobservability role to nodes with worker role", "NodeCount", updNodeCount)
-	}
-	return updNodeCount, nil
-}
-
-// revertNodeLabeling is for reverting the labels added to the nodes
-func (r *MachineConfigReconciler) revertNodeLabeling(ctx context.Context) error {
-	r.Lock()
-	defer r.Unlock()
-
-	for name, label := range r.Node.PrevReconcileUpd {
-		if label.op != add {
-			continue
-		}
-
-		patch, _ := newPatch(remove,
-			ResourceLabelsPath,
-			map[string]interface{}{
-				label.key: label.value,
-			})
-
-		node := &corev1.Node{}
-		if err := r.ClientGet(ctx, types.NamespacedName{Name: name}, node); err != nil {
-			if errors.IsNotFound(err) {
-				delete(r.Node.PrevReconcileUpd, name)
-				continue
-			}
-			return err
-		}
-		r.Log.V(1).Info("Successfully reverted label add", "Node", name, "Label", label.key)
-
-		if err := r.ClientPatch(ctx, node, client.RawPatch(types.JSONPatchType, patch)); err != nil {
-			return err
-		}
-
-		delete(r.Node.PrevReconcileUpd, name)
-	}
-
-	return nil
-}
-
-// ensureReqNodeLabelNotExists removes the nodeobservability label from the nodes.
-// Returns the number of updated nodes.
-func (r *MachineConfigReconciler) ensureReqNodeLabelNotExists(ctx context.Context) (int, error) {
-	r.Lock()
-	defer r.Unlock()
-
-	updNodeCount := 0
-	nodeList := &corev1.NodeList{}
-	if err := r.listNoObsLabeledNodes(ctx, nodeList); err != nil {
-		return updNodeCount, err
-	}
-
-	for i, node := range nodeList.Items {
-		if _, exist := node.Labels[NodeObservabilityNodeRoleLabelName]; !exist {
-			continue
-		}
-
-		patch, _ := newPatch(remove,
-			ResourceLabelsPath,
-			map[string]interface{}{
-				NodeObservabilityNodeRoleLabelName: Empty,
-			})
-		if err := r.ClientPatch(ctx, &nodeList.Items[i], client.RawPatch(types.JSONPatchType, patch)); err != nil {
-			return updNodeCount, err
-		}
-		r.Log.V(1).Info("Successfully removed label", "Node", node.Name, "Label", NodeObservabilityNodeRoleLabelName)
-
-		updNodeCount++
-		r.Node.PrevReconcileUpd[node.Name] = LabelInfo{
-			NodeObservabilityNodeRoleLabelName,
-			Empty,
-			remove,
-		}
-	}
-
-	// clean up any stale data
-	for k, v := range r.Node.PrevReconcileUpd {
-		if v.op == add {
-			delete(r.Node.PrevReconcileUpd, k)
-		}
-	}
-
-	if updNodeCount > 0 {
-		r.Log.V(1).Info("Successfully removed nodeobservability role from nodes with worker role", "NodeCount", updNodeCount)
-	}
-	return updNodeCount, nil
-}
-
-// revertNodeUnlabeling is for reverting the labels removed from the nodes during failure scenarios
-func (r *MachineConfigReconciler) revertNodeUnlabeling(ctx context.Context) error {
-	r.Lock()
-	defer r.Unlock()
-
-	for name, label := range r.Node.PrevReconcileUpd {
-		if label.op != remove {
-			continue
-		}
-
-		patch, _ := newPatch(add,
-			ResourceLabelsPath,
-			map[string]interface{}{
-				label.key: label.value,
-			})
-
-		node := &corev1.Node{}
-		if err := r.ClientGet(ctx, types.NamespacedName{Name: name}, node); err != nil {
-			if errors.IsNotFound(err) {
-				delete(r.Node.PrevReconcileUpd, name)
-				continue
-			}
-			return err
-		}
-
-		if err := r.ClientPatch(ctx, node, client.RawPatch(types.JSONPatchType, patch)); err != nil {
-			return err
-		}
-		r.Log.V(1).Info("Successfully reverted label delete", "Node", name, "Label", label.key)
-
-		delete(r.Node.PrevReconcileUpd, name)
-	}
-
-	return nil
-}
-
-// listNoObsLabeledNodes returns the list of nodes having NodeObservability role label
-func (r *MachineConfigReconciler) listNoObsLabeledNodes(ctx context.Context, nodeList *corev1.NodeList) error {
-	nodeLabel := map[string]string{
-		NodeObservabilityNodeRoleLabelName: Empty,
-	}
-
-	if err := r.listNodes(ctx, nodeList, nodeLabel); err != nil {
-		return fmt.Errorf("failed to get the list of nodes labeled nodeobservability: %w", err)
-	}
-
-	return nil
-}
-
-// listNodes returns the list of nodes matching the labels
-func (r *MachineConfigReconciler) listNodes(ctx context.Context, nodeList *corev1.NodeList, matchLabels map[string]string) error {
-	listOpts := []client.ListOption{
-		client.MatchingLabels(matchLabels),
-	}
-
-	if err := r.ClientList(ctx, nodeList, listOpts...); err != nil {
-		return err
-	}
-
-	return nil
 }

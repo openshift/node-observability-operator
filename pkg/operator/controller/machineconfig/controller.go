@@ -57,7 +57,6 @@ type MachineConfigReconciler struct {
 	Scheme        *runtime.Scheme
 	EventRecorder record.EventRecorder
 
-	Node       NodeSyncData
 	CtrlConfig *v1alpha1.NodeObservabilityMachineConfig
 }
 
@@ -69,10 +68,6 @@ func New(mgr ctrl.Manager) *MachineConfigReconciler {
 		Log:           ctrl.Log.WithName("controller").WithName("NodeObservabilityMachineConfig"),
 		Scheme:        mgr.GetScheme(),
 		EventRecorder: mgr.GetEventRecorderFor("node-observability-operator"),
-
-		Node: NodeSyncData{
-			PrevReconcileUpd: make(map[string]LabelInfo),
-		},
 	}
 }
 
@@ -364,12 +359,7 @@ func (r *MachineConfigReconciler) ensureProfConfEnabled(ctx context.Context) (bo
 	var modCount, setEnabledCondition int
 	var err error
 	if modCount, err = r.ensureReqNodeLabelExists(ctx); err != nil {
-		errors := []error{fmt.Errorf("failed to ensure nodes are labelled: %w", err)}
-		if errNodeLbl := r.revertNodeLabeling(ctx); errNodeLbl != nil {
-			// fails for even one node revert changes made
-			errors = append(errors, fmt.Errorf("failed to revert node labelling: %w", errNodeLbl))
-		}
-		return true, utilerrors.NewAggregate(errors)
+		return true, fmt.Errorf("failed to ensure nodes are labelled: %w", err)
 	}
 	setEnabledCondition += modCount
 	if modCount, err = r.ensureReqMCPExists(ctx); err != nil {
@@ -398,12 +388,7 @@ func (r *MachineConfigReconciler) ensureProfConfDisabled(ctx context.Context) (b
 
 	modCount, err := r.ensureReqNodeLabelNotExists(ctx)
 	if err != nil {
-		errors := []error{fmt.Errorf("failed to ensure nodes are not labelled: %w", err)}
-		if errNodeUnLbl := r.revertNodeUnlabeling(ctx); errNodeUnLbl != nil {
-			// fails for even one node revert changes made
-			errors = append(errors, fmt.Errorf("failed to revert node unlabelling: %w", errNodeUnLbl))
-		}
-		return true, utilerrors.NewAggregate(errors)
+		return true, fmt.Errorf("failed to ensure nodes are not labelled: %w", err)
 	}
 
 	if modCount > 0 {

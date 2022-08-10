@@ -16,20 +16,6 @@ limitations under the License.
 
 package machineconfigcontroller
 
-// NodeSyncData is for storing the state
-// of node operations made for enabling profiling
-type NodeSyncData struct {
-	PrevReconcileUpd map[string]LabelInfo
-}
-
-// LabelInfo is storing for the label changes
-// made to the nodes
-type LabelInfo struct {
-	key   string
-	value string
-	op    patchOp
-}
-
 // ResourcePatchValue is for creating the patch
 // request for updating a resource
 type ResourcePatchValue struct {

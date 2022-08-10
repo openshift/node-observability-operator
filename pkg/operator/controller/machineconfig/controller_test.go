@@ -56,9 +56,6 @@ func testReconciler() *MachineConfigReconciler {
 		Log:           zap.New(zap.UseDevMode(true)),
 		EventRecorder: record.NewFakeRecorder(100),
 		CtrlConfig:    nomc,
-		Node: NodeSyncData{
-			PrevReconcileUpd: make(map[string]LabelInfo),
-		},
 	}
 }
 
@@ -305,13 +302,6 @@ func TestReconcile(t *testing.T) {
 			name:    "controller resource exists and debug enabled",
 			reqObjs: append([]runtime.Object{workerMCP}, nodes...),
 			wantErr: false,
-			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				r.Node.PrevReconcileUpd["test-worker-4"] = LabelInfo{
-					NodeObservabilityNodeRoleLabelName,
-					Empty,
-					remove,
-				}
-			},
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != defaultRequeueTime ||
 					!status.IsDebuggingEnabled() ||
@@ -400,11 +390,6 @@ func TestReconcile(t *testing.T) {
 			reqObjs: append([]runtime.Object{mcp, criomc, workerMCP}, labeledNodes...),
 			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
 				r.CtrlConfig.Spec.Debug.EnableCrioProfiling = false
-				r.Node.PrevReconcileUpd["test-worker-4"] = LabelInfo{
-					NodeObservabilityNodeRoleLabelName,
-					Empty,
-					add,
-				}
 			},
 			wantErr: false,
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
@@ -953,16 +938,6 @@ func TestReconcileClientFakes(t *testing.T) {
 					ctx context.Context,
 					ns types.NamespacedName,
 					obj client.Object) error {
-					r.Node.PrevReconcileUpd["test-worker-1"] = LabelInfo{
-						NodeObservabilityNodeRoleLabelName,
-						Empty,
-						add,
-					}
-					r.Node.PrevReconcileUpd["test-worker-4"] = LabelInfo{
-						NodeObservabilityNodeRoleLabelName,
-						Empty,
-						remove,
-					}
 					switch o := obj.(type) {
 					case *mcv1.MachineConfigPool:
 						var mcp *mcv1.MachineConfigPool
@@ -1133,16 +1108,6 @@ func TestReconcileClientFakes(t *testing.T) {
 			arg2: request,
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
 				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
-					r.Node.PrevReconcileUpd["test-worker-1"] = LabelInfo{
-						NodeObservabilityNodeRoleLabelName,
-						Empty,
-						remove,
-					}
-					r.Node.PrevReconcileUpd["test-worker-4"] = LabelInfo{
-						NodeObservabilityNodeRoleLabelName,
-						Empty,
-						add,
-					}
 					switch o := obj.(type) {
 					case *mcv1.MachineConfigPool:
 						var mcp *mcv1.MachineConfigPool
@@ -1677,11 +1642,6 @@ func TestEnsureProfConfEnabled(t *testing.T) {
 		{
 			name: "ensureReqNodeLabelExists failure",
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				r.Node.PrevReconcileUpd["test-worker-1"] = LabelInfo{
-					NodeObservabilityNodeRoleLabelName,
-					Empty,
-					add,
-				}
 				m.ClientGetReturns(testError)
 				m.ClientListReturns(testError)
 			},
@@ -1691,11 +1651,6 @@ func TestEnsureProfConfEnabled(t *testing.T) {
 		{
 			name: "revertNodeLabeling failure",
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				r.Node.PrevReconcileUpd["test-worker-1"] = LabelInfo{
-					NodeObservabilityNodeRoleLabelName,
-					Empty,
-					add,
-				}
 				m.ClientGetCalls(func(
 					ctx context.Context,
 					ns types.NamespacedName,
@@ -1765,42 +1720,8 @@ func TestEnsureProfConfDisabled(t *testing.T) {
 		{
 			name: "ensureReqNodeLabelNotExists failure",
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				r.Node.PrevReconcileUpd["test-worker-1"] = LabelInfo{
-					NodeObservabilityNodeRoleLabelName,
-					Empty,
-					remove,
-				}
 				m.ClientGetReturns(testError)
 				m.ClientListReturns(testError)
-			},
-			requeue: true,
-			wantErr: true,
-		},
-		{
-			name: "revertNodeUnlabeling failure",
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				r.Node.PrevReconcileUpd["test-worker-1"] = LabelInfo{
-					NodeObservabilityNodeRoleLabelName,
-					Empty,
-					remove,
-				}
-				m.ClientGetCalls(func(
-					ctx context.Context,
-					ns types.NamespacedName,
-					obj client.Object) error {
-					switch o := obj.(type) {
-					case *corev1.Node:
-						nodes := testNodeObsNodes()
-						for _, node := range nodes {
-							if ns.Name == node.(*corev1.Node).GetName() {
-								node.(*corev1.Node).DeepCopyInto(o)
-							}
-						}
-					}
-					return nil
-				})
-				m.ClientListReturns(testError)
-				m.ClientPatchReturns(testError)
 			},
 			requeue: true,
 			wantErr: true,
