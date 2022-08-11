@@ -32,7 +32,7 @@ import (
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 )
 
-// enableCrioProf checks if MachineConfig CR for CRI-O profiling exists, if not creates one.
+// enableCrioProf creates MachineConfig CR for CRI-O profiling.
 func (r *MachineConfigReconciler) enableCrioProf(ctx context.Context) error {
 	criomc, err := r.getCrioProfMachineConfig()
 	if err != nil {
@@ -40,19 +40,18 @@ func (r *MachineConfigReconciler) enableCrioProf(ctx context.Context) error {
 	}
 
 	if err := ctrlutil.SetControllerReference(r.CtrlConfig, criomc, r.Scheme); err != nil {
-		return fmt.Errorf("failed to update owner info in CRI-O profiling MC resource: %w", err)
+		return fmt.Errorf("failed to update controller reference in crio profiling machine config: %w", err)
 	}
 
 	if err := r.ClientCreate(ctx, criomc); err != nil && !errors.IsAlreadyExists(err) {
-		return fmt.Errorf("failed to create crio profiling config %s: %w", criomc.Name, err)
+		return fmt.Errorf("failed to create crio profiling machine config: %w", err)
 	}
 
 	r.Log.V(1).Info("Successfully created MachineConfig to enable CRI-O profiling", "CrioProfilingConfigName", CrioProfilingConfigName)
 	return nil
 }
 
-// disableCrioProf checks if CRI-O MachineConfig CR for
-// enabling profiling exists, if exists delete the resource
+// disableCrioProf deletes MachineConfig CR for CRI-O profiling if it exists.
 func (r *MachineConfigReconciler) disableCrioProf(ctx context.Context) error {
 	criomc := &mcv1.MachineConfig{}
 	if err := r.ClientGet(ctx, types.NamespacedName{Name: CrioProfilingConfigName}, criomc); err != nil {
@@ -63,7 +62,7 @@ func (r *MachineConfigReconciler) disableCrioProf(ctx context.Context) error {
 	}
 
 	if err := r.ClientDelete(ctx, criomc); err != nil {
-		return err
+		return fmt.Errorf("failed to remove crio profiling machine config: %w", err)
 	}
 
 	r.Log.V(1).Info("Successfully removed MachineConfig to disable CRI-O profiling", "CrioProfilingConfigName", CrioProfilingConfigName)

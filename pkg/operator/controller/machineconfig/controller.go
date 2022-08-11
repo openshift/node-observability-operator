@@ -19,7 +19,6 @@ package machineconfigcontroller
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -51,7 +50,6 @@ import (
 // MachineConfigReconciler reconciles a NodeObservabilityMachineConfig object
 type MachineConfigReconciler struct {
 	impl
-	sync.RWMutex
 
 	Log           logr.Logger
 	Scheme        *runtime.Scheme
@@ -63,8 +61,7 @@ type MachineConfigReconciler struct {
 // New returns a new MachineConfigReconciler instance.
 func New(mgr ctrl.Manager) *MachineConfigReconciler {
 	return &MachineConfigReconciler{
-		impl: NewClient(mgr),
-
+		impl:          NewClient(mgr),
 		Log:           ctrl.Log.WithName("controller").WithName("NodeObservabilityMachineConfig"),
 		Scheme:        mgr.GetScheme(),
 		EventRecorder: mgr.GetEventRecorderFor("node-observability-operator"),
@@ -424,13 +421,10 @@ func (r *MachineConfigReconciler) ensureReqMCNotExists(ctx context.Context) erro
 // ensureReqMCPExists is for ensuring the required machine config pool exists
 func (r *MachineConfigReconciler) ensureReqMCPExists(ctx context.Context) (int, error) {
 	updatedCount := 0
-	updated, err := r.createProfMCP(ctx)
-	if err != nil {
+	if err := r.createProfMCP(ctx); err != nil {
 		return updatedCount, err
 	}
-	if updated {
-		updatedCount++
-	}
+	updatedCount++
 	return updatedCount, nil
 }
 
@@ -446,7 +440,7 @@ func (r *MachineConfigReconciler) ensureReqMCPNotExists(ctx context.Context) err
 func (r *MachineConfigReconciler) monitorProgress(ctx context.Context) (result ctrl.Result, err error) {
 
 	if r.CtrlConfig.Status.IsDebuggingEnabled() {
-		if result, err = r.CheckNodeObservabilityMCPStatus(ctx); err != nil {
+		if result, err = r.checkNodeObservabilityMCPStatus(ctx); err != nil {
 			err = fmt.Errorf("failed to check nodeobservability mcp status: %w", err)
 			return
 		}

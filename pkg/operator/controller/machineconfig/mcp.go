@@ -19,7 +19,6 @@ package machineconfigcontroller
 import (
 	"context"
 	"fmt"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -33,63 +32,43 @@ import (
 	"github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
-// createProfMCP is for creating the MCP required for
-// tracking profiling machine configs
-func (r *MachineConfigReconciler) createProfMCP(ctx context.Context) (bool, error) {
-	createdNow := false
-	namespace := types.NamespacedName{Name: ProfilingMCPName}
+// createProfMCP creates MachineConfigPool CR to enable the CRI-O profiling on the targeted nodes.
+func (r *MachineConfigReconciler) createProfMCP(ctx context.Context) error {
+	mcp := r.getCrioProfMachineConfigPool(ProfilingMCPName)
 
-	err := r.createMCP(ctx, namespace.Name)
-	if err != nil && !errors.IsAlreadyExists(err) {
-		return createdNow, err
-	}
-	if err == nil {
-		createdNow = true
+	if err := ctrlutil.SetControllerReference(r.CtrlConfig, mcp, r.Scheme); err != nil {
+		return fmt.Errorf("failed to update controller reference in crio profiling machine config pool: %w", err)
 	}
 
-	// grace time for client cache to get refreshed
-	time.Sleep(500 * time.Millisecond)
-
-	if _, err := r.fetchProfMCP(ctx, namespace); err != nil {
-		return createdNow, fmt.Errorf("failed to ensure %s MCP was indeed created: %v", namespace.Name, err)
+	if err := r.ClientCreate(ctx, mcp); err != nil {
+		return fmt.Errorf("failed to create crio profiling machine config pool: %w", err)
 	}
 
-	return createdNow, nil
-}
-
-// deleteProfMCP is for removing the MCP created for
-// tracking profiling machine configs
-func (r *MachineConfigReconciler) deleteProfMCP(ctx context.Context) error {
-	namespace := types.NamespacedName{Name: ProfilingMCPName}
-
-	mcp, err := r.fetchProfMCP(ctx, namespace)
-	if errors.IsNotFound(err) {
-		return nil
-	}
-
-	if err != nil {
-		return err
-	}
-
-	if err := r.DeleteMCP(ctx, mcp); err != nil {
-		return err
-	}
-
+	r.Log.V(1).Info("Successfully created MachineConfigPool to enable CRI-O profiling", "MCPName", ProfilingMCPName)
 	return nil
 }
 
-// fetchProfilingMCP is for fetching the profiling MCP created by this controller
-func (r *MachineConfigReconciler) fetchProfMCP(ctx context.Context, namespace types.NamespacedName) (*mcv1.MachineConfigPool, error) {
+// deleteProfMCP deletes MachineConfigPool CR which enables the CRI-O profiling on the nodes if it exists.
+func (r *MachineConfigReconciler) deleteProfMCP(ctx context.Context) error {
 	mcp := &mcv1.MachineConfigPool{}
-	if err := r.ClientGet(ctx, namespace, mcp); err != nil {
-		return nil, err
+	if err := r.ClientGet(ctx, types.NamespacedName{Name: ProfilingMCPName}, mcp); err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
 	}
-	return mcp, nil
+
+	if err := r.ClientDelete(ctx, mcp); err != nil {
+		return fmt.Errorf("failed to remove crio profiling machine config pool: %w", err)
+	}
+
+	r.Log.V(1).Info("Successfully removed MachineConfigPool which was enabling CRI-O profiling", "MCPName", ProfilingMCPName)
+	return nil
 }
 
-// GetProfilingMCP is for obtaining the tailored profiling MCP
-// required for creation
-func (r *MachineConfigReconciler) GetProfilingMCP(name string) *mcv1.MachineConfigPool {
+// getCrioProfMachineConfigPool returns the MachineConfigPool CR definition
+// to enable CRI-O profiling on the targeted nodes.
+func (r *MachineConfigReconciler) getCrioProfMachineConfigPool(name string) *mcv1.MachineConfigPool {
 
 	return &mcv1.MachineConfigPool{
 		TypeMeta: metav1.TypeMeta{
@@ -129,34 +108,8 @@ func (r *MachineConfigReconciler) GetProfilingMCP(name string) *mcv1.MachineConf
 	}
 }
 
-// createMCP is for creating the required MCP
-func (r *MachineConfigReconciler) createMCP(ctx context.Context, name string) error {
-	mcp := r.GetProfilingMCP(name)
-
-	if err := ctrlutil.SetControllerReference(r.CtrlConfig, mcp, r.Scheme); err != nil {
-		return fmt.Errorf("failed to update owner info in MCP %s: %w", name, err)
-	}
-
-	if err := r.ClientCreate(ctx, mcp); err != nil {
-		return fmt.Errorf("failed to create MCP %s: %w", name, err)
-	}
-
-	r.Log.V(1).Info("Successfully created MCP", "MCP", name)
-	return nil
-}
-
-// DeleteMCP is for deleting MCP passed MCP
-func (r *MachineConfigReconciler) DeleteMCP(ctx context.Context, mcp *mcv1.MachineConfigPool) error {
-	if err := r.ClientDelete(ctx, mcp); err != nil {
-		return fmt.Errorf("failed to remove MCP %s : %w", mcp.Name, err)
-	}
-
-	r.Log.V(1).Info("Successfully removed MCP", "MCP", mcp.Name)
-	return nil
-}
-
-// CheckNodeObservabilityMCPStatus is for reconciling update status of all machines in profiling MCP
-func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Context) (ctrl.Result, error) {
+// checkNodeObservabilityMCPStatus is for reconciling update status of all machines in profiling MCP
+func (r *MachineConfigReconciler) checkNodeObservabilityMCPStatus(ctx context.Context) (ctrl.Result, error) {
 	mcp := &mcv1.MachineConfigPool{}
 	if err := r.ClientGet(ctx, types.NamespacedName{Name: ProfilingMCPName}, mcp); err != nil {
 		if errors.IsNotFound(err) {
@@ -166,15 +119,12 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 		return ctrl.Result{}, err
 	}
 
-	r.Lock()
-
 	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdating) &&
 		mcp.Status.DegradedMachineCount == 0 {
 		msg := "Machine config update to enable debugging in progress"
 		r.Log.V(1).Info(msg)
 		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, msg)
 
-		r.Unlock()
 		return ctrl.Result{}, nil
 	}
 
@@ -185,7 +135,6 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 
 		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionTrue, v1alpha1.ReasonReady, msg)
 
-		r.Unlock()
 		return ctrl.Result{}, nil
 	}
 
@@ -193,26 +142,20 @@ func (r *MachineConfigReconciler) CheckNodeObservabilityMCPStatus(ctx context.Co
 		r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeWarning, "ConfigUpdate", "%s MCP has %d machines in degraded state",
 			mcp.Name, mcp.Status.DegradedMachineCount)
 
-		r.Unlock()
 		if err := r.revertEnabledProfConf(ctx); err != nil {
-			r.Lock()
 			msg := fmt.Sprintf("%s MCP has %d machines in degraded state. Reverting changes failed, reconcile again",
 				mcp.Name, mcp.Status.DegradedMachineCount)
 			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, msg)
 
-			r.Unlock()
 			return ctrl.Result{RequeueAfter: defaultRequeueTime},
 				fmt.Errorf("failed to revert changes to recover degraded machines: %w", err)
 		}
 
-		r.Lock()
 		msg := fmt.Sprintf("%s MCP has %d machines in degraded state, reverted changes", mcp.Name, mcp.Status.DegradedMachineCount)
 		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonFailed, msg)
-		r.Unlock()
 		return ctrl.Result{}, nil
 	}
 
-	r.Unlock()
 	r.Log.V(1).Info("Waiting for machine config update to complete on all machines", "MCP", mcp.Name)
 	return ctrl.Result{}, nil
 }
@@ -223,8 +166,6 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 	if err := r.ClientGet(ctx, types.NamespacedName{Name: WorkerNodeMCPName}, mcp); err != nil {
 		return ctrl.Result{}, err
 	}
-
-	r.Lock()
 
 	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdating) &&
 		mcp.Status.DegradedMachineCount == 0 {
@@ -238,13 +179,11 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, msg)
 		}
 		r.Log.V(1).Info(msg)
-		r.Unlock()
 		return ctrl.Result{}, nil
 	}
 
 	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdated) {
 
-		r.Unlock()
 		if err := r.ensureReqMCNotExists(ctx); err != nil {
 			return ctrl.Result{RequeueAfter: defaultRequeueTime}, err
 		}
@@ -253,7 +192,6 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 		}
 
 		var msg string
-		r.Lock()
 		if !r.CtrlConfig.Status.IsDebuggingEnabled() {
 			r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "ConfigUpdate", "debug config disabled on all machines")
 			msg = "Machine config update to disable debugging completed on all machines"
@@ -264,7 +202,6 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 			msg = "Reverted machine config changes due to failure on all machines"
 			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonFailed, msg)
 		}
-		r.Unlock()
 
 		r.Log.V(1).Info(msg)
 
@@ -284,11 +221,9 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 			r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress, msg)
 		}
 
-		r.Unlock()
 		return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
 	}
 
-	r.Unlock()
 	if !r.CtrlConfig.Status.IsDebuggingEnabled() {
 		r.Log.V(1).Info("Waiting for disabling debugging to complete on all machines", "MCP", mcp.Name)
 	}

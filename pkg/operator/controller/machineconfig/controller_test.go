@@ -135,7 +135,7 @@ func testNodeObsNodes() []runtime.Object {
 }
 
 func testNodeObsMCP(r *MachineConfigReconciler) *mcv1.MachineConfigPool {
-	mcp := r.GetProfilingMCP(ProfilingMCPName)
+	mcp := r.getCrioProfMachineConfigPool(ProfilingMCPName)
 
 	mcp.Spec.Configuration.ObjectReference = corev1.ObjectReference{
 		Name: "rendered-nodeobservability-9d2d6f47a54e5828cf2917d760b54a99",

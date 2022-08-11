@@ -89,7 +89,7 @@ func (r *MachineConfigReconciler) ensureReqNodeLabelNotExists(ctx context.Contex
 		updNodeCount++
 	}
 
-	if updNodeCount > 0 {
+	if updNodeCount == len(nodeList.Items) {
 		r.Log.V(1).Info("Successfully removed nodeobservability role from nodes with worker role", "NodeCount", updNodeCount)
 	}
 	return updNodeCount, nil
