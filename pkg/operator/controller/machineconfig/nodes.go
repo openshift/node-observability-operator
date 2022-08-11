@@ -28,17 +28,27 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// ensureReqNodeLabelExists is for checking the if the required labels exist on the nodes
-func (r *MachineConfigReconciler) ensureReqNodeLabelExists(ctx context.Context) (int, error) {
+// ensureReqNodeLabelExists is for checking the if the required labels exist on the nodes.
+// Returns true if all the targeted nodes have the required labels.
+// Return false if not all the nodes have the labels or none were selected.
+func (r *MachineConfigReconciler) ensureReqNodeLabelExists(ctx context.Context) (bool, error) {
 
-	updNodeCount := 0
+	// the number of the nodes which already had the required labels
+	// and the number of the nodes updated with the labels
+	existingNodeCount, updNodeCount := 0, 0
 	nodeList := &corev1.NodeList{}
 	if err := r.listNodes(ctx, nodeList, r.CtrlConfig.Spec.NodeSelector); err != nil {
-		return updNodeCount, err
+		return false, err
+	}
+
+	if len(nodeList.Items) == 0 {
+		r.Log.V(1).Info("No nodes matching the given selector were found", "NodeSelector", r.CtrlConfig.Spec.NodeSelector)
+		return false, nil
 	}
 
 	for i, node := range nodeList.Items {
 		if _, exist := node.Labels[NodeObservabilityNodeRoleLabelName]; exist {
+			existingNodeCount++
 			continue
 		}
 
@@ -48,17 +58,19 @@ func (r *MachineConfigReconciler) ensureReqNodeLabelExists(ctx context.Context) 
 				NodeObservabilityNodeRoleLabelName: Empty,
 			})
 		if err := r.ClientPatch(ctx, &nodeList.Items[i], client.RawPatch(types.JSONPatchType, patch)); err != nil {
-			return updNodeCount, err
+			return false, err
 		}
 		r.Log.V(1).Info("Successfully added label", "Node", node.Name, "Label", NodeObservabilityNodeRoleLabelName)
 
 		updNodeCount++
 	}
 
-	if updNodeCount > 0 {
-		r.Log.V(1).Info("Successfully added nodeobservability role to nodes with worker role", "NodeCount", updNodeCount)
+	if (existingNodeCount == len(nodeList.Items)) || (updNodeCount == len(nodeList.Items)) {
+		r.Log.V(1).Info("Nodeobservability role is present on all the nodes with worker role", "ExistingNodeCount", existingNodeCount, "UpdatedNodeCount", updNodeCount)
+		return true, nil
 	}
-	return updNodeCount, nil
+
+	return false, nil
 }
 
 // ensureReqNodeLabelNotExists removes the nodeobservability label from the nodes.

@@ -165,31 +165,6 @@ func (r *MachineConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// ignoreNOMCStatusUpdates is for ignoring NodeObservabilityMachineConfig
-// resource status update events and for not adding to the reconcile queue
-func ignoreNOMCStatusUpdates() predicate.Predicate {
-	return predicate.Funcs{
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			// old object does not exist, nothing to update
-			if e.ObjectOld == nil {
-				return false
-			}
-			// new object does not exist, nothing to update
-			if e.ObjectNew == nil {
-				return false
-			}
-
-			// if NOMC generated count is unchanged, it indicates
-			// spec or metadata has not changed and the event could be for
-			// status update which need not be queued for reconciliation
-			if _, ok := e.ObjectOld.(*v1alpha1.NodeObservabilityMachineConfig); ok {
-				return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration()
-			}
-			return true
-		},
-	}
-}
-
 // cleanUp is handling the deletion of NodeObservabilityMachineConfig resource.
 // Reverts all the changes made when debugging is enabled and
 // restores the cluster to earlier state.
@@ -297,19 +272,6 @@ func (r *MachineConfigReconciler) removeFinalizer(ctx context.Context, req ctrl.
 	return withoutFinalizers, err
 }
 
-// hasFinalizer checks if the required finalizer is present
-// in the NodeObservabilityMachineConfig resource
-func hasFinalizer(mc *v1alpha1.NodeObservabilityMachineConfig) bool {
-	hasFinalizer := false
-	for _, f := range mc.Finalizers {
-		if f == finalizer {
-			hasFinalizer = true
-			break
-		}
-	}
-	return hasFinalizer
-}
-
 // updateStatus is updating the status subresource of NodeObservabilityMachineConfig
 func (r *MachineConfigReconciler) updateStatus(ctx context.Context) error {
 
@@ -350,25 +312,31 @@ func (r *MachineConfigReconciler) handleProfilingRequest(ctx context.Context) (b
 	}
 }
 
-// ensureProfConfEnabled is for enabling the profiling of requested services
+// ensureProfConfEnabled makes sure all the configuration needed to enable the CRI-O profiling is applied.
+// Returns true if the requeue is needed.
 func (r *MachineConfigReconciler) ensureProfConfEnabled(ctx context.Context) (bool, error) {
 
-	var modCount, setEnabledCondition int
-	var err error
-	if modCount, err = r.ensureReqNodeLabelExists(ctx); err != nil {
+	labelEnsured, err := r.ensureReqNodeLabelExists(ctx)
+	if err != nil {
 		return true, fmt.Errorf("failed to ensure nodes are labelled: %w", err)
 	}
-	setEnabledCondition += modCount
-	if modCount, err = r.ensureReqMCPExists(ctx); err != nil {
-		return false, fmt.Errorf("failed to ensure mcp exists: %w", err)
+	if !labelEnsured {
+		// not all (or none of) the labels are present,
+		// requeue to retry later
+		return true, nil
 	}
-	setEnabledCondition += modCount
-	if modCount, err = r.ensureReqMCExists(ctx); err != nil {
+
+	if err := r.enableCrioProf(ctx); err != nil {
 		return false, fmt.Errorf("failed to ensure mc exists: %w", err)
 	}
-	setEnabledCondition += modCount
 
-	if setEnabledCondition > 0 {
+	if err := r.createProfMCP(ctx); err != nil {
+		return false, fmt.Errorf("failed to ensure mcp exists: %w", err)
+	}
+
+	if !r.CtrlConfig.Status.IsDebuggingEnabled() {
+		// we just applied all the config for CRI-O profiling,
+		// setup the status and requeue to wait for the MCO
 		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled, metav1.ConditionTrue, v1alpha1.ReasonEnabled,
 			"debug configurations enabled")
 		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress,
@@ -399,41 +367,6 @@ func (r *MachineConfigReconciler) ensureProfConfDisabled(ctx context.Context) (b
 	return false, nil
 }
 
-// ensureReqMCExists is for ensuring the required machine config exists
-func (r *MachineConfigReconciler) ensureReqMCExists(ctx context.Context) (int, error) {
-	updatedCount := 0
-	if r.CtrlConfig.Spec.Debug.EnableCrioProfiling {
-		err := r.enableCrioProf(ctx)
-		if err != nil {
-			return updatedCount, err
-		}
-		updatedCount++
-	}
-	return updatedCount, nil
-}
-
-// ensureReqMCNotExists is for ensuring the machine config created when
-// profiling was enabled is indeed removed
-func (r *MachineConfigReconciler) ensureReqMCNotExists(ctx context.Context) error {
-	return r.disableCrioProf(ctx)
-}
-
-// ensureReqMCPExists is for ensuring the required machine config pool exists
-func (r *MachineConfigReconciler) ensureReqMCPExists(ctx context.Context) (int, error) {
-	updatedCount := 0
-	if err := r.createProfMCP(ctx); err != nil {
-		return updatedCount, err
-	}
-	updatedCount++
-	return updatedCount, nil
-}
-
-// ensureReqMCPNotExists is for ensuring the machine config pool created when
-// profiling was enabled is indeed removed
-func (r *MachineConfigReconciler) ensureReqMCPNotExists(ctx context.Context) error {
-	return r.deleteProfMCP(ctx)
-}
-
 // monitorProgress is for checking the progress of the MCPs based
 // on configuration. nodeobservability MCP is checked when debug
 // is enabled and worker MCP when disabled
@@ -461,4 +394,42 @@ func (r *MachineConfigReconciler) monitorProgress(ctx context.Context) (result c
 func (r *MachineConfigReconciler) revertEnabledProfConf(ctx context.Context) error {
 	_, err := r.ensureReqNodeLabelNotExists(ctx)
 	return err
+}
+
+// ignoreNOMCStatusUpdates is for ignoring NodeObservabilityMachineConfig
+// resource status update events and for not adding to the reconcile queue
+func ignoreNOMCStatusUpdates() predicate.Predicate {
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			// old object does not exist, nothing to update
+			if e.ObjectOld == nil {
+				return false
+			}
+			// new object does not exist, nothing to update
+			if e.ObjectNew == nil {
+				return false
+			}
+
+			// if NOMC generated count is unchanged, it indicates
+			// spec or metadata has not changed and the event could be for
+			// status update which need not be queued for reconciliation
+			if _, ok := e.ObjectOld.(*v1alpha1.NodeObservabilityMachineConfig); ok {
+				return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration()
+			}
+			return true
+		},
+	}
+}
+
+// hasFinalizer checks if the required finalizer is present
+// in the NodeObservabilityMachineConfig resource
+func hasFinalizer(mc *v1alpha1.NodeObservabilityMachineConfig) bool {
+	hasFinalizer := false
+	for _, f := range mc.Finalizers {
+		if f == finalizer {
+			hasFinalizer = true
+			break
+		}
+	}
+	return hasFinalizer
 }

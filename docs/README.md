@@ -106,7 +106,7 @@ metadata:
   name: cluster
 spec:
   nodeSelector:
-    "node-role.kubernetes.io/worker": ""
+    app: example
   type: crio-kubelet
 ```
 

@@ -896,6 +896,23 @@ func TestReconcileClientFakes(t *testing.T) {
 			arg1: ctx,
 			arg2: request,
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientListCalls(func(
+					ctx context.Context,
+					list client.ObjectList,
+					opts ...client.ListOption) error {
+					switch o := list.(type) {
+					case *corev1.NodeList:
+						n := &corev1.NodeList{}
+						nodes := testWorkerNodes()
+						for i := range nodes {
+							node := nodes[i].(*corev1.Node)
+							node.ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = Empty
+							n.Items = append(n.Items, *node)
+						}
+						n.DeepCopyInto(o)
+					}
+					return nil
+				})
 				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
 					switch o := obj.(type) {
 					case *mcv1.MachineConfigPool:
@@ -1016,6 +1033,23 @@ func TestReconcileClientFakes(t *testing.T) {
 			arg1: ctx,
 			arg2: request,
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientListCalls(func(
+					ctx context.Context,
+					list client.ObjectList,
+					opts ...client.ListOption) error {
+					switch o := list.(type) {
+					case *corev1.NodeList:
+						n := &corev1.NodeList{}
+						nodes := testWorkerNodes()
+						for i := range nodes {
+							node := nodes[i].(*corev1.Node)
+							node.ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = Empty
+							n.Items = append(n.Items, *node)
+						}
+						n.DeepCopyInto(o)
+					}
+					return nil
+				})
 				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
 					switch o := obj.(type) {
 					case *mcv1.MachineConfigPool:
@@ -1054,6 +1088,23 @@ func TestReconcileClientFakes(t *testing.T) {
 			arg1: ctx,
 			arg2: request,
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientListCalls(func(
+					ctx context.Context,
+					list client.ObjectList,
+					opts ...client.ListOption) error {
+					switch o := list.(type) {
+					case *corev1.NodeList:
+						n := &corev1.NodeList{}
+						nodes := testWorkerNodes()
+						for i := range nodes {
+							node := nodes[i].(*corev1.Node)
+							node.ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = Empty
+							n.Items = append(n.Items, *node)
+						}
+						n.DeepCopyInto(o)
+					}
+					return nil
+				})
 				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
 					switch o := obj.(type) {
 					case *mcv1.MachineConfigPool:
@@ -1649,33 +1700,26 @@ func TestEnsureProfConfEnabled(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "revertNodeLabeling failure",
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				m.ClientGetCalls(func(
-					ctx context.Context,
-					ns types.NamespacedName,
-					obj client.Object) error {
-					switch o := obj.(type) {
-					case *corev1.Node:
-						nodes := testNodeObsNodes()
-						for _, node := range nodes {
-							if ns.Name == node.(*corev1.Node).GetName() {
-								node.(*corev1.Node).DeepCopyInto(o)
-							}
-						}
-					}
-					return nil
-				})
-				m.ClientListReturns(testError)
-				m.ClientPatchReturns(testError)
-			},
-			requeue: true,
-			wantErr: true,
-		},
-		{
 			name: "ensureReqMCPExists failure",
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
 				r.CtrlConfig.SetNamespace("test")
+				m.ClientListCalls(func(
+					ctx context.Context,
+					list client.ObjectList,
+					opts ...client.ListOption) error {
+					switch o := list.(type) {
+					case *corev1.NodeList:
+						n := &corev1.NodeList{}
+						nodes := testWorkerNodes()
+						for i := range nodes {
+							node := nodes[i].(*corev1.Node)
+							node.ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = Empty
+							n.Items = append(n.Items, *node)
+						}
+						n.DeepCopyInto(o)
+					}
+					return nil
+				})
 			},
 			requeue: false,
 			wantErr: true,
@@ -1684,6 +1728,23 @@ func TestEnsureProfConfEnabled(t *testing.T) {
 			name: "ensureReqMCExists failure",
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
 				r.CtrlConfig.SetNamespace("test")
+				m.ClientListCalls(func(
+					ctx context.Context,
+					list client.ObjectList,
+					opts ...client.ListOption) error {
+					switch o := list.(type) {
+					case *corev1.NodeList:
+						n := &corev1.NodeList{}
+						nodes := testWorkerNodes()
+						for i := range nodes {
+							node := nodes[i].(*corev1.Node)
+							node.ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = Empty
+							n.Items = append(n.Items, *node)
+						}
+						n.DeepCopyInto(o)
+					}
+					return nil
+				})
 			},
 			requeue: false,
 			wantErr: true,
