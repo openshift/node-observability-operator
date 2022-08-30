@@ -48,6 +48,14 @@ spec:
                       CRI-O service
                     type: boolean
                 type: object
+              nodeSelector:
+                additionalProperties:
+                  type: string
+                description: NodeSelector is a map of key:value pair that are used
+                  to match against node labels to be configured
+                type: object
+            required:
+            - nodeSelector
             type: object
           status:
             description: NodeObservabilityMachineConfigStatus defines the observed

@@ -72,6 +72,9 @@ func (r *NodeObservabilityReconciler) desiredNOMCSpec(instance *v1alpha1.NodeObs
 	if instance.Spec.Type == v1alpha1.CrioKubeletNodeObservabilityType {
 		s.Debug.EnableCrioProfiling = true
 	}
+	if len(instance.Spec.NodeSelector) != 0 {
+		s.NodeSelector = instance.Spec.NodeSelector
+	}
 	// TODO: ebpf, custom will go here
 	return s
 }

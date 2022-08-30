@@ -11,7 +11,7 @@ metadata:
             "name": "cluster"
           },
           "spec": {
-            "labels": {
+            "nodeSelector": {
               "node-role.kubernetes.io/worker": ""
             },
             "type": "crio-kubelet"
@@ -26,6 +26,9 @@ metadata:
           "spec": {
             "debug": {
               "enableCrioProfiling": true
+            },
+            "nodeSelector": {
+              "node-role.kubernetes.io/worker": ""
             }
           }
         },

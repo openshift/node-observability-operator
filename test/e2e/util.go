@@ -20,7 +20,7 @@ func testNodeObservability() *operatorv1alpha1.NodeObservability {
 			Namespace: testNamespace,
 		},
 		Spec: operatorv1alpha1.NodeObservabilitySpec{
-			Labels: map[string]string{
+			NodeSelector: map[string]string{
 				"node-role.kubernetes.io/worker": "",
 			},
 			Type: operatorv1alpha1.CrioKubeletNodeObservabilityType,
