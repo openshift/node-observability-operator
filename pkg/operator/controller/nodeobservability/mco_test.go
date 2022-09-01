@@ -67,8 +67,7 @@ func TestEnsureMCO(t *testing.T) {
 			existingObjects: []runtime.Object{
 				nomc,
 			},
-			expectedExist: true,
-			expectedMCO:   nomc,
+			expectedMCO: nomc,
 		},
 	}
 	for _, tc := range testCases {
@@ -80,7 +79,7 @@ func TestEnsureMCO(t *testing.T) {
 				Log:    zap.New(zap.UseDevMode(true)),
 			}
 
-			gotExist, obj, err := r.ensureNOMC(context.TODO(), nodeObs)
+			obj, err := r.ensureNOMC(context.TODO(), nodeObs, test.TestNamespace)
 			if err != nil {
 				if !tc.errExpected {
 					t.Fatalf("unexpected error received: %v", err)
@@ -91,10 +90,10 @@ func TestEnsureMCO(t *testing.T) {
 			if tc.errExpected {
 				t.Fatalf("Error expected but wasn't received")
 			}
-			if gotExist != tc.expectedExist {
-				t.Errorf("expected machineconfig exist to be %t, got %t", tc.expectedExist, gotExist)
-			}
-			if gotExist {
+
+			t.Log(obj)
+
+			if obj != nil {
 				for _, ref := range obj.GetOwnerReferences() {
 					if ref.Name == NodeObservabilityMachineConfigTest {
 						return

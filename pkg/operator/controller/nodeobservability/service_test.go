@@ -31,6 +31,7 @@ import (
 	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
+// TODO fix TestEnsureService
 func TestEnsureService(t *testing.T) {
 	nodeObs := &operatorv1alpha1.NodeObservability{}
 	makeService := func() *corev1.Service {
@@ -75,7 +76,7 @@ func TestEnsureService(t *testing.T) {
 			}
 			nodeObs := &operatorv1alpha1.NodeObservability{}
 
-			gotExist, _, err := r.ensureService(context.TODO(), nodeObs, test.TestNamespace)
+			_, err := r.ensureService(context.TODO(), nodeObs, test.TestNamespace)
 			if err != nil {
 				if !tc.errExpected {
 					t.Fatalf("unexpected error received: %v", err)
@@ -84,9 +85,6 @@ func TestEnsureService(t *testing.T) {
 			}
 			if tc.errExpected {
 				t.Fatalf("Error expected but wasn't received")
-			}
-			if gotExist != tc.expectedExist {
-				t.Errorf("expected service's exist to be %t, got %t", tc.expectedExist, gotExist)
 			}
 		})
 	}

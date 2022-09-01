@@ -9,6 +9,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+
 	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
@@ -19,62 +22,54 @@ const (
 // ensureServiceAccount ensures that the serviceaccount exists
 // Returns a Boolean value indicating whether it exists, a pointer to the
 // serviceaccount and an error when relevant
-func (r *NodeObservabilityReconciler) ensureServiceAccount(ctx context.Context, nodeObs *v1alpha1.NodeObservability, ns string) (bool, *corev1.ServiceAccount, error) {
+func (r *NodeObservabilityReconciler) ensureServiceAccount(ctx context.Context, nodeObs *v1alpha1.NodeObservability, ns string) (*corev1.ServiceAccount, error) {
 	nameSpace := types.NamespacedName{Namespace: ns, Name: serviceAccountName}
+
 	desired := r.desiredServiceAccount(nodeObs, ns)
-	exist, current, err := r.currentServiceAccount(ctx, nameSpace)
-	if err != nil {
-		return false, nil, fmt.Errorf("failed to get ServiceAccount: %v", err)
+	if err := controllerutil.SetControllerReference(nodeObs, desired, r.Scheme); err != nil {
+		return nil, fmt.Errorf("failed to set the controller reference for serviceaccount %q: %w", nameSpace.Name, err)
 	}
-	if !exist {
+
+	_, err := r.currentServiceAccount(ctx, nameSpace)
+	if err != nil && !errors.IsNotFound(err) {
+		return nil, fmt.Errorf("failed to get serviceaccount %s/%s due to: %w", nameSpace.Namespace, nameSpace.Name, err)
+	} else if err != nil && errors.IsNotFound(err) {
+
+		// creating serviceaccount since it is not found
 		if err := r.createServiceAccount(ctx, desired); err != nil {
-			return false, nil, err
+			return nil, err
 		}
+		log.FromContext(ctx).Info("successfully created serviceaccount", "name", nameSpace.Name, "namespace", nameSpace.Namespace)
 		return r.currentServiceAccount(ctx, nameSpace)
 	}
-	return true, current, err
+
+	return desired, r.Update(ctx, desired)
 }
 
 // currentServiceAccount checks that the serviceaccount exists
-func (r *NodeObservabilityReconciler) currentServiceAccount(ctx context.Context, nameSpace types.NamespacedName) (bool, *corev1.ServiceAccount, error) {
+func (r *NodeObservabilityReconciler) currentServiceAccount(ctx context.Context, nameSpace types.NamespacedName) (*corev1.ServiceAccount, error) {
 	sa := &corev1.ServiceAccount{}
-	if err := r.Get(ctx, nameSpace, sa); err != nil || r.Err.Set[saObj] {
-		if errors.IsNotFound(err) || r.Err.NotFound[saObj] {
-			return false, nil, nil
-		}
-		if r.Err.Set[saObj] {
-			err = fmt.Errorf("failed to get ServiceAccount: simulated error")
-		}
-		return false, nil, err
+	if err := r.Get(ctx, nameSpace, sa); err != nil {
+		return nil, fmt.Errorf("failed to get serviceaccount %s/%s due to: %w", nameSpace.Namespace, nameSpace.Name, err)
 	}
-	return true, sa, nil
+	return sa, nil
 }
 
 // createServiceAccount creates the serviceaccount
 func (r *NodeObservabilityReconciler) createServiceAccount(ctx context.Context, sa *corev1.ServiceAccount) error {
 	if err := r.Create(ctx, sa); err != nil {
-		return fmt.Errorf("failed to create ServiceAccount %s/%s: %w", sa.Namespace, sa.Name, err)
+		return fmt.Errorf("failed to create serviceaccount %s/%s: %w", sa.Namespace, sa.Name, err)
 	}
-	r.Log.Info("created ServiceAccount", "ServiceAccount.Namespace", sa.Namespace, "ServiceAccount.Name", sa.Name)
+	r.Log.Info("created serviceaccount", "serviceaccount.Namespace", sa.Namespace, "serviceaccount.Name", sa.Name)
 	return nil
 }
 
 // desiredServiceAccount returns a serviceaccount object
 func (r *NodeObservabilityReconciler) desiredServiceAccount(nodeObs *v1alpha1.NodeObservability, ns string) *corev1.ServiceAccount {
-
-	sa := &corev1.ServiceAccount{
+	return &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: ns,
 			Name:      serviceAccountName,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					Name:       nodeObs.Name,
-					Kind:       nodeObs.Kind,
-					UID:        nodeObs.UID,
-					APIVersion: nodeObs.APIVersion,
-				},
-			},
 		},
 	}
-	return sa
 }

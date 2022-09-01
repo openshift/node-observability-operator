@@ -157,34 +157,28 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	} else if !haveSCC {
 		return ctrl.Result{}, fmt.Errorf("failed to get securitycontextconstraints")
 	}
-	r.Log.V(1).Info("SecurityContextConstraints ensured", "Name", scc.Name)
+	r.Log.V(1).Info("SecurityContextConstraints ensured", "name", scc.Name)
 
 	// ensure serviceaccount
-	haveSA, sa, err := r.ensureServiceAccount(ctx, nodeObs, r.Namespace)
+	sa, err := r.ensureServiceAccount(ctx, nodeObs, r.Namespace)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure serviceaccount : %w", err)
-	} else if !haveSA {
-		return ctrl.Result{}, fmt.Errorf("failed to get serviceaccount")
 	}
-	r.Log.V(1).Info("ServiceAccount ensured", "Namespace", sa.Namespace, "Name", sa.Name)
+	r.Log.V(1).Info("serviceaccount ensured", "namespace", sa.Namespace, "name", sa.Name)
 
 	// ensure service
-	haveSvc, svc, err := r.ensureService(ctx, nodeObs, r.Namespace)
+	svc, err := r.ensureService(ctx, nodeObs, r.Namespace)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure service : %w", err)
-	} else if !haveSvc {
-		return ctrl.Result{}, fmt.Errorf("failed to get service")
 	}
-	r.Log.V(1).Info("Service ensured", "Namespace", svc.Namespace, "Name", svc.Name)
+	r.Log.V(1).Info("service ensured", "namespace", svc.Namespace, "name", svc.Name)
 
 	// check clusterrole
-	haveCR, cr, err := r.ensureClusterRole(ctx, nodeObs)
+	_, cr, err := r.ensureClusterRole(ctx, nodeObs)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure clusterrole : %w", err)
-	} else if !haveCR {
-		return ctrl.Result{}, fmt.Errorf("failed to get clusterrole")
 	}
-	r.Log.V(1).Info("ClusterRole ensured", "Name", cr.Name)
+	r.Log.V(1).Info("clusterrole ensured", "name", cr.Name)
 
 	// check clusterolebinding with serviceaccount
 	haveCRB, crb, err := r.ensureClusterRoleBinding(ctx, nodeObs, sa.Name, r.Namespace)
@@ -209,13 +203,11 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	// if machine config change is not requested, we can mark it as ready
 	var nomcReady bool = true
 	if machineConfigChangeRequested(nodeObs) {
-		haveNOMC, nomc, err := r.ensureNOMC(ctx, nodeObs)
+		nomc, err := r.ensureNOMC(ctx, nodeObs, r.Namespace)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to ensure nodeobservabilitymachineconfig : %w", err)
-		} else if !haveNOMC {
-			return ctrl.Result{}, fmt.Errorf("failed to get nodeobservabilitymachineconfig")
 		}
-		r.Log.V(1).Info("NodeObservabilityMachineConfig ensured", "Name", nomc.Name)
+		r.Log.V(1).Info("nodeobservabilitymachineconfig ensured", "name", nomc.Name)
 		nomcReady = nomc.Status.IsReady()
 	}
 

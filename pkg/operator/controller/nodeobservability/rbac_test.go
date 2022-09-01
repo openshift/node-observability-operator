@@ -280,7 +280,7 @@ func TestEnsureClusterRole(t *testing.T) {
 				Log:    zap.New(zap.UseDevMode(true)),
 			}
 			nodeObs := &operatorv1alpha1.NodeObservability{}
-			_, serviceAccount, err := r.ensureServiceAccount(context.TODO(), nodeObs, test.TestNamespace)
+			serviceAccount, err := r.ensureServiceAccount(context.TODO(), nodeObs, test.TestNamespace)
 			if err != nil {
 				if !tc.errExpected {
 					t.Fatalf("unexpected error received: %v", err)
