@@ -22,8 +22,9 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -31,7 +32,6 @@ import (
 	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
-// TODO fix TestEnsureServiceAccount
 func TestEnsureServiceAccount(t *testing.T) {
 	nodeObs := &operatorv1alpha1.NodeObservability{}
 	makeServiceAccount := func() *corev1.ServiceAccount {
@@ -46,14 +46,11 @@ func TestEnsureServiceAccount(t *testing.T) {
 	testCases := []struct {
 		name            string
 		existingObjects []runtime.Object
-		expectedExist   bool
 		expectedSA      *corev1.ServiceAccount
-		errExpected     bool
 	}{
 		{
 			name:            "Does not exist",
 			existingObjects: []runtime.Object{},
-			expectedExist:   true,
 			expectedSA:      makeServiceAccount(),
 		},
 		{
@@ -61,8 +58,7 @@ func TestEnsureServiceAccount(t *testing.T) {
 			existingObjects: []runtime.Object{
 				makeServiceAccount(),
 			},
-			expectedExist: true,
-			expectedSA:    makeServiceAccount(),
+			expectedSA: makeServiceAccount(),
 		},
 	}
 
@@ -78,14 +74,19 @@ func TestEnsureServiceAccount(t *testing.T) {
 
 			_, err := r.ensureServiceAccount(context.TODO(), nodeObs, test.TestNamespace)
 			if err != nil {
-				if !tc.errExpected {
-					t.Fatalf("unexpected error received: %v", err)
-				}
-				return
+				t.Fatalf("unexpected error received: %v", err)
 			}
-			if tc.errExpected {
-				t.Fatalf("Error expected but wasn't received")
+
+			s := &corev1.ServiceAccount{}
+			err = r.Client.Get(context.Background(), types.NamespacedName{Name: tc.expectedSA.Name, Namespace: tc.expectedSA.Namespace}, s)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
 			}
+
+			if s == nil {
+				t.Fatalf("expected serviceaccount %s/%s not created", tc.expectedSA.GetNamespace(), tc.expectedSA.GetName())
+			}
+
 		})
 	}
 }

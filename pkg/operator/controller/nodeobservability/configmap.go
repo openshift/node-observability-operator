@@ -17,7 +17,7 @@ const (
 	srcKbltCAConfigMapNameSpace = "openshift-config-managed"
 )
 
-func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeObs *v1alpha1.NodeObservability, ns string) (bool, error) {
+func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeObs *v1alpha1.NodeObservability, ns string) error {
 	kbltCACM := &corev1.ConfigMap{}
 	kbltCACMName := types.NamespacedName{
 		Name:      srcKbltCAConfigMapName,
@@ -26,10 +26,9 @@ func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeO
 	// Use the clusterWide client in order to get the configmap from openshift-config-managed namespace
 	// As the default client will only look for configmaps inside the namespace
 	if err := r.ClusterWideClient.Get(ctx, kbltCACMName, kbltCACM); err != nil {
-		if errors.IsNotFound(err) {
-			return false, fmt.Errorf("unable to find source configMap %v: %w", kbltCACMName, err)
+		if !errors.IsNotFound(err) {
+			return fmt.Errorf("error getting source configmap %q, %w", kbltCACMName, err)
 		}
-		return false, fmt.Errorf("error getting source configMap %v, %w", kbltCACMName, err)
 	}
 
 	// Copy the configmap into the operator namespace
@@ -56,15 +55,15 @@ func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeO
 	}
 
 	if err := r.Get(ctx, configMapName, &corev1.ConfigMap{}); err == nil {
-		return true, nil
+		return nil
 	} else if !errors.IsNotFound(err) {
-		return false, fmt.Errorf("error getting target configMap %s, %w", configMapName, err)
+		return fmt.Errorf("error getting target configmap %s, %w", configMapName, err)
 	}
 
 	if err := r.Create(ctx, configMap); err != nil {
-		return false, fmt.Errorf("failed to create target configMap %s: %w", configMapName, err)
+		return fmt.Errorf("failed to create target configmap %s: %w", configMapName, err)
 	}
 
-	r.Log.Info("created ConfigMap", "ConfigMap.Namespace", configMapName.Namespace, "ConfigMap.Name", configMapName.Name)
-	return true, nil
+	r.Log.Info("created configmap", "name", configMapName.Namespace, "name", configMapName.Name)
+	return nil
 }

@@ -20,13 +20,14 @@ import (
 	"context"
 	"fmt"
 
-	logr "github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilclock "k8s.io/apimachinery/pkg/util/clock"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+
+	logr "github.com/go-logr/logr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -190,13 +191,11 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	r.Log.V(1).Info("ClusterRoleBinding ensured", "Name", crb.Name)
 
 	// check daemonset
-	haveDS, ds, err := r.ensureDaemonSet(ctx, nodeObs, sa, r.Namespace)
+	ds, err := r.ensureDaemonSet(ctx, nodeObs, sa, r.Namespace)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure daemonset : %w", err)
-	} else if !haveDS {
-		return ctrl.Result{}, fmt.Errorf("failed to get daemonset")
 	}
-	r.Log.V(1).Info("DaemonSet ensured", "Namespace", ds.Namespace, "Name", ds.Name)
+	r.Log.V(1).Info("daemonset ensured", "namespace", ds.Namespace, "name", ds.Name)
 
 	dsReady := ds.Status.NumberReady == ds.Status.DesiredNumberScheduled
 

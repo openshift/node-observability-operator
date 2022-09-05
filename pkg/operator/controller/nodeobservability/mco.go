@@ -23,16 +23,17 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/google/go-cmp/cmp"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
 	"github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
 func (r *NodeObservabilityReconciler) ensureNOMC(ctx context.Context, instance *v1alpha1.NodeObservability, ns string) (*v1alpha1.NodeObservabilityMachineConfig, error) {
 	nameSpace := types.NamespacedName{Name: instance.Name, Namespace: ns}
 
-	desired := r.desiredNOMC(instance)
+	desired := r.desiredNOMC(instance, nameSpace)
 	if err := controllerutil.SetControllerReference(instance, desired, r.Scheme); err != nil {
 		return nil, fmt.Errorf("failed to set the controller reference for nomc %q: %w", nameSpace.Name, err)
 	}
@@ -62,10 +63,11 @@ func (r *NodeObservabilityReconciler) currentNOMC(ctx context.Context, nameSpace
 }
 
 // desiredNOMC returns a NodeObservabilityMachineConfig object
-func (r *NodeObservabilityReconciler) desiredNOMC(instance *v1alpha1.NodeObservability) *v1alpha1.NodeObservabilityMachineConfig {
+func (r *NodeObservabilityReconciler) desiredNOMC(instance *v1alpha1.NodeObservability, nameSpace types.NamespacedName) *v1alpha1.NodeObservabilityMachineConfig {
 	return &v1alpha1.NodeObservabilityMachineConfig{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: instance.Name,
+			Name:      instance.Name,
+			Namespace: nameSpace.Namespace,
 		},
 		Spec: r.desiredNOMCSpec(instance),
 	}

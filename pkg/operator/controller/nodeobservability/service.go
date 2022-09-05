@@ -13,10 +13,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+	"github.com/google/go-cmp/cmp"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/google/go-cmp/cmp"
 	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
@@ -91,6 +91,7 @@ func (r *NodeObservabilityReconciler) updateService(ctx context.Context, current
 		updatedService.Spec.Ports = desired.Spec.Ports
 		updated = true
 	}
+
 	if !equality.Semantic.DeepEqual(updatedService.Spec.Selector, desired.Spec.Selector) {
 		updatedService.Spec.Selector = desired.Spec.Selector
 		updated = true
@@ -129,6 +130,7 @@ func (r *NodeObservabilityReconciler) desiredService(nodeObs *v1alpha1.NodeObser
 		},
 		Spec: corev1.ServiceSpec{
 			ClusterIP: corev1.ClusterIPNone,
+			Type:      corev1.ServiceTypeClusterIP,
 			Selector:  ls,
 			Ports: []corev1.ServicePort{
 				{

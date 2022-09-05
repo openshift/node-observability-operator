@@ -18,13 +18,17 @@ package nodeobservabilitycontroller
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/pointer"
+
+	"github.com/google/go-cmp/cmp"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -36,58 +40,276 @@ const (
 	nodeObsInstanceName = "nodeobservability-sample"
 )
 
-func TestEnsureDaemonset(t *testing.T) {
+type testDaemonsetBuilder struct {
+	name           string
+	namespace      string
+	serviceAccount string
+	version        string
+	containers     []corev1.Container
+	ownerReference []metav1.OwnerReference
+	volumes        []corev1.Volume
+	nodeSelector   map[string]string
+}
 
-	makeDaemonset := func() *appsv1.DaemonSet {
-		ls := labelsForNodeObservability(daemonSetName)
-		tgp := int64(30)
-		vst := corev1.HostPathSocket
-		privileged := true
-		ds := appsv1.DaemonSet{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      daemonSetName,
-				Namespace: test.OperatorNamespace,
+func testDaemonset(name, namespace, serviceAccount string) *testDaemonsetBuilder {
+	return &testDaemonsetBuilder{
+		name:           name,
+		namespace:      namespace,
+		serviceAccount: serviceAccount,
+	}
+}
+
+func (b *testDaemonsetBuilder) withNodeSelector(selector map[string]string) *testDaemonsetBuilder {
+	b.nodeSelector = selector
+	return b
+}
+
+func (b *testDaemonsetBuilder) withResourceVersion(version string) *testDaemonsetBuilder {
+	b.version = version
+	return b
+}
+
+func (b *testDaemonsetBuilder) withContainers(containers ...corev1.Container) *testDaemonsetBuilder {
+	b.containers = containers
+	return b
+}
+
+func (b *testDaemonsetBuilder) withControllerReference(name string) *testDaemonsetBuilder {
+	b.ownerReference = []metav1.OwnerReference{
+		{
+			APIVersion:         operatorv1alpha1.GroupVersion.Identifier(),
+			Kind:               "NodeObservability",
+			Name:               name,
+			Controller:         pointer.BoolPtr(true),
+			BlockOwnerDeletion: pointer.BoolPtr(true),
+		},
+	}
+	return b
+}
+
+func (b *testDaemonsetBuilder) withVolumes(volumes ...corev1.Volume) *testDaemonsetBuilder {
+	b.volumes = volumes
+	return b
+}
+
+func (b *testDaemonsetBuilder) build() *appsv1.DaemonSet {
+	labels := labelsForNodeObservability(nodeObsInstanceName)
+	d := &appsv1.DaemonSet{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "DaemonSet",
+			APIVersion: "apps/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            daemonSetName,
+			Namespace:       test.TestNamespace,
+			OwnerReferences: b.ownerReference,
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labelsForNodeObservability(nodeObsInstanceName),
 			},
-			Spec: appsv1.DaemonSetSpec{
-				Selector: &metav1.LabelSelector{
-					MatchLabels: ls,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
 				},
-				Template: corev1.PodTemplateSpec{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels: ls,
-					},
-					Spec: corev1.PodSpec{
-						Containers: []corev1.Container{{
-							ImagePullPolicy: corev1.PullIfNotPresent,
-							Name:            podName,
-							// TODO - this will change once the shell script in the node-observability-agent is
-							// finalized
-							Command:                  []string{"/bin/sh", "-c", "curl --unix-socket /var/run/crio/crio.sock http://localhost/debug/pprof/profile > /mnt/crio-${NODE_IP}_$(date +\"%F-%T.%N\").out && sleep 3600"},
-							Resources:                corev1.ResourceRequirements{},
-							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
-							SecurityContext: &corev1.SecurityContext{
-								Privileged: &privileged,
-							},
-							Env: []corev1.EnvVar{{
+				Spec: corev1.PodSpec{
+					Containers:                    b.containers,
+					DNSPolicy:                     corev1.DNSClusterFirst,
+					RestartPolicy:                 corev1.RestartPolicyAlways,
+					SchedulerName:                 defaultScheduler,
+					ServiceAccountName:            b.serviceAccount,
+					Volumes:                       b.volumes,
+					NodeSelector:                  b.nodeSelector,
+					TerminationGracePeriodSeconds: pointer.Int64(30),
+				},
+			},
+		},
+	}
+	if b.version != "" {
+		d.ResourceVersion = b.version
+	} else {
+		d.ResourceVersion = "1"
+	}
+	return d
+}
+
+type testContainerBuilder struct {
+	name                     string
+	image                    string
+	args                     []string
+	command                  []string
+	env                      []corev1.EnvVar
+	volumeMounts             []corev1.VolumeMount
+	securityContext          *corev1.SecurityContext
+	terminationMessagePolicy corev1.TerminationMessagePolicy
+}
+
+func testContainer(name, image string) *testContainerBuilder {
+	return &testContainerBuilder{
+		name:  name,
+		image: image,
+	}
+}
+
+func (b *testContainerBuilder) withEnvs(envs ...corev1.EnvVar) *testContainerBuilder {
+	b.env = envs
+	return b
+}
+
+func (b *testContainerBuilder) withArgs(args ...string) *testContainerBuilder {
+	b.args = args
+	return b
+}
+
+func (b *testContainerBuilder) withCommand(command ...string) *testContainerBuilder {
+	b.command = command
+	return b
+}
+
+func (b *testContainerBuilder) withTerminationMessagePolicy(policy corev1.TerminationMessagePolicy) *testContainerBuilder {
+	b.terminationMessagePolicy = policy
+	return b
+}
+
+func (b *testContainerBuilder) withVolumeMounts(mounts ...corev1.VolumeMount) *testContainerBuilder {
+	b.volumeMounts = mounts
+	return b
+}
+
+func (b *testContainerBuilder) withSecurityContext(securityContext corev1.SecurityContext) *testContainerBuilder {
+	b.securityContext = &securityContext
+	return b
+}
+
+func (b *testContainerBuilder) build() corev1.Container {
+	return corev1.Container{
+		Name:                     b.name,
+		Image:                    b.image,
+		ImagePullPolicy:          corev1.PullIfNotPresent,
+		Command:                  b.command,
+		Args:                     b.args,
+		Env:                      b.env,
+		VolumeMounts:             b.volumeMounts,
+		TerminationMessagePolicy: b.terminationMessagePolicy,
+		SecurityContext:          b.securityContext,
+	}
+}
+
+func TestEnsureDaemonset(t *testing.T) {
+	vst := corev1.HostPathSocket
+	testCases := []struct {
+		name            string
+		existingObjects []runtime.Object
+		serviceaccount  *corev1.ServiceAccount
+		expectedDS      *appsv1.DaemonSet
+	}{
+		{
+			name: "New daemonset",
+			existingObjects: []runtime.Object{
+				makeKubeletCACM(),
+			},
+			expectedDS: testDaemonset(
+				daemonSetName,
+				test.TestNamespace,
+				serviceAccountName).
+				withNodeSelector(map[string]string{"node-role.kubernetes.io/worker": ""}).
+				withControllerReference(nodeObsInstanceName).
+				withContainers(
+					testContainer(podName, "node-observability-agent:latest").
+						withEnvs([]corev1.EnvVar{
+							{
 								Name: "NODE_IP",
 								ValueFrom: &corev1.EnvVarSource{
 									FieldRef: &corev1.ObjectFieldSelector{
 										FieldPath: "status.hostIP",
 									},
 								},
-							}},
-							VolumeMounts: []corev1.VolumeMount{{
+							},
+						}...).
+						withTerminationMessagePolicy(corev1.TerminationMessageFallbackToLogsOnError).
+						withCommand([]string{"node-observability-agent"}...).
+						withArgs([]string{
+							"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
+							"--storage=/run/node-observability",
+							fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
+						}...).
+						withSecurityContext(corev1.SecurityContext{
+							Privileged: pointer.Bool(true),
+						}).
+						withVolumeMounts([]corev1.VolumeMount{
+							{
 								MountPath: socketMountPath,
 								Name:      socketName,
 								ReadOnly:  false,
-							}},
-						}},
-						DNSPolicy:                     corev1.DNSClusterFirst,
-						RestartPolicy:                 corev1.RestartPolicyAlways,
-						SchedulerName:                 defaultScheduler,
-						ServiceAccountName:            serviceAccountName,
-						TerminationGracePeriodSeconds: &tgp,
-						Volumes: []corev1.Volume{{
+							},
+							{
+								MountPath: kbltCAMountPath,
+								Name:      kbltCAName,
+								ReadOnly:  true,
+							},
+						}...).
+						build(),
+					testContainer("kube-rbac-proxy", "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0").
+						withArgs([]string{
+							"--secure-listen-address=0.0.0.0:8443",
+							"--upstream=http://127.0.0.1:9000/",
+							fmt.Sprintf("--tls-cert-file=%s/tls.crt", certsMountPath),
+							fmt.Sprintf("--tls-private-key-file=%s/tls.key", certsMountPath),
+							"--logtostderr=true",
+							"--v=2",
+						}...).
+						withVolumeMounts([]corev1.VolumeMount{
+							{
+								Name:      certsName,
+								MountPath: certsMountPath,
+								ReadOnly:  true,
+							},
+						}...).
+						build(),
+				).
+				withVolumes([]corev1.Volume{
+					{
+						Name: socketName,
+						VolumeSource: corev1.VolumeSource{
+							HostPath: &corev1.HostPathVolumeSource{
+								Path: socketPath,
+								Type: &vst,
+							},
+						},
+					},
+					{
+						Name: kbltCAName,
+						VolumeSource: corev1.VolumeSource{
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: nodeObsInstanceName,
+								},
+							},
+						},
+					},
+					{
+						Name: certsName,
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{
+								SecretName: secretName,
+							},
+						},
+					},
+				}...).
+				build(),
+		},
+		{
+			name: "Update existing daemonset",
+			existingObjects: []runtime.Object{
+				makeKubeletCACM(),
+				testDaemonset(
+					daemonSetName,
+					test.TestNamespace,
+					serviceAccountName).
+					withNodeSelector(map[string]string{"node-role.kubernetes.io/worker": ""}).
+					withControllerReference(nodeObsInstanceName).
+					withVolumes([]corev1.Volume{
+						{
 							Name: socketName,
 							VolumeSource: corev1.VolumeSource{
 								HostPath: &corev1.HostPathVolumeSource{
@@ -95,40 +317,118 @@ func TestEnsureDaemonset(t *testing.T) {
 									Type: &vst,
 								},
 							},
-						}},
-						NodeSelector: map[string]string{
-							"node-role.kubernetes.io/worker": "",
+						},
+						{
+							Name: kbltCAName,
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: nodeObsInstanceName,
+									},
+								},
+							},
+						},
+						{
+							Name: certsName,
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: secretName,
+								},
+							},
+						},
+					}...).
+					build(),
+			},
+			expectedDS: testDaemonset(
+				daemonSetName,
+				test.TestNamespace,
+				serviceAccountName).
+				withNodeSelector(map[string]string{"node-role.kubernetes.io/worker": ""}).
+				withControllerReference(nodeObsInstanceName).
+				withResourceVersion("2").
+				withContainers(
+					testContainer(podName, "node-observability-agent:latest").
+						withEnvs([]corev1.EnvVar{
+							{
+								Name: "NODE_IP",
+								ValueFrom: &corev1.EnvVarSource{
+									FieldRef: &corev1.ObjectFieldSelector{
+										FieldPath: "status.hostIP",
+									},
+								},
+							},
+						}...).
+						withTerminationMessagePolicy(corev1.TerminationMessageFallbackToLogsOnError).
+						withCommand([]string{"node-observability-agent"}...).
+						withArgs([]string{
+							"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
+							"--storage=/run/node-observability",
+							fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
+						}...).
+						withSecurityContext(corev1.SecurityContext{
+							Privileged: pointer.Bool(true),
+						}).
+						withVolumeMounts([]corev1.VolumeMount{
+							{
+								MountPath: socketMountPath,
+								Name:      socketName,
+								ReadOnly:  false,
+							},
+							{
+								MountPath: kbltCAMountPath,
+								Name:      kbltCAName,
+								ReadOnly:  true,
+							},
+						}...).
+						build(),
+					testContainer("kube-rbac-proxy", "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0").
+						withArgs([]string{
+							"--secure-listen-address=0.0.0.0:8443",
+							"--upstream=http://127.0.0.1:9000/",
+							fmt.Sprintf("--tls-cert-file=%s/tls.crt", certsMountPath),
+							fmt.Sprintf("--tls-private-key-file=%s/tls.key", certsMountPath),
+							"--logtostderr=true",
+							"--v=2",
+						}...).
+						withVolumeMounts([]corev1.VolumeMount{
+							{
+								Name:      certsName,
+								MountPath: certsMountPath,
+								ReadOnly:  true,
+							},
+						}...).
+						build(),
+				).
+				withVolumes([]corev1.Volume{
+					{
+						Name: socketName,
+						VolumeSource: corev1.VolumeSource{
+							HostPath: &corev1.HostPathVolumeSource{
+								Path: socketPath,
+								Type: &vst,
+							},
 						},
 					},
-				},
-			},
-		}
-		return &ds
-	}
-
-	testCases := []struct {
-		name            string
-		existingObjects []runtime.Object
-		expectedExist   bool
-		expectedDS      *appsv1.DaemonSet
-		errExpected     bool
-	}{
-		{
-			name: "Does not exist",
-			existingObjects: []runtime.Object{
-				makeKubeletCACM(),
-			},
-			expectedExist: true,
-			expectedDS:    makeDaemonset(),
-		},
-		{
-			name: "Exists",
-			existingObjects: []runtime.Object{
-				makeDaemonset(),
-				makeKubeletCACM(),
-			},
-			expectedExist: true,
-			expectedDS:    makeDaemonset(),
+					{
+						Name: kbltCAName,
+						VolumeSource: corev1.VolumeSource{
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: nodeObsInstanceName,
+								},
+							},
+						},
+					},
+					{
+						Name: certsName,
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{
+								SecretName: secretName,
+							},
+						},
+					},
+				}...).
+				build(),
 		},
 		{
 			name: "Does not exist but target CA configmap is there",
@@ -136,8 +436,96 @@ func TestEnsureDaemonset(t *testing.T) {
 				makeKubeletCACM(),
 				makeTargetKubeletCACM(),
 			},
-			expectedExist: true,
-			expectedDS:    makeDaemonset(),
+			expectedDS: testDaemonset(
+				daemonSetName,
+				test.TestNamespace,
+				serviceAccountName).
+				withNodeSelector(map[string]string{"node-role.kubernetes.io/worker": ""}).
+				withControllerReference(nodeObsInstanceName).
+				withResourceVersion("1").
+				withContainers(
+					testContainer(podName, "node-observability-agent:latest").
+						withEnvs([]corev1.EnvVar{
+							{
+								Name: "NODE_IP",
+								ValueFrom: &corev1.EnvVarSource{
+									FieldRef: &corev1.ObjectFieldSelector{
+										FieldPath: "status.hostIP",
+									},
+								},
+							},
+						}...).
+						withTerminationMessagePolicy(corev1.TerminationMessageFallbackToLogsOnError).
+						withCommand([]string{"node-observability-agent"}...).
+						withArgs([]string{
+							"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
+							"--storage=/run/node-observability",
+							fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
+						}...).
+						withSecurityContext(corev1.SecurityContext{
+							Privileged: pointer.Bool(true),
+						}).
+						withVolumeMounts([]corev1.VolumeMount{
+							{
+								MountPath: socketMountPath,
+								Name:      socketName,
+								ReadOnly:  false,
+							},
+							{
+								MountPath: kbltCAMountPath,
+								Name:      kbltCAName,
+								ReadOnly:  true,
+							},
+						}...).
+						build(),
+					testContainer("kube-rbac-proxy", "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0").
+						withArgs([]string{
+							"--secure-listen-address=0.0.0.0:8443",
+							"--upstream=http://127.0.0.1:9000/",
+							fmt.Sprintf("--tls-cert-file=%s/tls.crt", certsMountPath),
+							fmt.Sprintf("--tls-private-key-file=%s/tls.key", certsMountPath),
+							"--logtostderr=true",
+							"--v=2",
+						}...).
+						withVolumeMounts([]corev1.VolumeMount{
+							{
+								Name:      certsName,
+								MountPath: certsMountPath,
+								ReadOnly:  true,
+							},
+						}...).
+						build(),
+				).
+				withVolumes([]corev1.Volume{
+					{
+						Name: socketName,
+						VolumeSource: corev1.VolumeSource{
+							HostPath: &corev1.HostPathVolumeSource{
+								Path: socketPath,
+								Type: &vst,
+							},
+						},
+					},
+					{
+						Name: kbltCAName,
+						VolumeSource: corev1.VolumeSource{
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: nodeObsInstanceName,
+								},
+							},
+						},
+					},
+					{
+						Name: certsName,
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{
+								SecretName: secretName,
+							},
+						},
+					},
+				}...).
+				build(),
 		},
 	}
 	for _, tc := range testCases {
@@ -147,12 +535,16 @@ func TestEnsureDaemonset(t *testing.T) {
 				Client:            cl,
 				ClusterWideClient: cl,
 				Scheme:            test.Scheme,
+				Namespace:         test.TestNamespace,
 				Log:               zap.New(zap.UseDevMode(true)),
 				AgentImage:        "node-observability-agent:latest",
 			}
 			nodeObs := &operatorv1alpha1.NodeObservability{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: nodeObsInstanceName,
+				ObjectMeta: metav1.ObjectMeta{Name: nodeObsInstanceName},
+				Spec: operatorv1alpha1.NodeObservabilitySpec{
+					Labels: map[string]string{
+						"node-role.kubernetes.io/worker": "",
+					},
 				},
 			}
 			sa := &corev1.ServiceAccount{
@@ -162,19 +554,459 @@ func TestEnsureDaemonset(t *testing.T) {
 				},
 			}
 
-			gotExist, _, err := r.ensureDaemonSet(context.TODO(), nodeObs, sa, test.OperatorNamespace)
+			_, err := r.ensureDaemonSet(context.TODO(), nodeObs, sa, r.Namespace)
 			if err != nil {
-				if !tc.errExpected {
-					t.Fatalf("unexpected error received: %v", err)
-				}
-				return
+				t.Fatalf("unexpected error received: %v", err)
 			}
 
-			if tc.errExpected {
-				t.Fatalf("Error expected but wasn't received")
+			ds := &appsv1.DaemonSet{}
+			err = r.Client.Get(context.Background(), types.NamespacedName{Namespace: test.TestNamespace, Name: daemonSetName}, ds)
+			if err != nil {
+				t.Fatalf("failed to get daemonset: %v", err)
 			}
-			if gotExist != tc.expectedExist {
-				t.Errorf("expected service account's exist to be %t, got %t", tc.expectedExist, gotExist)
+			if diff := cmp.Diff(ds, tc.expectedDS); diff != "" {
+				t.Errorf("resource mismatch:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestUpdateDaemonSet(t *testing.T) {
+
+	for _, tc := range []struct {
+		name              string
+		existingDaemonset *appsv1.DaemonSet
+		desiredDaemonset  *appsv1.DaemonSet
+		expectedDaemonset *appsv1.DaemonSet
+		expectUpdate      bool
+	}{
+		{
+			name: "image changed",
+			existingDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(testContainer("agent", "agent:v1").
+					build(),
+				).build(),
+			desiredDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(testContainer("agent", "agent:v2").
+					build(),
+				).build(),
+			expectedDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(testContainer("agent", "agent:v2").
+					build(),
+				).build(),
+			expectUpdate: true,
+		},
+		{
+			name: "container args changed",
+			existingDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(testContainer("agent", "agent:v1").
+					withArgs([]string{"--arg1=1"}...).
+					build(),
+				).build(),
+			desiredDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(testContainer("agent", "agent:v2").
+					withArgs([]string{"--arg=value"}...).
+					build(),
+				).build(),
+			expectedDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(testContainer("agent", "agent:v2").
+					withArgs([]string{"--arg=value"}...).
+					build(),
+				).build(),
+			expectUpdate: true,
+		},
+		{
+			name: "container injected into daemonset",
+			existingDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(
+					testContainer("agent", "agent:v1").
+						withArgs([]string{"--arg1=1"}...).
+						build(),
+					testContainer("random-container", "agent:v1").
+						withArgs([]string{"--arg1=1"}...).
+						build(),
+				).build(),
+			desiredDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(
+					testContainer("agent", "agent:v1").
+						withArgs([]string{"--arg1=1"}...).
+						build(),
+				).build(),
+			expectedDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(
+					testContainer("agent", "agent:v1").
+						withArgs([]string{"--arg1=1"}...).
+						build(),
+				).build(),
+			expectUpdate: true,
+		},
+		{
+			name: "container env modified",
+			existingDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(testContainer("agent", "agent:v1").
+					withEnvs([]corev1.EnvVar{{Name: "env2", Value: "ENV1"}}...).
+					withEnvs([]corev1.EnvVar{{Name: "env1", Value: "Modified"}}...).
+					build(),
+				).build(),
+			desiredDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(testContainer("agent", "agent:v2").
+					withEnvs([]corev1.EnvVar{{Name: "env1", Value: "ENV1"}}...).
+					build(),
+				).build(),
+			expectedDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(testContainer("agent", "agent:v2").
+					withEnvs([]corev1.EnvVar{{Name: "env1", Value: "ENV1"}}...).
+					build(),
+				).build(),
+			expectUpdate: true,
+		},
+		{
+			name: "container volume mount modified",
+			existingDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(testContainer("agent", "agent:v1").
+					withVolumeMounts([]corev1.VolumeMount{{Name: "vol", MountPath: "/root"}}...).
+					withVolumeMounts([]corev1.VolumeMount{{Name: "random-volume"}}...).
+					build(),
+				).build(),
+			desiredDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(testContainer("agent", "agent:v2").
+					withVolumeMounts([]corev1.VolumeMount{{Name: "vol", MountPath: "/tmp"}}...).
+					build(),
+				).build(),
+			expectedDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(testContainer("agent", "agent:v2").
+					withVolumeMounts([]corev1.VolumeMount{{Name: "vol", MountPath: "/tmp"}}...).
+					build(),
+				).build(),
+			expectUpdate: true,
+		},
+		{
+			name: "daemonset volumes modified",
+			existingDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(
+					testContainer("agent", "agent:v1").build()).
+				withVolumes([]corev1.Volume{
+					{
+						Name: "volume",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{
+								SecretName: "random-secret",
+							},
+						},
+					},
+					{
+						Name: "random-volume",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{
+								SecretName: "random-secret",
+							},
+						},
+					},
+				}...).
+				build(),
+			desiredDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(
+					testContainer("agent", "agent:v1").build()).
+				withVolumes([]corev1.Volume{
+					{
+						Name: "volume",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{
+								SecretName: "secret",
+							},
+						},
+					},
+				}...).
+				build(),
+			expectedDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(
+					testContainer("agent", "agent:v1").build()).
+				withVolumes([]corev1.Volume{
+					{
+						Name: "volume",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{
+								SecretName: "secret",
+							},
+						},
+					},
+				}...).
+				build(),
+			expectUpdate: true,
+		},
+		{
+			name: "security context is modified",
+			existingDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(testContainer("agent", "agent:v1").
+					withSecurityContext(corev1.SecurityContext{Privileged: pointer.Bool(false)}).
+					build(),
+				).build(),
+			desiredDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(testContainer("agent", "agent:v2").
+					withSecurityContext(corev1.SecurityContext{Privileged: pointer.Bool(true)}).
+					build(),
+				).build(),
+			expectedDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(testContainer("agent", "agent:v2").
+					withSecurityContext(corev1.SecurityContext{Privileged: pointer.Bool(true)}).
+					build(),
+				).build(),
+			expectUpdate: true,
+		},
+		{
+			name: "daemonset is the same",
+			existingDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(
+					testContainer("agent", "agent:v1").
+						withArgs([]string{"--arg1=1"}...).
+						build(),
+				).build(),
+			desiredDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(
+					testContainer("agent", "agent:v1").
+						withArgs([]string{"--arg1=1"}...).
+						build(),
+				).build(),
+			expectedDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(
+					testContainer("agent", "agent:v1").
+						withArgs([]string{"--arg1=1"}...).
+						build(),
+				).build(),
+			expectUpdate: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cl := fake.NewClientBuilder().WithObjects(tc.existingDaemonset).Build()
+			r := &NodeObservabilityReconciler{
+				Client:            cl,
+				ClusterWideClient: cl,
+				Scheme:            test.Scheme,
+				Namespace:         test.TestNamespace,
+				Log:               zap.New(zap.UseDevMode(true)),
+				AgentImage:        "node-observability-agent:latest",
+			}
+			updated, err := r.updateDaemonset(context.Background(), tc.existingDaemonset, tc.desiredDaemonset)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tc.expectUpdate != updated {
+				t.Errorf("expected update to be %t, instead was %t", tc.expectUpdate, updated)
+			}
+			currentDaemonset := &appsv1.DaemonSet{}
+			err = r.Client.Get(context.Background(),
+				types.NamespacedName{
+					Namespace: tc.expectedDaemonset.Namespace,
+					Name:      tc.expectedDaemonset.Name},
+				currentDaemonset)
+			if err != nil {
+				t.Fatalf("failed to get existing daemonset: %v", err)
+			}
+
+			if diff := cmp.Diff(currentDaemonset.Spec, tc.expectedDaemonset.Spec); diff != "" {
+				t.Fatalf("daemonset spec mismatch:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestHasSecurityContextChanged(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		currentSC *corev1.SecurityContext
+		desiredSC *corev1.SecurityContext
+		changed   bool
+	}{
+		{
+			name:      "current RunAsNonRoot is nil",
+			currentSC: &corev1.SecurityContext{},
+			desiredSC: &corev1.SecurityContext{RunAsNonRoot: pointer.BoolPtr(false)},
+			changed:   true,
+		},
+		{
+			// should be ignored to handle defaulting
+			name:      "desired RunAsNonRoot is nil",
+			currentSC: &corev1.SecurityContext{RunAsNonRoot: pointer.BoolPtr(false)},
+			desiredSC: &corev1.SecurityContext{},
+			changed:   false,
+		},
+		{
+			name:      "RunAsNonRoot changes true->false",
+			currentSC: &corev1.SecurityContext{RunAsNonRoot: pointer.BoolPtr(true)},
+			desiredSC: &corev1.SecurityContext{RunAsNonRoot: pointer.BoolPtr(false)},
+			changed:   true,
+		},
+		{
+			name:      "RunAsNonRoot changes false->true",
+			currentSC: &corev1.SecurityContext{RunAsNonRoot: pointer.BoolPtr(true)},
+			desiredSC: &corev1.SecurityContext{RunAsNonRoot: pointer.BoolPtr(false)},
+			changed:   true,
+		},
+		{
+			name:      "RunAsNonRoot changes is same",
+			currentSC: &corev1.SecurityContext{RunAsNonRoot: pointer.BoolPtr(true)},
+			desiredSC: &corev1.SecurityContext{RunAsNonRoot: pointer.BoolPtr(true)},
+			changed:   false,
+		},
+		{
+			name:      "current Privileged is nil",
+			currentSC: &corev1.SecurityContext{},
+			desiredSC: &corev1.SecurityContext{Privileged: pointer.BoolPtr(false)},
+			changed:   true,
+		},
+		{
+			// should be ignored to handle defaulting
+			name:      "desired Privileged is nil",
+			desiredSC: &corev1.SecurityContext{},
+			currentSC: &corev1.SecurityContext{Privileged: pointer.BoolPtr(false)},
+			changed:   false,
+		},
+		{
+			name:      "Privileged changes true->false",
+			currentSC: &corev1.SecurityContext{Privileged: pointer.BoolPtr(true)},
+			desiredSC: &corev1.SecurityContext{Privileged: pointer.BoolPtr(false)},
+			changed:   true,
+		},
+		{
+			name:      "Privileged changes false->true",
+			currentSC: &corev1.SecurityContext{Privileged: pointer.BoolPtr(true)},
+			desiredSC: &corev1.SecurityContext{Privileged: pointer.BoolPtr(false)},
+			changed:   true,
+		},
+		{
+			name:      "Privileged is same",
+			currentSC: &corev1.SecurityContext{Privileged: pointer.BoolPtr(true)},
+			desiredSC: &corev1.SecurityContext{Privileged: pointer.BoolPtr(true)},
+			changed:   false,
+		},
+		{
+			name:      "current AllowPrivilegeEscalation is nil",
+			currentSC: &corev1.SecurityContext{},
+			desiredSC: &corev1.SecurityContext{AllowPrivilegeEscalation: pointer.BoolPtr(false)},
+			changed:   true,
+		},
+		{
+			// should be ignored to handle defaulting
+			name:      "desired AllowPrivilegeEscalation is nil",
+			desiredSC: &corev1.SecurityContext{},
+			currentSC: &corev1.SecurityContext{AllowPrivilegeEscalation: pointer.BoolPtr(false)},
+			changed:   false,
+		},
+		{
+			name:      "AllowPrivilegeEscalation changes true->false",
+			currentSC: &corev1.SecurityContext{AllowPrivilegeEscalation: pointer.BoolPtr(true)},
+			desiredSC: &corev1.SecurityContext{AllowPrivilegeEscalation: pointer.BoolPtr(false)},
+			changed:   true,
+		},
+		{
+			name:      "AllowPrivilegeEscalation changes false->true",
+			currentSC: &corev1.SecurityContext{AllowPrivilegeEscalation: pointer.BoolPtr(true)},
+			desiredSC: &corev1.SecurityContext{AllowPrivilegeEscalation: pointer.BoolPtr(false)},
+			changed:   true,
+		},
+		{
+			name:      "AllowPrivilegeEscalation is same",
+			currentSC: &corev1.SecurityContext{AllowPrivilegeEscalation: pointer.BoolPtr(true)},
+			desiredSC: &corev1.SecurityContext{AllowPrivilegeEscalation: pointer.BoolPtr(true)},
+			changed:   false,
+		},
+		{
+			name:      "Add Capabilities are the same",
+			currentSC: &corev1.SecurityContext{Capabilities: &corev1.Capabilities{Add: []corev1.Capability{"A", "B", "C"}}},
+			desiredSC: &corev1.SecurityContext{Capabilities: &corev1.Capabilities{Add: []corev1.Capability{"C", "B", "A"}}},
+			changed:   false,
+		},
+		{
+			name:      "Add Capabilities are the different",
+			currentSC: &corev1.SecurityContext{Capabilities: &corev1.Capabilities{Add: []corev1.Capability{"A", "B", "C"}}},
+			desiredSC: &corev1.SecurityContext{Capabilities: &corev1.Capabilities{Add: []corev1.Capability{"C", "B", "C"}}},
+			changed:   true,
+		},
+		{
+			name:      "current Capabilities are nil",
+			currentSC: &corev1.SecurityContext{},
+			desiredSC: &corev1.SecurityContext{Capabilities: &corev1.Capabilities{Add: []corev1.Capability{"A", "B", "C"}}},
+			changed:   true,
+		},
+		{
+			// ignore the desired because the capabilities might be defaulting or set by something else.
+			name:      "desired Capabilities are nil",
+			desiredSC: &corev1.SecurityContext{},
+			currentSC: &corev1.SecurityContext{Capabilities: &corev1.Capabilities{Add: []corev1.Capability{"A", "B", "C"}}},
+			changed:   false,
+		},
+		{
+			name:      "current Add Capabilities are nil",
+			currentSC: &corev1.SecurityContext{Capabilities: &corev1.Capabilities{}},
+			desiredSC: &corev1.SecurityContext{Capabilities: &corev1.Capabilities{Add: []corev1.Capability{"A", "B", "C"}}},
+			changed:   true,
+		},
+		{
+			name:      "desired Add Capabilities are nil",
+			desiredSC: &corev1.SecurityContext{Capabilities: &corev1.Capabilities{}},
+			currentSC: &corev1.SecurityContext{Capabilities: &corev1.Capabilities{Add: []corev1.Capability{"A", "B", "C"}}},
+			changed:   true,
+		},
+		{
+			name:      "Drop Capabilities are the same",
+			currentSC: &corev1.SecurityContext{Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"A", "B", "C"}}},
+			desiredSC: &corev1.SecurityContext{Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"C", "B", "A"}}},
+			changed:   false,
+		},
+		{
+			name:      "Drop Capabilities are the different",
+			currentSC: &corev1.SecurityContext{Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"A", "B", "C"}}},
+			desiredSC: &corev1.SecurityContext{Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"C", "B", "C"}}},
+			changed:   true,
+		},
+		{
+			name:      "current Drop Capabilities are nil",
+			currentSC: &corev1.SecurityContext{Capabilities: &corev1.Capabilities{}},
+			desiredSC: &corev1.SecurityContext{Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"A", "B", "C"}}},
+			changed:   true,
+		},
+		{
+			name:      "desired Drop Capabilities are nil",
+			desiredSC: &corev1.SecurityContext{Capabilities: &corev1.Capabilities{}},
+			currentSC: &corev1.SecurityContext{Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"A", "B", "C"}}},
+			changed:   true,
+		},
+		{
+			name:      "current SeccompProfile is nil",
+			currentSC: &corev1.SecurityContext{},
+			desiredSC: &corev1.SecurityContext{SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeLocalhost}},
+			changed:   true,
+		},
+		{
+			// ignore the desired seccompprofile if it is being defaulted elsewhere
+			name:      "desired SeccompProfile is nil",
+			desiredSC: &corev1.SecurityContext{},
+			currentSC: &corev1.SecurityContext{SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeLocalhost}},
+			changed:   false,
+		},
+		{
+			name:      "SeccompProfile is different",
+			currentSC: &corev1.SecurityContext{SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
+			desiredSC: &corev1.SecurityContext{SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeLocalhost}},
+			changed:   true,
+		},
+		{
+			name:      "SeccompProfile is same",
+			currentSC: &corev1.SecurityContext{SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
+			desiredSC: &corev1.SecurityContext{SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
+			changed:   false,
+		},
+		{
+			name:      "SeccompProfile is empty",
+			currentSC: &corev1.SecurityContext{SeccompProfile: &corev1.SeccompProfile{}},
+			desiredSC: &corev1.SecurityContext{SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
+			changed:   true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			changed := hasSecurityContextChanged(tc.currentSC, tc.desiredSC)
+			if changed != tc.changed {
+				t.Errorf("expected %v, instead was %v", tc.changed, changed)
 			}
 		})
 	}
