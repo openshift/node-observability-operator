@@ -34,7 +34,9 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -113,6 +115,17 @@ func main() {
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "94c735b6.olm.openshift.io",
 		Namespace:              operatorNamespace,
+		// Use a non-caching client everywhere. The default split client does not
+		// promise to invalidate the cache during writes (nor does it promise
+		// sequential create/get coherence), and we have code which (probably
+		// incorrectly) assumes a get immediately following a create/update will
+		// return the updated resource. All client consumers will need audited to
+		// ensure they are tolerant of stale data (or we need a cache or client that
+		// makes stronger coherence guarantees).
+		// https://pkg.go.dev/sigs.k8s.io/controller-runtime#hdr-Clients_and_Caches
+		NewClient: func(_ cache.Cache, config *rest.Config, options client.Options, _ ...client.Object) (client.Client, error) {
+			return client.New(config, options)
+		},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

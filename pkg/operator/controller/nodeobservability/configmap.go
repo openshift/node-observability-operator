@@ -9,6 +9,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
 	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
@@ -40,18 +42,14 @@ func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeO
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      configMapName.Name,
 			Namespace: configMapName.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					Name:       nodeObs.Name,
-					Kind:       nodeObs.Kind,
-					UID:        nodeObs.UID,
-					APIVersion: nodeObs.APIVersion,
-				},
-			},
 		},
 		Data: map[string]string{
 			kbltCAMountedFile: kbltCACM.Data[kbltCAMountedFile],
 		},
+	}
+
+	if err := controllerutil.SetControllerReference(nodeObs, configMap, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set the controller reference for configmap %s/%s: %w", configMap.Namespace, configMap.Name, err)
 	}
 
 	if err := r.Get(ctx, configMapName, &corev1.ConfigMap{}); err == nil {
