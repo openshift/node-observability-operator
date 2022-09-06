@@ -37,11 +37,11 @@ spec:
           spec:
             description: NodeObservabilitySpec defines the desired state of NodeObservability
             properties:
-              labels:
+              nodeSelector:
                 additionalProperties:
                   type: string
-                description: Labels is map of key:value pairs that are used to match
-                  against node labels
+                description: NodeSelector is map of key:value pairs that are used
+                  to match against node labels to be observed
                 type: object
               type:
                 description: 'Type defines the type of profiling queries, which will
@@ -51,6 +51,7 @@ spec:
                 - crio-kubelet
                 type: string
             required:
+            - nodeSelector
             - type
             type: object
           status:

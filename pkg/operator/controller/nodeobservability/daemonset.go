@@ -195,7 +195,7 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 							},
 						},
 					},
-					NodeSelector: nodeObs.Spec.Labels,
+					NodeSelector: nodeObs.Spec.NodeSelector,
 				},
 			},
 		},

@@ -90,7 +90,7 @@ func (r *MachineConfigReconciler) ensureReqNodeLabelExists(ctx context.Context) 
 
 	updNodeCount := 0
 	nodeList := &corev1.NodeList{}
-	if err := r.listWorkerNodes(ctx, nodeList); err != nil {
+	if err := r.listNodes(ctx, nodeList, r.CtrlConfig.Spec.NodeSelector); err != nil {
 		return updNodeCount, err
 	}
 
@@ -244,19 +244,6 @@ func (r *MachineConfigReconciler) revertNodeUnlabeling(ctx context.Context) erro
 		r.Log.V(1).Info("Successfully reverted label delete", "Node", name, "Label", label.key)
 
 		delete(r.Node.PrevReconcileUpd, name)
-	}
-
-	return nil
-}
-
-// listWorkerNodes returns the list of nodes having worker role label
-func (r *MachineConfigReconciler) listWorkerNodes(ctx context.Context, nodeList *corev1.NodeList) error {
-	workerNodeLabel := map[string]string{
-		WorkerNodeRoleLabelName: Empty,
-	}
-
-	if err := r.listNodes(ctx, nodeList, workerNodeLabel); err != nil {
-		return fmt.Errorf("failed to get the list of nodes with worker role: %w", err)
 	}
 
 	return nil
