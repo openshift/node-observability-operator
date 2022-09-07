@@ -77,7 +77,7 @@ make index-image-build index-image-push
    ```
 3. Create a CatalogSource object:
 ```sh
-cat <<EOF | oc apply -f - 
+cat <<EOF | oc apply -f -
 apiVersion: operators.coreos.com/v1alpha1
 kind: CatalogSource
 metadata:
@@ -105,7 +105,7 @@ kind: NodeObservability
 metadata:
   name: cluster
 spec:
-  labels:
+  nodeSelector:
     "node-role.kubernetes.io/worker": ""
   type: crio-kubelet
 ```
@@ -116,8 +116,8 @@ thus allowing the agent to communicate with CRIO to run the pprof request.
 The `kubelet-serving-ca` certificate chain is also mounted on the agent pod,
 which allows secure communication between agent and node's kubelet endpoint.
 
-__Important__: The `NodeObservability` custom resource (CR) is unique cluster-wide. 
-The operator expects the CR's name to be `cluster`, and ignores `NodeObservability` 
+__Important__: The `NodeObservability` custom resource (CR) is unique cluster-wide.
+The operator expects the CR's name to be `cluster`, and ignores `NodeObservability`
 resources created with a different name.
 
 `NodeObservability` resources created with a different name will be ignored
@@ -128,7 +128,7 @@ kind: NodeObservability
 metadata:
   name: anything-but-cluster
 spec:
-  labels:
+  nodeSelector:
     "node-role.kubernetes.io/worker": ""
   type: crio-kubelet
 status:
@@ -262,5 +262,5 @@ and has annotation `service.beta.openshift.io/serving-cert-secret-name=node-obse
 Check if Secret `node-observability-agent` exists and has tls key and certificate.
 
 Mount crio socket - Agent pods mount crio.sock via HostPath mount.
-The pods run as privileged to achieve that. A cluster-wide policy, 
+The pods run as privileged to achieve that. A cluster-wide policy,
 preventing privileged pods in the cluster, could exist.
