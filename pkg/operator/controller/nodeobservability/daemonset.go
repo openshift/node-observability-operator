@@ -86,7 +86,7 @@ func (r *NodeObservabilityReconciler) createDaemonSet(ctx context.Context, ds *a
 	if err := r.Create(ctx, ds); err != nil {
 		return fmt.Errorf("failed to create daemonset %s/%s: %w", ds.Namespace, ds.Name, err)
 	}
-	r.Log.Info("created daemonset", "namespace", ds.Namespace, "name", ds.Name)
+	r.Log.V(1).Info("created daemonset", "ds.namespace", ds.Namespace, "ds.name", ds.Name)
 	return nil
 }
 

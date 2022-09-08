@@ -10,7 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
@@ -39,7 +38,7 @@ func (r *NodeObservabilityReconciler) ensureServiceAccount(ctx context.Context, 
 		if err := r.createServiceAccount(ctx, desired); err != nil {
 			return nil, err
 		}
-		log.FromContext(ctx).Info("successfully created serviceaccount", "name", nameSpace.Name, "namespace", nameSpace.Namespace)
+		r.Log.V(1).Info("successfully created serviceaccount", "sa.name", nameSpace.Name, "sa.namespace", nameSpace.Namespace)
 		return r.currentServiceAccount(ctx, nameSpace)
 	}
 
@@ -60,7 +59,7 @@ func (r *NodeObservabilityReconciler) createServiceAccount(ctx context.Context, 
 	if err := r.Create(ctx, sa); err != nil {
 		return fmt.Errorf("failed to create serviceaccount %s/%s: %w", sa.Namespace, sa.Name, err)
 	}
-	r.Log.Info("created serviceaccount", "serviceaccount.Namespace", sa.Namespace, "serviceaccount.Name", sa.Name)
+	r.Log.Info("created serviceaccount", "sa.Namespace", sa.Namespace, "sa.Name", sa.Name)
 	return nil
 }
 

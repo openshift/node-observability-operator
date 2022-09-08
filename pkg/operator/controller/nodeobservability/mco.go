@@ -78,7 +78,7 @@ func (r *NodeObservabilityReconciler) createNOMC(ctx context.Context, instance *
 	if err := r.Create(ctx, instance); err != nil {
 		return fmt.Errorf("failed to create nomc %s/%s: %w", instance.Namespace, instance.Name, err)
 	}
-	r.Log.Info("created nomc", "namespace", instance.Namespace, "name", instance.Name)
+	r.Log.V(1).Info("created nomc", "nomc.namespace", instance.Namespace, "nomc.name", instance.Name)
 	return nil
 }
 
@@ -125,6 +125,6 @@ func (r *NodeObservabilityReconciler) deleteNOMC(ctx context.Context, nodeObs *v
 		}
 		return fmt.Errorf("failed to delete nomc %s/%s: %w", mc.Namespace, mc.Name, err)
 	}
-	r.Log.Info("deleted nomc", "name", mc.Name)
+	r.Log.V(1).Info("deleted nomc", "nomc.name", mc.Name)
 	return nil
 }

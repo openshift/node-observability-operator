@@ -15,7 +15,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
@@ -52,7 +51,7 @@ func (r *NodeObservabilityReconciler) ensureService(ctx context.Context, nodeObs
 		if err := r.createService(ctx, desired); err != nil {
 			return nil, err
 		}
-		log.FromContext(ctx).Info("successfully created service", "name", nameSpace.Name, "namespace", nameSpace.Namespace)
+		r.Log.V(1).Info("successfully created service", "svc.name", nameSpace.Name, "svc.namespace", nameSpace.Namespace)
 		return r.currentService(ctx, nameSpace)
 	}
 
@@ -74,7 +73,7 @@ func (r *NodeObservabilityReconciler) createService(ctx context.Context, svc *co
 	if err := r.Create(ctx, svc); err != nil {
 		return fmt.Errorf("failed to create service %s/%s: %w", svc.Namespace, svc.Name, err)
 	}
-	r.Log.Info("created service", "service.Namespace", svc.Namespace, "service.Name", svc.Name)
+	r.Log.V(1).Info("created service", "svc.Namespace", svc.Namespace, "svc.Name", svc.Name)
 	return nil
 }
 

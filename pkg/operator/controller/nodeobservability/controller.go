@@ -158,28 +158,28 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	} else if !haveSCC {
 		return ctrl.Result{}, fmt.Errorf("failed to get securitycontextconstraints")
 	}
-	r.Log.V(1).Info("SecurityContextConstraints ensured", "name", scc.Name)
+	r.Log.V(1).Info("securitycontextconstraint ensured", "scc.name", scc.Name)
 
 	// ensure serviceaccount
 	sa, err := r.ensureServiceAccount(ctx, nodeObs, r.Namespace)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure serviceaccount : %w", err)
 	}
-	r.Log.V(1).Info("serviceaccount ensured", "namespace", sa.Namespace, "name", sa.Name)
+	r.Log.V(1).Info("serviceaccount ensured", "sa.namespace", sa.Namespace, "sa.name", sa.Name)
 
 	// ensure service
 	svc, err := r.ensureService(ctx, nodeObs, r.Namespace)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure service : %w", err)
 	}
-	r.Log.V(1).Info("service ensured", "namespace", svc.Namespace, "name", svc.Name)
+	r.Log.V(1).Info("service ensured", "svc.namespace", svc.Namespace, "svc.name", svc.Name)
 
 	// check clusterrole
 	_, cr, err := r.ensureClusterRole(ctx, nodeObs)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure clusterrole : %w", err)
 	}
-	r.Log.V(1).Info("clusterrole ensured", "name", cr.Name)
+	r.Log.V(1).Info("clusterrole ensured", "clusterrole.name", cr.Name)
 
 	// check clusterolebinding with serviceaccount
 	haveCRB, crb, err := r.ensureClusterRoleBinding(ctx, nodeObs, sa.Name, r.Namespace)
@@ -188,14 +188,14 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	} else if !haveCRB {
 		return ctrl.Result{}, fmt.Errorf("failed to get clusterrolebinding")
 	}
-	r.Log.V(1).Info("ClusterRoleBinding ensured", "Name", crb.Name)
+	r.Log.V(1).Info("clusterrolebinding ensured", "clusterrolebinding.name", crb.Name)
 
 	// check daemonset
 	ds, err := r.ensureDaemonSet(ctx, nodeObs, sa, r.Namespace)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure daemonset : %w", err)
 	}
-	r.Log.V(1).Info("daemonset ensured", "namespace", ds.Namespace, "name", ds.Name)
+	r.Log.V(1).Info("daemonset ensured", "ds.namespace", ds.Namespace, "ds.name", ds.Name)
 
 	dsReady := ds.Status.NumberReady == ds.Status.DesiredNumberScheduled
 
@@ -206,7 +206,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to ensure nodeobservabilitymachineconfig : %w", err)
 		}
-		r.Log.V(1).Info("nodeobservabilitymachineconfig ensured", "name", nomc.Name)
+		r.Log.V(1).Info("nodeobservabilitymachineconfig ensured", "nomc.name", nomc.Name)
 		nomcReady = nomc.Status.IsReady()
 	}
 
