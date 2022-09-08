@@ -542,7 +542,7 @@ func TestEnsureDaemonset(t *testing.T) {
 			nodeObs := &operatorv1alpha1.NodeObservability{
 				ObjectMeta: metav1.ObjectMeta{Name: nodeObsInstanceName},
 				Spec: operatorv1alpha1.NodeObservabilitySpec{
-					Labels: map[string]string{
+					NodeSelector: map[string]string{
 						"node-role.kubernetes.io/worker": "",
 					},
 				},
