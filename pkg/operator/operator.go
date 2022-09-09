@@ -18,7 +18,6 @@ package operator
 
 import (
 	"context"
-	"crypto/x509"
 	"fmt"
 	"os"
 
@@ -38,6 +37,7 @@ import (
 	machineconfigcontroller "github.com/openshift/node-observability-operator/pkg/operator/controller/machineconfig"
 	nodeobservabilitycontroller "github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservability"
 	nodeobservabilityrun "github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservabilityrun"
+	"github.com/openshift/node-observability-operator/pkg/utils"
 )
 
 // Operator hold the manager resource.
@@ -52,7 +52,7 @@ func New(cliCfg *rest.Config, opCfg *operatorconfig.Config) (*Operator, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read serviceaccount token: %w", err)
 	}
-	ca, err := readCACert(opCfg.CaCertFile)
+	ca, err := utils.ReadCACert(opCfg.CaCertFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read CA cert: %w", err)
 	}
@@ -138,7 +138,6 @@ func New(cliCfg *rest.Config, opCfg *operatorconfig.Config) (*Operator, error) {
 		Scheme:    mgr.GetScheme(),
 		Log:       ctrl.Log.WithName("controller.nodeobservabilityrun"),
 		Namespace: opCfg.OperatorNamespace,
-		AgentName: opctrl.AgentName,
 		AuthToken: token,
 		CACert:    ca,
 	}).SetupWithManager(mgr); err != nil {
@@ -169,19 +168,4 @@ func New(cliCfg *rest.Config, opCfg *operatorconfig.Config) (*Operator, error) {
 // Start starts the operator synchronously until a message is received from ctx.
 func (o *Operator) Start(ctx context.Context) error {
 	return o.manager.Start(ctx)
-}
-func readCACert(caCertFile string) (*x509.CertPool, error) {
-	content, err := os.ReadFile(caCertFile)
-	if err != nil {
-		return nil, err
-	}
-	if len(content) <= 0 {
-		return nil, fmt.Errorf("%s is empty", caCertFile)
-	}
-	caCertPool := x509.NewCertPool()
-	if !caCertPool.AppendCertsFromPEM(content) {
-		return nil, fmt.Errorf("unable to add certificates into caCertPool: %w", err)
-
-	}
-	return caCertPool, nil
 }

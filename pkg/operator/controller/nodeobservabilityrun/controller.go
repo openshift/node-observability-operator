@@ -22,7 +22,11 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -40,28 +44,24 @@ import (
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	nodeobservabilityv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
+	opctrl "github.com/openshift/node-observability-operator/pkg/operator/controller"
 )
 
 const (
-	pollingPeriod    = time.Second * 5
-	authHeader       = "Authorization"
-	ProfilingMCPName = "nodeobservability"
-	pprofPath        = "node-observability-pprof"
-	pprofStatus      = "node-observability-status"
-)
-
-var (
-	transport = http.DefaultTransport
+	pollingPeriod         = time.Second * 5
+	httpRequestTimeout    = time.Second * 10
+	authHeader            = "Authorization"
+	pprofPath             = "node-observability-pprof"
+	pprofStatus           = "node-observability-status"
+	nodeObservabilityKind = "NodeObservability"
 )
 
 // NodeObservabilityRunReconciler reconciles a NodeObservabilityRun object
 type NodeObservabilityRunReconciler struct {
 	client.Client
-	Log logr.Logger
-	URL
+	Log       logr.Logger
 	Scheme    *runtime.Scheme
 	Namespace string
-	AgentName string
 	AuthToken []byte
 	CACert    *x509.CertPool
 }
@@ -80,22 +80,28 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 	r.Log.V(1).Info("reconciliation started")
 
 	instance := &nodeobservabilityv1alpha2.NodeObservabilityRun{}
-	err = r.Get(ctx, req.NamespacedName, instance)
-	if err != nil {
+	if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
 		if errors.IsNotFound(err) {
-			err = nil
-			return
+			r.Log.V(1).Info("nodeobservabilityrun resource not found, ignoring since object must be deleted")
+			return ctrl.Result{}, nil
 		}
-		err = fmt.Errorf("failed to get nodeobservabilityrun: %w", err)
-		return
+		return ctrl.Result{}, fmt.Errorf("failed to get nodeobservabilityrun: %w", err)
 	}
 
-	if finished(instance) {
-		r.Log.V(1).Info("Run for this instance has been completed already")
-		return
+	if runFinished(instance) {
+		r.Log.V(1).Info("run for this instance has been completed already")
+		return ctrl.Result{}, nil
+	}
+
+	if updated, err := r.adoptResource(ctx, instance); err != nil {
+		return ctrl.Result{}, fmt.Errorf("error while setting owner reference NodeObservabilityRun->NodeObservability: %w", err)
+	} else if updated {
+		r.Log.V(1).Info("instance has just been adopted by nodeobservability", "nob.name", instance.Spec.NodeObservabilityRef.Name)
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	defer func() {
+		// using named return values to handle status update in deferred function
 		errUpdate := r.updateStatus(ctx, instance)
 		if errUpdate != nil {
 			errUpdate = fmt.Errorf("failed to update status: %w", errUpdate)
@@ -103,67 +109,51 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 		}
 	}()
 
-	var isAdopted bool
-	if isAdopted, err = r.adoptResource(ctx, instance); !isAdopted {
-		if err != nil {
-			err = fmt.Errorf("error while setting owner reference nodeobservabilityrun->nodeobservability: %w", err)
-			return
-		}
-		res = ctrl.Result{Requeue: true}
-		return
+	if canProceed, err := r.preconditionsMet(ctx, instance); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to check the preconditions: %w", err)
+	} else if !canProceed {
+		r.Log.V(1).Info("waiting for nodeobservability to become ready", "nob.name", instance.Spec.NodeObservabilityRef.Name)
+		instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugReady, metav1.ConditionFalse, nodeobservabilityv1alpha2.ReasonInProgress, fmt.Sprintf("Waiting for NodeObservability %s to become ready", instance.Spec.NodeObservabilityRef.Name))
+		return ctrl.Result{RequeueAfter: pollingPeriod}, nil
 	}
 
-	var canProceed bool
-	var msg string
-	if canProceed, err = r.preconditionsMet(ctx, instance); !canProceed {
-		if err != nil {
-			err = fmt.Errorf("preconditions not met: %w", err)
-			return
-		}
-		msg = fmt.Sprintf("Waiting for nodeobservability %s to become ready", instance.Spec.NodeObservabilityRef.Name)
-		instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugReady, metav1.ConditionFalse, nodeobservabilityv1alpha2.ReasonInProgress, msg)
-		return ctrl.Result{RequeueAfter: pollingPeriod}, err
-	}
-	msg = "Ready to start profiling"
-	instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugReady, metav1.ConditionTrue, nodeobservabilityv1alpha2.ReasonReady, msg)
+	instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugReady, metav1.ConditionTrue, nodeobservabilityv1alpha2.ReasonReady, "Ready to start profiling")
 
-	if inProgress(instance) {
-		r.Log.V(1).Info("Run is in progress")
+	if runInProgress(instance) {
+		r.Log.V(1).Info("run is in progress")
 		var requeue bool
-		requeue, err = r.handleInProgress(instance)
-		if requeue {
-			msg = "Profiling query in progress"
-			instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha2.ReasonInProgress, msg)
+		if requeue, err = r.handleInProgress(instance); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to poll agents: %w", err)
+		} else if requeue {
+			instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha2.ReasonInProgress, "Profiling query in progress")
 			return ctrl.Result{RequeueAfter: pollingPeriod}, err
 		}
+		r.Log.V(1).Info("profiling query is done")
 		t := metav1.Now()
 		instance.Status.FinishedTimestamp = &t
-		msg = "Profiling query done"
-		instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugFinished, metav1.ConditionTrue, nodeobservabilityv1alpha2.ReasonFinished, msg)
-		return
+		instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugFinished, metav1.ConditionTrue, nodeobservabilityv1alpha2.ReasonFinished, "Profiling query done")
+		return ctrl.Result{}, nil
 	}
 
-	err = r.startRun(ctx, instance)
-	if err != nil {
-		msg = fmt.Sprintf("Failed to initiate profiling query: %s", err.Error())
-		instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha2.ReasonFailed, msg)
-		return ctrl.Result{}, err
+	r.Log.V(1).Info("ready to initiate profiling query")
+	if err := r.startRun(ctx, instance); err != nil {
+		instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha2.ReasonFailed, fmt.Sprintf("Failed to initiate profiling query: %s", err))
+		return ctrl.Result{}, fmt.Errorf("failed to initiate profiling query: %w", err)
 	}
 
-	msg = "Profiling query initiated"
-	instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha2.ReasonInProgress, msg)
+	r.Log.V(1).Info("profiling query initiated")
+	instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha2.ReasonInProgress, "Profiling query initiated")
 
 	// one cycle takes cca 30s
-	return ctrl.Result{RequeueAfter: time.Second * 30}, err
+	return ctrl.Result{RequeueAfter: time.Second * 30}, nil
 }
 
-// adoptResource sets OwnerReference to point to NodeObservability from .spec.ref.name
-// returns true if already adopted, false otherwise
+// adoptResource sets OwnerReference to point to NodeObservability from .spec.nodeobservabilityref.name.
+// returns true if it was adopted by this function, false otherwise.
 func (r *NodeObservabilityRunReconciler) adoptResource(ctx context.Context, instance *nodeobservabilityv1alpha2.NodeObservabilityRun) (bool, error) {
 	for _, ref := range instance.OwnerReferences {
-		// FIXME: check kind as well?
-		if ref.Name == instance.Spec.NodeObservabilityRef.Name {
-			return true, nil
+		if ref.Kind == nodeObservabilityKind && ref.Name == instance.Spec.NodeObservabilityRef.Name {
+			return false, nil
 		}
 	}
 	nodeObs := &nodeobservabilityv1alpha2.NodeObservability{}
@@ -171,23 +161,24 @@ func (r *NodeObservabilityRunReconciler) adoptResource(ctx context.Context, inst
 		return false, err
 	}
 	cpy := instance.DeepCopy()
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		_, corErr := ctrlutil.CreateOrUpdate(ctx, r.Client, cpy, func() error {
 			return ctrlutil.SetOwnerReference(nodeObs, cpy, r.Scheme)
 		})
 		return corErr
-	})
-	return false, err
+	}); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (r *NodeObservabilityRunReconciler) handleInProgress(instance *nodeobservabilityv1alpha2.NodeObservabilityRun) (bool, error) {
 	var errors []error
 	for _, agent := range instance.Status.Agents {
-		url := r.format(agent.IP, r.AgentName, r.Namespace, pprofStatus, agent.Port)
-		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityRunErrorRetriable, r.httpGetCall(url))
-		if err != nil {
+		url := formatURL(agent.IP, opctrl.AgentServiceName, r.Namespace, agent.Port, pprofStatus)
+		if err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityRunErrorRetriable, r.httpGetCall(url)); err != nil {
 			if e, ok := err.(NodeObservabilityRunError); ok && e.HttpCode == http.StatusConflict {
-				r.Log.V(1).Info("Received 407:StatusConflict, job still running")
+				r.Log.V(1).Info("received 407:statusconflict, job still running", "agent.name", agent.Name, "agent.ip", agent.IP)
 				return true, nil
 			}
 			errors = append(errors, fmt.Errorf("failed to get the status of the agent named %q with %q IP: %w", agent.Name, agent.IP, err))
@@ -213,11 +204,11 @@ func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance 
 	}
 
 	for _, a := range subset.Addresses {
-		url := r.format(a.IP, r.AgentName, r.Namespace, pprofPath, port)
-		r.Log.V(1).Info("Initiating new run for node", "Name", a.TargetRef.Name, "IP", a.IP, "port", port, "URL", url)
+		url := formatURL(a.IP, opctrl.AgentServiceName, r.Namespace, port, pprofPath)
+		r.Log.V(1).Info("initiating new run for node", "node.name", a.NodeName, "pod.name", a.TargetRef.Name, "pod.ip", a.IP, "pod.port", port, "url", url)
 		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityRunErrorRetriable, r.httpGetCall(url))
 		if err != nil {
-			r.Log.V(1).Info("Failed to start profiling, removing node from list", "Name", a.TargetRef.Name, "IP", a.IP, "Error", err)
+			r.Log.V(1).Info("failed to start profiling, removing node from list", "node.name", a.NodeName, "pod.name", a.TargetRef.Name, "pod.ip", a.IP, "error", err)
 			failedTargets = append(failedTargets, nodeobservabilityv1alpha2.AgentNode{Name: a.TargetRef.Name, IP: a.IP, Port: port})
 			continue
 		}
@@ -255,22 +246,6 @@ func (r *NodeObservabilityRunReconciler) preconditionsMet(ctx context.Context, i
 	return no.Status.IsReady(), nil
 }
 
-func finished(instance *nodeobservabilityv1alpha2.NodeObservabilityRun) bool {
-	t := instance.Status.FinishedTimestamp
-	if t != nil && !t.IsZero() {
-		return true
-	}
-	return false
-}
-
-func inProgress(instance *nodeobservabilityv1alpha2.NodeObservabilityRun) bool {
-	t := instance.Status.StartTimestamp
-	if t != nil && !t.IsZero() {
-		return true
-	}
-	return false
-}
-
 func (r *NodeObservabilityRunReconciler) httpGetCall(url string) func() error {
 	return func() error {
 		req, err := http.NewRequest("GET", url, nil)
@@ -279,8 +254,14 @@ func (r *NodeObservabilityRunReconciler) httpGetCall(url string) func() error {
 		}
 		req.Header.Set(authHeader, fmt.Sprintf("Bearer %s", string(r.AuthToken)))
 		client := http.Client{
-			Timeout:   time.Second * 10,
-			Transport: transport,
+			Timeout: httpRequestTimeout,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					RootCAs:                  r.CACert,
+					MinVersion:               tls.VersionTLS12,
+					PreferServerCipherSuites: true,
+				},
+			},
 		}
 		resp, err := client.Do(req)
 		if err != nil {
@@ -299,22 +280,9 @@ func (r *NodeObservabilityRunReconciler) httpGetCall(url string) func() error {
 	}
 }
 
-func handleFailingAgent(instance *nodeobservabilityv1alpha2.NodeObservabilityRun, old nodeobservabilityv1alpha2.AgentNode) {
-	var newAgents []nodeobservabilityv1alpha2.AgentNode
-	for _, a := range instance.Status.Agents {
-		if a.Name == old.Name {
-			instance.Status.FailedAgents = append(instance.Status.FailedAgents, old)
-		} else {
-			newAgents = append(newAgents, a)
-		}
-	}
-	instance.Status.Agents = newAgents
-
-}
-
 func (r *NodeObservabilityRunReconciler) getAgentEndpoints(ctx context.Context) (*corev1.Endpoints, error) {
 	endpoints := &corev1.Endpoints{}
-	if err := r.Get(ctx, types.NamespacedName{Name: r.AgentName, Namespace: r.Namespace}, endpoints); err != nil {
+	if err := r.Get(ctx, types.NamespacedName{Name: opctrl.AgentServiceName, Namespace: r.Namespace}, endpoints); err != nil {
 		return nil, err
 	}
 	if len(endpoints.Subsets) != 1 {
@@ -328,15 +296,39 @@ func (r *NodeObservabilityRunReconciler) getAgentEndpoints(ctx context.Context) 
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *NodeObservabilityRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	t := http.DefaultTransport.(*http.Transport).Clone()
-	t.TLSClientConfig = &tls.Config{
-		RootCAs:                  r.CACert,
-		MinVersion:               tls.VersionTLS12,
-		PreferServerCipherSuites: true,
-	}
-	transport = t
-	r.URL = &url{}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&nodeobservabilityv1alpha2.NodeObservabilityRun{}).
 		Complete(r)
+}
+
+func handleFailingAgent(instance *nodeobservabilityv1alpha2.NodeObservabilityRun, old nodeobservabilityv1alpha2.AgentNode) {
+	var newAgents []nodeobservabilityv1alpha2.AgentNode
+	for _, a := range instance.Status.Agents {
+		if a.Name == old.Name {
+			instance.Status.FailedAgents = append(instance.Status.FailedAgents, old)
+		} else {
+			newAgents = append(newAgents, a)
+		}
+	}
+	instance.Status.Agents = newAgents
+}
+
+func runFinished(instance *nodeobservabilityv1alpha2.NodeObservabilityRun) bool {
+	return instance.Status.FinishedTimestamp != nil && !instance.Status.FinishedTimestamp.IsZero()
+}
+
+func runInProgress(instance *nodeobservabilityv1alpha2.NodeObservabilityRun) bool {
+	return instance.Status.StartTimestamp != nil && !instance.Status.StartTimestamp.IsZero()
+}
+
+func formatURL(ip, svcName, namespace string, port int32, path string) string {
+	// https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#a-aaaa-records-1
+	// IP address won't pass TLS verification, agent serves certificate with DNS names as SAN
+	podDNSName := fmt.Sprintf("%s.%s.%s.svc", strings.ReplaceAll(ip, ".", "-"), svcName, namespace)
+	return (&url.URL{
+		Scheme: "https",
+		Host:   net.JoinHostPort(podDNSName, strconv.Itoa(int(port))),
+		Path:   path,
+	}).String()
+
 }

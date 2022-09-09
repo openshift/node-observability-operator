@@ -84,7 +84,7 @@ func TestEnsureDaemonset(t *testing.T) {
 				).
 				withHostPathVolume(socketName, socketPath, corev1.HostPathSocket).
 				withConfigMapVolume(kbltCAName, kubeletCAConfigMapName).
-				withSecretVolume(certsName, secretName).
+				withSecretVolume(certsName, "node-observability-agent").
 				build(),
 		},
 		{
@@ -111,7 +111,7 @@ func TestEnsureDaemonset(t *testing.T) {
 					).
 					withHostPathVolume(socketName, socketPath, corev1.HostPathSocket).
 					withConfigMapVolume(kbltCAName, kubeletCAConfigMapName).
-					withSecretVolume(certsName, secretName).
+					withSecretVolume(certsName, "node-observability-agent").
 					build(),
 			},
 			expectedDS: testDaemonset(daemonSetName, test.TestNamespace, serviceAccountName).
@@ -145,7 +145,7 @@ func TestEnsureDaemonset(t *testing.T) {
 				).
 				withHostPathVolume(socketName, socketPath, corev1.HostPathSocket).
 				withConfigMapVolume(kbltCAName, kubeletCAConfigMapName).
-				withSecretVolume(certsName, secretName).
+				withSecretVolume(certsName, "node-observability-agent").
 				build(),
 		},
 		{
@@ -185,7 +185,7 @@ func TestEnsureDaemonset(t *testing.T) {
 				).
 				withHostPathVolume(socketName, socketPath, corev1.HostPathSocket).
 				withConfigMapVolume(kbltCAName, kubeletCAConfigMapName).
-				withSecretVolume(certsName, secretName).
+				withSecretVolume(certsName, "node-observability-agent").
 				build(),
 		},
 	}

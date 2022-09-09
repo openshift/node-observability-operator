@@ -2,12 +2,7 @@ package nodeobservabilityruncontroller
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
-	"fmt"
-	"log"
 	"net/http"
-	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -25,19 +20,23 @@ import (
 
 	operatorv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 	"github.com/openshift/node-observability-operator/pkg/operator/controller/utils/test"
+	"github.com/openshift/node-observability-operator/pkg/utils"
 )
 
 const (
-	name        = "agent"
+	name        = "node-observability-agent"
 	nodeObsName = "cluster"
 	namespace   = "test"
-	CAPath      = "../../../../hack/certs/serving-ca.crt"
+	caPath      = "../../../../hack/certs/serving-ca.crt"
 	certPath    = "../../../../hack/certs/serving-localhost.crt"
 	keyPath     = "../../../../hack/certs/serving-localhost.key"
 )
 
 func TestGetAgentEndpoints(t *testing.T) {
-	ctx := context.TODO()
+	caCert, err := utils.ReadCACert(caPath)
+	if err != nil {
+		t.Fatal("Failed to read the test CA")
+	}
 	cases := []struct {
 		name            string
 		errExpected     bool
@@ -88,10 +87,10 @@ func TestGetAgentEndpoints(t *testing.T) {
 		cl := fake.NewClientBuilder().WithScheme(test.Scheme).WithRuntimeObjects(tc.existingObjects...).Build()
 		r := NodeObservabilityRunReconciler{
 			Client:    cl,
-			AgentName: name,
 			Namespace: namespace,
+			CACert:    caCert,
 		}
-		_, err := r.getAgentEndpoints(ctx)
+		_, err := r.getAgentEndpoints(context.TODO())
 		if err != nil {
 			if tc.errExpected {
 				return
@@ -173,7 +172,7 @@ func TestIsFinished(t *testing.T) {
 	}
 	for _, tc := range cases {
 		testInstance.Status.FinishedTimestamp = tc.time
-		gotResult := finished(testInstance)
+		gotResult := runFinished(testInstance)
 		if gotResult != tc.finished {
 			t.Fatalf("expected result %t, got %t", tc.finished, gotResult)
 		}
@@ -204,7 +203,7 @@ func TestIsInProgress(t *testing.T) {
 	}
 	for _, tc := range cases {
 		testInstance.Status.StartTimestamp = tc.time
-		gotResult := inProgress(testInstance)
+		gotResult := runInProgress(testInstance)
 		if gotResult != tc.inProgress {
 			t.Fatalf("expected result %t, got %t", tc.inProgress, gotResult)
 		}
@@ -212,13 +211,29 @@ func TestIsInProgress(t *testing.T) {
 }
 
 func TestReconcile(t *testing.T) {
+	errCh := make(chan error)
 	go func() {
-		serverError := fakeHttpServer()
-		if serverError != nil {
-			log.Fatal("ListenAndServe: ", serverError)
+		http.HandleFunc("/node-observability-pprof", pong)
+		http.HandleFunc("/node-observability-status", pong)
+
+		server := &http.Server{
+			Addr:              "127.0.0.1:8443",
+			ReadHeaderTimeout: 3 * time.Second,
+		}
+		if err := server.ListenAndServeTLS(certPath, keyPath); err != nil {
+			errCh <- err
 		}
 	}()
-	time.Sleep(time.Second * 2)
+	select {
+	case <-time.After(time.Second * 2):
+	case err := <-errCh:
+		t.Fatal("Failed to run the fake http server:", err)
+	}
+	caCert, err := utils.ReadCACert(caPath)
+	if err != nil {
+		t.Fatal("Failed to read the test CA")
+	}
+
 	now := metav1.Now()
 	ctx := logr.NewContext(context.Background(), zap.New(zap.UseDevMode(true)))
 	cases := []struct {
@@ -293,9 +308,8 @@ func TestReconcile(t *testing.T) {
 		cl := fake.NewClientBuilder().WithScheme(test.Scheme).WithRuntimeObjects(tc.existingObjects...).Build()
 		r := NodeObservabilityRunReconciler{
 			Client:    cl,
-			URL:       &testURL{},
-			AgentName: name,
 			Namespace: namespace,
+			CACert:    caCert,
 		}
 		res, err := r.Reconcile(ctx, tc.req)
 		if err != nil {
@@ -312,10 +326,10 @@ func TestReconcile(t *testing.T) {
 			t.Fatalf("%s: error while trying to get NodeObservabilityRun  %v", tc.name, res)
 		}
 
-		if tc.started && !inProgress(got) {
+		if tc.started && !runInProgress(got) {
 			t.Fatalf("%s: error NodeObservabilityRun should be running", tc.name)
 		}
-		if tc.finished && !finished(got) {
+		if tc.finished && !runFinished(got) {
 			t.Fatalf("%s: error NodeObservabilityRun should be finished", tc.name)
 		}
 	}
@@ -330,6 +344,7 @@ func testNodeObservabilityRun() *operatorv1alpha2.NodeObservabilityRun {
 			Namespace: namespace,
 			OwnerReferences: []metav1.OwnerReference{
 				{
+					Kind: "NodeObservability",
 					Name: nodeObsName,
 				},
 			},
@@ -369,45 +384,7 @@ func testNodeObservabilityRunWithStatus(s operatorv1alpha2.NodeObservabilityRunS
 	return run
 }
 
-func fakeHttpServer() error {
-	caCert, err := readCACert(CAPath)
-	if err != nil {
-		return err
-	}
-	t := http.DefaultTransport.(*http.Transport).Clone()
-	t.TLSClientConfig = &tls.Config{
-		RootCAs:                  caCert,
-		MinVersion:               tls.VersionTLS12,
-		PreferServerCipherSuites: true,
-	}
-	transport = t
-
-	http.HandleFunc("/node-observability-pprof", pong)
-	http.HandleFunc("/node-observability-status", pong)
-	server := &http.Server{
-		Addr:              "127.0.0.1:8443",
-		ReadHeaderTimeout: 10 * time.Second,
-	}
-	return server.ListenAndServeTLS(certPath, keyPath)
-}
-
 func pong(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	_, _ = w.Write([]byte("pong\n"))
-}
-
-func readCACert(caCertFile string) (*x509.CertPool, error) {
-	content, err := os.ReadFile(caCertFile)
-	if err != nil {
-		return nil, err
-	}
-	if len(content) <= 0 {
-		return nil, fmt.Errorf("%s is empty", caCertFile)
-	}
-	caCertPool := x509.NewCertPool()
-	if !caCertPool.AppendCertsFromPEM(content) {
-		return nil, fmt.Errorf("unable to add certificates into caCertPool: %v", err)
-
-	}
-	return caCertPool, nil
 }
