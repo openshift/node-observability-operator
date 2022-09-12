@@ -56,12 +56,6 @@ func testReconciler() *MachineConfigReconciler {
 		Log:           zap.New(zap.UseDevMode(true)),
 		EventRecorder: record.NewFakeRecorder(100),
 		CtrlConfig:    nomc,
-		Node: NodeSyncData{
-			PrevReconcileUpd: make(map[string]LabelInfo),
-		},
-		MachineConfig: MachineConfigSyncData{
-			PrevReconcileUpd: make(map[string]MachineConfigInfo),
-		},
 	}
 }
 
@@ -141,7 +135,7 @@ func testNodeObsNodes() []runtime.Object {
 }
 
 func testNodeObsMCP(r *MachineConfigReconciler) *mcv1.MachineConfigPool {
-	mcp := r.GetProfilingMCP(ProfilingMCPName)
+	mcp := r.getCrioProfMachineConfigPool(ProfilingMCPName)
 
 	mcp.Spec.Configuration.ObjectReference = corev1.ObjectReference{
 		Name: "rendered-nodeobservability-9d2d6f47a54e5828cf2917d760b54a99",
@@ -294,7 +288,7 @@ func TestReconcile(t *testing.T) {
 	labeledNodes := testNodeObsNodes()
 	mcp := testNodeObsMCP(r)
 	workerMCP := testWorkerMCP()
-	criomc, _ := r.getCrioConfig()
+	criomc, _ := r.getCrioProfMachineConfig()
 
 	tests := []struct {
 		name       string
@@ -308,13 +302,6 @@ func TestReconcile(t *testing.T) {
 			name:    "controller resource exists and debug enabled",
 			reqObjs: append([]runtime.Object{workerMCP}, nodes...),
 			wantErr: false,
-			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				r.Node.PrevReconcileUpd["test-worker-4"] = LabelInfo{
-					NodeObservabilityNodeRoleLabelName,
-					Empty,
-					remove,
-				}
-			},
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != defaultRequeueTime ||
 					!status.IsDebuggingEnabled() ||
@@ -403,11 +390,6 @@ func TestReconcile(t *testing.T) {
 			reqObjs: append([]runtime.Object{mcp, criomc, workerMCP}, labeledNodes...),
 			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
 				r.CtrlConfig.Spec.Debug.EnableCrioProfiling = false
-				r.Node.PrevReconcileUpd["test-worker-4"] = LabelInfo{
-					NodeObservabilityNodeRoleLabelName,
-					Empty,
-					add,
-				}
 			},
 			wantErr: false,
 			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
@@ -844,7 +826,7 @@ func TestReconcileClientFakes(t *testing.T) {
 						}
 						mcp.DeepCopyInto(o)
 					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioConfig()
+						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
@@ -888,7 +870,7 @@ func TestReconcileClientFakes(t *testing.T) {
 						}
 						mcp.DeepCopyInto(o)
 					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioConfig()
+						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
@@ -914,6 +896,23 @@ func TestReconcileClientFakes(t *testing.T) {
 			arg1: ctx,
 			arg2: request,
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientListCalls(func(
+					ctx context.Context,
+					list client.ObjectList,
+					opts ...client.ListOption) error {
+					switch o := list.(type) {
+					case *corev1.NodeList:
+						n := &corev1.NodeList{}
+						nodes := testWorkerNodes()
+						for i := range nodes {
+							node := nodes[i].(*corev1.Node)
+							node.ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = Empty
+							n.Items = append(n.Items, *node)
+						}
+						n.DeepCopyInto(o)
+					}
+					return nil
+				})
 				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
 					switch o := obj.(type) {
 					case *mcv1.MachineConfigPool:
@@ -926,7 +925,7 @@ func TestReconcileClientFakes(t *testing.T) {
 						}
 						mcp.DeepCopyInto(o)
 					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioConfig()
+						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
@@ -956,16 +955,6 @@ func TestReconcileClientFakes(t *testing.T) {
 					ctx context.Context,
 					ns types.NamespacedName,
 					obj client.Object) error {
-					r.Node.PrevReconcileUpd["test-worker-1"] = LabelInfo{
-						NodeObservabilityNodeRoleLabelName,
-						Empty,
-						add,
-					}
-					r.Node.PrevReconcileUpd["test-worker-4"] = LabelInfo{
-						NodeObservabilityNodeRoleLabelName,
-						Empty,
-						remove,
-					}
 					switch o := obj.(type) {
 					case *mcv1.MachineConfigPool:
 						var mcp *mcv1.MachineConfigPool
@@ -977,7 +966,7 @@ func TestReconcileClientFakes(t *testing.T) {
 						}
 						mcp.DeepCopyInto(o)
 					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioConfig()
+						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
@@ -1044,12 +1033,29 @@ func TestReconcileClientFakes(t *testing.T) {
 			arg1: ctx,
 			arg2: request,
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientListCalls(func(
+					ctx context.Context,
+					list client.ObjectList,
+					opts ...client.ListOption) error {
+					switch o := list.(type) {
+					case *corev1.NodeList:
+						n := &corev1.NodeList{}
+						nodes := testWorkerNodes()
+						for i := range nodes {
+							node := nodes[i].(*corev1.Node)
+							node.ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = Empty
+							n.Items = append(n.Items, *node)
+						}
+						n.DeepCopyInto(o)
+					}
+					return nil
+				})
 				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
 					switch o := obj.(type) {
 					case *mcv1.MachineConfigPool:
 						return testError
 					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioConfig()
+						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
@@ -1082,6 +1088,23 @@ func TestReconcileClientFakes(t *testing.T) {
 			arg1: ctx,
 			arg2: request,
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientListCalls(func(
+					ctx context.Context,
+					list client.ObjectList,
+					opts ...client.ListOption) error {
+					switch o := list.(type) {
+					case *corev1.NodeList:
+						n := &corev1.NodeList{}
+						nodes := testWorkerNodes()
+						for i := range nodes {
+							node := nodes[i].(*corev1.Node)
+							node.ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = Empty
+							n.Items = append(n.Items, *node)
+						}
+						n.DeepCopyInto(o)
+					}
+					return nil
+				})
 				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
 					switch o := obj.(type) {
 					case *mcv1.MachineConfigPool:
@@ -1136,16 +1159,6 @@ func TestReconcileClientFakes(t *testing.T) {
 			arg2: request,
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
 				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
-					r.Node.PrevReconcileUpd["test-worker-1"] = LabelInfo{
-						NodeObservabilityNodeRoleLabelName,
-						Empty,
-						remove,
-					}
-					r.Node.PrevReconcileUpd["test-worker-4"] = LabelInfo{
-						NodeObservabilityNodeRoleLabelName,
-						Empty,
-						add,
-					}
 					switch o := obj.(type) {
 					case *mcv1.MachineConfigPool:
 						var mcp *mcv1.MachineConfigPool
@@ -1157,7 +1170,7 @@ func TestReconcileClientFakes(t *testing.T) {
 						}
 						mcp.DeepCopyInto(o)
 					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioConfig()
+						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
@@ -1236,7 +1249,7 @@ func TestReconcileClientFakes(t *testing.T) {
 							mcv1.MachineConfigPoolUpdated, corev1.ConditionTrue)
 						mcp.DeepCopyInto(o)
 					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioConfig()
+						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
@@ -1308,7 +1321,7 @@ func TestReconcileClientFakes(t *testing.T) {
 							mcv1.MachineConfigPoolUpdated, corev1.ConditionTrue)
 						mcp.DeepCopyInto(o)
 					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioConfig()
+						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
 					case *v1alpha1.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
@@ -1680,42 +1693,8 @@ func TestEnsureProfConfEnabled(t *testing.T) {
 		{
 			name: "ensureReqNodeLabelExists failure",
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				r.Node.PrevReconcileUpd["test-worker-1"] = LabelInfo{
-					NodeObservabilityNodeRoleLabelName,
-					Empty,
-					add,
-				}
 				m.ClientGetReturns(testError)
 				m.ClientListReturns(testError)
-			},
-			requeue: true,
-			wantErr: true,
-		},
-		{
-			name: "revertNodeLabeling failure",
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				r.Node.PrevReconcileUpd["test-worker-1"] = LabelInfo{
-					NodeObservabilityNodeRoleLabelName,
-					Empty,
-					add,
-				}
-				m.ClientGetCalls(func(
-					ctx context.Context,
-					ns types.NamespacedName,
-					obj client.Object) error {
-					switch o := obj.(type) {
-					case *corev1.Node:
-						nodes := testNodeObsNodes()
-						for _, node := range nodes {
-							if ns.Name == node.(*corev1.Node).GetName() {
-								node.(*corev1.Node).DeepCopyInto(o)
-							}
-						}
-					}
-					return nil
-				})
-				m.ClientListReturns(testError)
-				m.ClientPatchReturns(testError)
 			},
 			requeue: true,
 			wantErr: true,
@@ -1724,6 +1703,23 @@ func TestEnsureProfConfEnabled(t *testing.T) {
 			name: "ensureReqMCPExists failure",
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
 				r.CtrlConfig.SetNamespace("test")
+				m.ClientListCalls(func(
+					ctx context.Context,
+					list client.ObjectList,
+					opts ...client.ListOption) error {
+					switch o := list.(type) {
+					case *corev1.NodeList:
+						n := &corev1.NodeList{}
+						nodes := testWorkerNodes()
+						for i := range nodes {
+							node := nodes[i].(*corev1.Node)
+							node.ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = Empty
+							n.Items = append(n.Items, *node)
+						}
+						n.DeepCopyInto(o)
+					}
+					return nil
+				})
 			},
 			requeue: false,
 			wantErr: true,
@@ -1732,6 +1728,23 @@ func TestEnsureProfConfEnabled(t *testing.T) {
 			name: "ensureReqMCExists failure",
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
 				r.CtrlConfig.SetNamespace("test")
+				m.ClientListCalls(func(
+					ctx context.Context,
+					list client.ObjectList,
+					opts ...client.ListOption) error {
+					switch o := list.(type) {
+					case *corev1.NodeList:
+						n := &corev1.NodeList{}
+						nodes := testWorkerNodes()
+						for i := range nodes {
+							node := nodes[i].(*corev1.Node)
+							node.ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = Empty
+							n.Items = append(n.Items, *node)
+						}
+						n.DeepCopyInto(o)
+					}
+					return nil
+				})
 			},
 			requeue: false,
 			wantErr: true,
@@ -1768,42 +1781,8 @@ func TestEnsureProfConfDisabled(t *testing.T) {
 		{
 			name: "ensureReqNodeLabelNotExists failure",
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				r.Node.PrevReconcileUpd["test-worker-1"] = LabelInfo{
-					NodeObservabilityNodeRoleLabelName,
-					Empty,
-					remove,
-				}
 				m.ClientGetReturns(testError)
 				m.ClientListReturns(testError)
-			},
-			requeue: true,
-			wantErr: true,
-		},
-		{
-			name: "revertNodeUnlabeling failure",
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				r.Node.PrevReconcileUpd["test-worker-1"] = LabelInfo{
-					NodeObservabilityNodeRoleLabelName,
-					Empty,
-					remove,
-				}
-				m.ClientGetCalls(func(
-					ctx context.Context,
-					ns types.NamespacedName,
-					obj client.Object) error {
-					switch o := obj.(type) {
-					case *corev1.Node:
-						nodes := testNodeObsNodes()
-						for _, node := range nodes {
-							if ns.Name == node.(*corev1.Node).GetName() {
-								node.(*corev1.Node).DeepCopyInto(o)
-							}
-						}
-					}
-					return nil
-				})
-				m.ClientListReturns(testError)
-				m.ClientPatchReturns(testError)
 			},
 			requeue: true,
 			wantErr: true,

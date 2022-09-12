@@ -5,11 +5,8 @@ import (
 	"context"
 	"sync"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 type FakeImpl struct {
@@ -104,29 +101,6 @@ type FakeImpl struct {
 	}
 	clientUpdateReturnsOnCall map[int]struct {
 		result1 error
-	}
-	ManagerGetEventRecorderForStub        func(manager.Manager, string) record.EventRecorder
-	managerGetEventRecorderForMutex       sync.RWMutex
-	managerGetEventRecorderForArgsForCall []struct {
-		arg1 manager.Manager
-		arg2 string
-	}
-	managerGetEventRecorderForReturns struct {
-		result1 record.EventRecorder
-	}
-	managerGetEventRecorderForReturnsOnCall map[int]struct {
-		result1 record.EventRecorder
-	}
-	ManagerGetSchemeStub        func(manager.Manager) *runtime.Scheme
-	managerGetSchemeMutex       sync.RWMutex
-	managerGetSchemeArgsForCall []struct {
-		arg1 manager.Manager
-	}
-	managerGetSchemeReturns struct {
-		result1 *runtime.Scheme
-	}
-	managerGetSchemeReturnsOnCall map[int]struct {
-		result1 *runtime.Scheme
 	}
 	invocations      map[string][][]interface{}
 	invocationsMutex sync.RWMutex
@@ -574,129 +548,6 @@ func (fake *FakeImpl) ClientUpdateReturnsOnCall(i int, result1 error) {
 	}{result1}
 }
 
-func (fake *FakeImpl) ManagerGetEventRecorderFor(arg1 manager.Manager, arg2 string) record.EventRecorder {
-	fake.managerGetEventRecorderForMutex.Lock()
-	ret, specificReturn := fake.managerGetEventRecorderForReturnsOnCall[len(fake.managerGetEventRecorderForArgsForCall)]
-	fake.managerGetEventRecorderForArgsForCall = append(fake.managerGetEventRecorderForArgsForCall, struct {
-		arg1 manager.Manager
-		arg2 string
-	}{arg1, arg2})
-	stub := fake.ManagerGetEventRecorderForStub
-	fakeReturns := fake.managerGetEventRecorderForReturns
-	fake.recordInvocation("ManagerGetEventRecorderFor", []interface{}{arg1, arg2})
-	fake.managerGetEventRecorderForMutex.Unlock()
-	if stub != nil {
-		return stub(arg1, arg2)
-	}
-	if specificReturn {
-		return ret.result1
-	}
-	return fakeReturns.result1
-}
-
-func (fake *FakeImpl) ManagerGetEventRecorderForCallCount() int {
-	fake.managerGetEventRecorderForMutex.RLock()
-	defer fake.managerGetEventRecorderForMutex.RUnlock()
-	return len(fake.managerGetEventRecorderForArgsForCall)
-}
-
-func (fake *FakeImpl) ManagerGetEventRecorderForCalls(stub func(manager.Manager, string) record.EventRecorder) {
-	fake.managerGetEventRecorderForMutex.Lock()
-	defer fake.managerGetEventRecorderForMutex.Unlock()
-	fake.ManagerGetEventRecorderForStub = stub
-}
-
-func (fake *FakeImpl) ManagerGetEventRecorderForArgsForCall(i int) (manager.Manager, string) {
-	fake.managerGetEventRecorderForMutex.RLock()
-	defer fake.managerGetEventRecorderForMutex.RUnlock()
-	argsForCall := fake.managerGetEventRecorderForArgsForCall[i]
-	return argsForCall.arg1, argsForCall.arg2
-}
-
-func (fake *FakeImpl) ManagerGetEventRecorderForReturns(result1 record.EventRecorder) {
-	fake.managerGetEventRecorderForMutex.Lock()
-	defer fake.managerGetEventRecorderForMutex.Unlock()
-	fake.ManagerGetEventRecorderForStub = nil
-	fake.managerGetEventRecorderForReturns = struct {
-		result1 record.EventRecorder
-	}{result1}
-}
-
-func (fake *FakeImpl) ManagerGetEventRecorderForReturnsOnCall(i int, result1 record.EventRecorder) {
-	fake.managerGetEventRecorderForMutex.Lock()
-	defer fake.managerGetEventRecorderForMutex.Unlock()
-	fake.ManagerGetEventRecorderForStub = nil
-	if fake.managerGetEventRecorderForReturnsOnCall == nil {
-		fake.managerGetEventRecorderForReturnsOnCall = make(map[int]struct {
-			result1 record.EventRecorder
-		})
-	}
-	fake.managerGetEventRecorderForReturnsOnCall[i] = struct {
-		result1 record.EventRecorder
-	}{result1}
-}
-
-func (fake *FakeImpl) ManagerGetScheme(arg1 manager.Manager) *runtime.Scheme {
-	fake.managerGetSchemeMutex.Lock()
-	ret, specificReturn := fake.managerGetSchemeReturnsOnCall[len(fake.managerGetSchemeArgsForCall)]
-	fake.managerGetSchemeArgsForCall = append(fake.managerGetSchemeArgsForCall, struct {
-		arg1 manager.Manager
-	}{arg1})
-	stub := fake.ManagerGetSchemeStub
-	fakeReturns := fake.managerGetSchemeReturns
-	fake.recordInvocation("ManagerGetScheme", []interface{}{arg1})
-	fake.managerGetSchemeMutex.Unlock()
-	if stub != nil {
-		return stub(arg1)
-	}
-	if specificReturn {
-		return ret.result1
-	}
-	return fakeReturns.result1
-}
-
-func (fake *FakeImpl) ManagerGetSchemeCallCount() int {
-	fake.managerGetSchemeMutex.RLock()
-	defer fake.managerGetSchemeMutex.RUnlock()
-	return len(fake.managerGetSchemeArgsForCall)
-}
-
-func (fake *FakeImpl) ManagerGetSchemeCalls(stub func(manager.Manager) *runtime.Scheme) {
-	fake.managerGetSchemeMutex.Lock()
-	defer fake.managerGetSchemeMutex.Unlock()
-	fake.ManagerGetSchemeStub = stub
-}
-
-func (fake *FakeImpl) ManagerGetSchemeArgsForCall(i int) manager.Manager {
-	fake.managerGetSchemeMutex.RLock()
-	defer fake.managerGetSchemeMutex.RUnlock()
-	argsForCall := fake.managerGetSchemeArgsForCall[i]
-	return argsForCall.arg1
-}
-
-func (fake *FakeImpl) ManagerGetSchemeReturns(result1 *runtime.Scheme) {
-	fake.managerGetSchemeMutex.Lock()
-	defer fake.managerGetSchemeMutex.Unlock()
-	fake.ManagerGetSchemeStub = nil
-	fake.managerGetSchemeReturns = struct {
-		result1 *runtime.Scheme
-	}{result1}
-}
-
-func (fake *FakeImpl) ManagerGetSchemeReturnsOnCall(i int, result1 *runtime.Scheme) {
-	fake.managerGetSchemeMutex.Lock()
-	defer fake.managerGetSchemeMutex.Unlock()
-	fake.ManagerGetSchemeStub = nil
-	if fake.managerGetSchemeReturnsOnCall == nil {
-		fake.managerGetSchemeReturnsOnCall = make(map[int]struct {
-			result1 *runtime.Scheme
-		})
-	}
-	fake.managerGetSchemeReturnsOnCall[i] = struct {
-		result1 *runtime.Scheme
-	}{result1}
-}
-
 func (fake *FakeImpl) Invocations() map[string][][]interface{} {
 	fake.invocationsMutex.RLock()
 	defer fake.invocationsMutex.RUnlock()
@@ -714,10 +565,6 @@ func (fake *FakeImpl) Invocations() map[string][][]interface{} {
 	defer fake.clientStatusUpdateMutex.RUnlock()
 	fake.clientUpdateMutex.RLock()
 	defer fake.clientUpdateMutex.RUnlock()
-	fake.managerGetEventRecorderForMutex.RLock()
-	defer fake.managerGetEventRecorderForMutex.RUnlock()
-	fake.managerGetSchemeMutex.RLock()
-	defer fake.managerGetSchemeMutex.RUnlock()
 	copiedInvocations := map[string][][]interface{}{}
 	for key, value := range fake.invocations {
 		copiedInvocations[key] = value

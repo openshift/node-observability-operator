@@ -19,8 +19,6 @@ package machineconfigcontroller
 import (
 	"context"
 
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
@@ -32,8 +30,6 @@ type defaultImpl struct {
 //go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -generate
 //counterfeiter:generate . impl
 type impl interface {
-	ManagerGetScheme(manager.Manager) *runtime.Scheme
-	ManagerGetEventRecorderFor(manager.Manager, string) record.EventRecorder
 	ClientGet(context.Context, client.ObjectKey, client.Object) error
 	ClientList(context.Context, client.ObjectList, ...client.ListOption) error
 	ClientStatusUpdate(context.Context, client.Object, ...client.UpdateOption) error
@@ -43,23 +39,10 @@ type impl interface {
 	ClientPatch(context.Context, client.Object, client.Patch, ...client.PatchOption) error
 }
 
-func NewClient(m manager.Manager, impls ...impl) impl {
-	if len(impls) != 0 {
-		return impls[0]
-	}
+func NewClient(m manager.Manager) impl {
 	return &defaultImpl{
 		Client: m.GetClient(),
 	}
-}
-
-func (c *defaultImpl) ManagerGetScheme(m manager.Manager) *runtime.Scheme {
-	return m.GetScheme()
-}
-
-func (c *defaultImpl) ManagerGetEventRecorderFor(
-	m manager.Manager, name string,
-) record.EventRecorder {
-	return m.GetEventRecorderFor(name)
 }
 
 func (c *defaultImpl) ClientGet(

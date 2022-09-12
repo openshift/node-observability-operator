@@ -2,7 +2,7 @@
 
 **Note**: This Operator is in the early stages of implementation and keeps changing.
 
-The NodeObservability Operator allows you to deploy and manage [NodeObservability Agent](https://github.com/openshift/node-observability-agent) on the worker nodes. The NodeObservability agent is deployed through DaemonSets on all or selected nodes.     
+The NodeObservability Operator allows you to deploy and manage [NodeObservability Agent](https://github.com/openshift/node-observability-agent) on the worker nodes. The NodeObservability agent is deployed through DaemonSets on the selected nodes.     
 Afterward, the profiling requests can be created to trigger different types of profiling. The profiling data will be accessible in the root filesystem of the NodeObservability Agent.
 
 - [Deploying the  NodeObservability Operator](#deploying-the-nodeobservability-operator)

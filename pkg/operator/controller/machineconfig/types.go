@@ -16,65 +16,12 @@ limitations under the License.
 
 package machineconfigcontroller
 
-import (
-	"sync"
-
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
-
-	"github.com/go-logr/logr"
-
-	"github.com/openshift/node-observability-operator/api/v1alpha1"
-)
-
-// MachineConfigReconciler reconciles a NodeObservabilityMachineConfig object
-type MachineConfigReconciler struct {
-	impl
-	sync.RWMutex
-
-	Log           logr.Logger
-	Scheme        *runtime.Scheme
-	EventRecorder record.EventRecorder
-
-	Node          NodeSyncData
-	MachineConfig MachineConfigSyncData
-	CtrlConfig    *v1alpha1.NodeObservabilityMachineConfig
-}
-
-// NodeSyncData is for storing the state
-// of node operations made for enabling profiling
-type NodeSyncData struct {
-	PrevReconcileUpd map[string]LabelInfo
-}
-
-// LabelInfo is storing for the label changes
-// made to the nodes
-type LabelInfo struct {
-	key   string
-	value string
-	op    patchOp
-}
-
 // ResourcePatchValue is for creating the patch
 // request for updating a resource
 type ResourcePatchValue struct {
 	Op    string      `json:"op"`
 	Path  string      `json:"path"`
 	Value interface{} `json:"value,omitempty"`
-}
-
-// MachineConfigSyncData is for storing the state
-// of the MC created for enabling profiling of
-// requested services
-type MachineConfigSyncData struct {
-	PrevReconcileUpd map[string]MachineConfigInfo
-}
-
-// MachineConfigInfo is for storing the state
-// data of MC operations
-type MachineConfigInfo struct {
-	op     string
-	config interface{}
 }
 
 // patchOp is defined for patch operation type

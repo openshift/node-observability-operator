@@ -55,9 +55,8 @@ const (
 )
 
 var (
-	scheme               = runtime.NewScheme()
-	setupLog             = ctrl.Log.WithName("node-observability")
-	nodeObsMCOReconciler *machineconfigcontroller.MachineConfigReconciler
+	scheme   = runtime.NewScheme()
+	setupLog = ctrl.Log.WithName("node-observability")
 )
 
 func init() {
@@ -113,7 +112,7 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "94c735b6.olm.openshift.io",
-		Namespace:              "node-observability-operator",
+		Namespace:              operatorNamespace,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -132,7 +131,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&nodeobservabilitycontroller.NodeObservabilityReconciler{
+	if err := (&nodeobservabilitycontroller.NodeObservabilityReconciler{
 		Client:            mgr.GetClient(),
 		ClusterWideClient: clusterWideCli,
 		Scheme:            mgr.GetScheme(),
@@ -144,16 +143,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	if nodeObsMCOReconciler, err = machineconfigcontroller.New(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "NodeObservabilityMachineConfig")
-		os.Exit(1)
-	}
-	if err = nodeObsMCOReconciler.SetupWithManager(mgr); err != nil {
+	if err := machineconfigcontroller.New(mgr).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "NodeObservabilityMachineConfig")
 		os.Exit(1)
 	}
 
-	if err = (&nodeobservabilityrun.NodeObservabilityRunReconciler{
+	if err := (&nodeobservabilityrun.NodeObservabilityRunReconciler{
 		Client:    mgr.GetClient(),
 		Scheme:    mgr.GetScheme(),
 		Log:       ctrl.Log.WithName("controller").WithName("NodeObservabilityRun"),
