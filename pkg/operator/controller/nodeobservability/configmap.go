@@ -28,9 +28,7 @@ func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeO
 	// Use the clusterWide client in order to get the configmap from openshift-config-managed namespace
 	// As the default client will only look for configmaps inside the namespace
 	if err := r.ClusterWideClient.Get(ctx, kbltCACMName, kbltCACM); err != nil {
-		if !errors.IsNotFound(err) {
-			return fmt.Errorf("error getting source configmap %q, %w", kbltCACMName, err)
-		}
+		return fmt.Errorf("error getting source configmap %q, %w", kbltCACMName, err)
 	}
 
 	// Copy the configmap into the operator namespace
@@ -49,19 +47,20 @@ func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeO
 	}
 
 	if err := controllerutil.SetControllerReference(nodeObs, configMap, r.Scheme); err != nil {
-		return fmt.Errorf("failed to set the controller reference for configmap %s/%s: %w", configMap.Namespace, configMap.Name, err)
+		return fmt.Errorf("failed to set the controller reference for target configmap %q: %w", configMapName, err)
 	}
 
-	if err := r.Get(ctx, configMapName, &corev1.ConfigMap{}); err == nil {
-		return nil
-	} else if !errors.IsNotFound(err) {
-		return fmt.Errorf("error getting target configmap %s, %w", configMapName, err)
+	if err := r.Get(ctx, configMapName, &corev1.ConfigMap{}); err != nil {
+		if !errors.IsNotFound(err) {
+			return fmt.Errorf("error getting target configmap %q, %w", configMapName, err)
+		} else {
+			// create configmap since it is not found
+			if err := r.Create(ctx, configMap); err != nil {
+				return fmt.Errorf("failed to create target configmap %q: %w", configMapName, err)
+			}
+		}
 	}
 
-	if err := r.Create(ctx, configMap); err != nil {
-		return fmt.Errorf("failed to create target configmap %s: %w", configMapName, err)
-	}
-
-	r.Log.Info("created configmap", "name", configMapName.Namespace, "name", configMapName.Name)
+	r.Log.Info("created kubelet CA configmap", "configmap.namespace", configMapName.Namespace, "configmap.name", configMapName.Name)
 	return nil
 }

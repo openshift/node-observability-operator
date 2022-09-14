@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -34,6 +33,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/client-go/util/retry"
+
+	"github.com/go-logr/logr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -72,11 +73,10 @@ type NodeObservabilityRunReconciler struct {
 
 // Reconcile manages NodeObservabilityRuns
 func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
-	var msg string
 	if ctxLog, err := logr.FromContext(ctx); err == nil {
 		r.Log = ctxLog
 	}
-	r.Log.V(1).Info("Beginning Reconciliation")
+	r.Log.V(1).Info("reconciling", "request", req)
 
 	instance := &nodeobservabilityv1alpha1.NodeObservabilityRun{}
 	err = r.Get(ctx, req.NamespacedName, instance)
@@ -85,7 +85,7 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 			err = nil
 			return
 		}
-		err = fmt.Errorf("failed to get NodeObservabilityRun: %w", err)
+		err = fmt.Errorf("failed to get nodeobservabilityrun: %w", err)
 		return
 	}
 
@@ -105,7 +105,7 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 	var isAdopted bool
 	if isAdopted, err = r.adoptResource(ctx, instance); !isAdopted {
 		if err != nil {
-			err = fmt.Errorf("error while setting owner reference NodeObservabilityRun->NodeObservability: %w", err)
+			err = fmt.Errorf("error while setting owner reference nodeobservabilityrun->nodeobservability: %w", err)
 			return
 		}
 		res = ctrl.Result{Requeue: true}
@@ -113,12 +113,13 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 	}
 
 	var canProceed bool
+	var msg string
 	if canProceed, err = r.preconditionsMet(ctx, instance); !canProceed {
 		if err != nil {
 			err = fmt.Errorf("preconditions not met: %w", err)
 			return
 		}
-		msg = fmt.Sprintf("Waiting for NodeObservability %s to become ready", instance.Spec.NodeObservabilityRef.Name)
+		msg = fmt.Sprintf("Waiting for nodeobservability %s to become ready", instance.Spec.NodeObservabilityRef.Name)
 		instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugReady, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonInProgress, msg)
 		return ctrl.Result{RequeueAfter: pollingPeriod}, err
 	}

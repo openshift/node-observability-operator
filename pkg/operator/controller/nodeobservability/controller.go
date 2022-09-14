@@ -85,10 +85,11 @@ type NodeObservabilityReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.10.0/pkg/reconcile
 func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-
 	if ctxLog, err := logr.FromContext(ctx); err == nil {
 		r.Log = ctxLog
 	}
+
+	r.Log.V(3).Info("reconciling", "request", req)
 
 	// Fetch the NodeObservability instance
 	nodeObs := &operatorv1alpha1.NodeObservability{}
@@ -98,13 +99,12 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
-			r.Log.V(1).Info("NodeObservability resource not found. Ignoring since object must be deleted")
+			r.Log.V(1).Info("nodeobservability resource not found. Ignoring since object must be deleted")
 			return ctrl.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
-		return ctrl.Result{}, fmt.Errorf("failed to get NodeObservability: %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to get nodeobservability: %w", err)
 	}
-	r.Log.V(3).Info("Reconciling:", "NodeObservability", nodeObs)
 
 	err = isClusterNodeObservability(ctx, nodeObs)
 	if err != nil {
@@ -121,15 +121,15 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 			errUpdate = fmt.Errorf("failed to update status for NodeObservability %v: %w", nodeObs, errUpdate)
 			return ctrl.Result{}, utilerrors.NewAggregate([]error{err, errUpdate})
 		}
-		r.Log.V(3).Info("Status updated ", "Count", "0", "LastUpdated", now, "Ready", false)
-		r.Log.Error(err, "Exiting reconcile")
+		r.Log.V(3).Info("Status updated:", "Count", "0", "LastUpdated", now, "Ready", false)
+		r.Log.Error(err, "exiting reconcile")
 		// Return without err, to prevent requeuing
 		return ctrl.Result{}, nil
 	}
 
 	// nodeObs is named cluster: proceed
 	if nodeObs.DeletionTimestamp != nil {
-		r.Log.V(1).Info("NodeObservability resource is going to be deleted. Taking action")
+		r.Log.V(1).Info("nodeobservability resource is going to be deleted. Taking action")
 		if err := r.ensureNodeObservabilityDeleted(ctx, nodeObs); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to ensure nodeobservability deletion: %w", err)
 		}
@@ -141,7 +141,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	// Set finalizers on the NodeObservability resource
 	updated, err := r.withFinalizers(ctx, nodeObs)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to update NodeObservability with finalizers:, %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to update nodeobservability with finalizers:, %w", err)
 	}
 	nodeObs = updated
 
@@ -175,9 +175,11 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	r.Log.V(1).Info("service ensured", "svc.namespace", svc.Namespace, "svc.name", svc.Name)
 
 	// check clusterrole
-	_, cr, err := r.ensureClusterRole(ctx, nodeObs)
+	haveCR, cr, err := r.ensureClusterRole(ctx, nodeObs)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure clusterrole : %w", err)
+	} else if !haveCR {
+		return ctrl.Result{}, fmt.Errorf("failed to get clusterrole")
 	}
 	r.Log.V(1).Info("clusterrole ensured", "clusterrole.name", cr.Name)
 
@@ -202,7 +204,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	// if machine config change is not requested, we can mark it as ready
 	var nomcReady bool = true
 	if machineConfigChangeRequested(nodeObs) {
-		nomc, err := r.ensureNOMC(ctx, nodeObs, r.Namespace)
+		nomc, err := r.ensureNOMC(ctx, nodeObs)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to ensure nodeobservabilitymachineconfig : %w", err)
 		}

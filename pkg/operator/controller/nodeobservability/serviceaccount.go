@@ -9,6 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/google/go-cmp/cmp"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
@@ -26,41 +27,43 @@ func (r *NodeObservabilityReconciler) ensureServiceAccount(ctx context.Context, 
 
 	desired := r.desiredServiceAccount(nodeObs, ns)
 	if err := controllerutil.SetControllerReference(nodeObs, desired, r.Scheme); err != nil {
-		return nil, fmt.Errorf("failed to set the controller reference for serviceaccount %q: %w", nameSpace.Name, err)
+		return nil, fmt.Errorf("failed to set the controller reference for serviceaccount %q: %w", nameSpace, err)
 	}
 
-	_, err := r.currentServiceAccount(ctx, nameSpace)
+	current, err := r.currentServiceAccount(ctx, nameSpace)
 	if err != nil && !errors.IsNotFound(err) {
-		return nil, fmt.Errorf("failed to get serviceaccount %s/%s due to: %w", nameSpace.Namespace, nameSpace.Name, err)
+		return nil, fmt.Errorf("failed to get serviceaccount %q due to: %w", nameSpace, err)
 	} else if err != nil && errors.IsNotFound(err) {
 
 		// creating serviceaccount since it is not found
 		if err := r.createServiceAccount(ctx, desired); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create serviceaccount %q: %w", nameSpace, err)
 		}
 		r.Log.V(1).Info("successfully created serviceaccount", "sa.name", nameSpace.Name, "sa.namespace", nameSpace.Namespace)
 		return r.currentServiceAccount(ctx, nameSpace)
 	}
 
-	return desired, r.Update(ctx, desired)
+	var updated *corev1.ServiceAccount
+	if updated, err = r.updateServiceAccount(ctx, current, desired); err != nil {
+		return nil, fmt.Errorf("failed to update serviceaccount %q due to: %w", nameSpace, err)
+	}
+
+	r.Log.V(1).Info("successfully updated serviceaccount", "sa.name", nameSpace.Name, "sa.namespace", nameSpace.Namespace)
+	return updated, nil
 }
 
 // currentServiceAccount checks that the serviceaccount exists
 func (r *NodeObservabilityReconciler) currentServiceAccount(ctx context.Context, nameSpace types.NamespacedName) (*corev1.ServiceAccount, error) {
 	sa := &corev1.ServiceAccount{}
 	if err := r.Get(ctx, nameSpace, sa); err != nil {
-		return nil, fmt.Errorf("failed to get serviceaccount %s/%s due to: %w", nameSpace.Namespace, nameSpace.Name, err)
+		return nil, err
 	}
 	return sa, nil
 }
 
 // createServiceAccount creates the serviceaccount
 func (r *NodeObservabilityReconciler) createServiceAccount(ctx context.Context, sa *corev1.ServiceAccount) error {
-	if err := r.Create(ctx, sa); err != nil {
-		return fmt.Errorf("failed to create serviceaccount %s/%s: %w", sa.Namespace, sa.Name, err)
-	}
-	r.Log.Info("created serviceaccount", "sa.Namespace", sa.Namespace, "sa.Name", sa.Name)
-	return nil
+	return r.Create(ctx, sa)
 }
 
 // desiredServiceAccount returns a serviceaccount object
@@ -71,4 +74,20 @@ func (r *NodeObservabilityReconciler) desiredServiceAccount(nodeObs *v1alpha1.No
 			Name:      serviceAccountName,
 		},
 	}
+}
+
+func (r *NodeObservabilityReconciler) updateServiceAccount(ctx context.Context, current, desired *corev1.ServiceAccount) (*corev1.ServiceAccount, error) {
+	updatedSA := current.DeepCopy()
+	var updated bool
+
+	if !cmp.Equal(current.ObjectMeta.OwnerReferences, desired.ObjectMeta.OwnerReferences) {
+		updatedSA.ObjectMeta.OwnerReferences = desired.ObjectMeta.OwnerReferences
+		updated = true
+	}
+
+	if updated {
+		return updatedSA, r.Update(ctx, updatedSA)
+	}
+
+	return updatedSA, nil
 }

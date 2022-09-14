@@ -11,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
@@ -43,7 +42,7 @@ func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeO
 
 	current, err := r.currentDaemonSet(ctx, nameSpace)
 	if err != nil && !errors.IsNotFound(err) {
-		return nil, fmt.Errorf("failed to get daemonset %s/%s due to: %w", nameSpace.Namespace, nameSpace.Namespace, err)
+		return nil, fmt.Errorf("failed to get daemonset %q due to: %w", nameSpace, err)
 	} else if err != nil && errors.IsNotFound(err) {
 
 		// create daemon since it doesn't exist
@@ -53,20 +52,22 @@ func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeO
 		}
 
 		if err := r.createDaemonSet(ctx, desired); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create daemonset %q: %w", nameSpace, err)
 		}
+		r.Log.V(1).Info("created daemonset", "ds.namespace", nameSpace.Namespace, "ds.name", nameSpace.Name)
+
 		return r.currentDaemonSet(ctx, nameSpace)
 	}
 
 	updated, err := r.updateDaemonset(ctx, current, desired)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to update the daemonset %q: %w", nameSpace, err)
 	}
 
 	if updated {
 		current, err = r.currentDaemonSet(ctx, nameSpace)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get existing daemonset %s/%s: %w", nameSpace.Namespace, nameSpace.Name, err)
+			return nil, fmt.Errorf("failed to get existing daemonset %q: %w", nameSpace, err)
 		}
 	}
 	return current, nil
@@ -83,11 +84,7 @@ func (r *NodeObservabilityReconciler) currentDaemonSet(ctx context.Context, name
 
 // createDaemonSet creates the serviceaccount
 func (r *NodeObservabilityReconciler) createDaemonSet(ctx context.Context, ds *appsv1.DaemonSet) error {
-	if err := r.Create(ctx, ds); err != nil {
-		return fmt.Errorf("failed to create daemonset %s/%s: %w", ds.Namespace, ds.Name, err)
-	}
-	r.Log.V(1).Info("created daemonset", "ds.namespace", ds.Namespace, "ds.name", ds.Name)
-	return nil
+	return r.Create(ctx, ds)
 }
 
 func (r *NodeObservabilityReconciler) updateDaemonset(ctx context.Context, current, desired *appsv1.DaemonSet) (bool, error) {
@@ -99,40 +96,29 @@ func (r *NodeObservabilityReconciler) updateDaemonset(ctx context.Context, curre
 		updated = true
 	}
 
-	// if the desired and current daemonset container are not the same then just update
-	if len(desired.Spec.Template.Spec.Containers) != len(updatedDS.Spec.Template.Spec.Containers) {
-		updatedDS.Spec.Template.Spec.Containers = desired.Spec.Template.Spec.Containers
+	if !cmp.Equal(current.Spec.Template.Labels, desired.Spec.Template.Labels) {
+		updatedDS.Spec.Template.Labels = desired.Spec.Template.Labels
 		updated = true
-	} else {
-		// for each of the container in the desired daemonset ensure the corresponding container in the current matches
-		for _, desiredContainer := range desired.Spec.Template.Spec.Containers {
-			foundIndex := -1
-			for i, currentContainer := range updatedDS.Spec.Template.Spec.Containers {
-				if currentContainer.Name == desiredContainer.Name {
-					foundIndex = i
-					break
-				}
-			}
-			if foundIndex < 0 {
-				return false, fmt.Errorf("daemonset %s does not have a container with the name %s", current.Name, desiredContainer.Name)
-			}
-
-			if changed := hasContainerChanged(updatedDS.Spec.Template.Spec.Containers[foundIndex], desiredContainer); changed {
-				updatedDS.Spec.Template.Spec.Containers[foundIndex] = desiredContainer
-				updated = true
-			}
-		}
 	}
 
-	if haveVolumesChanged(updatedDS.Spec.Template.Spec.Volumes, desired.Spec.Template.Spec.Volumes) {
-		updatedDS.Spec.Template.Spec.Volumes = desired.Spec.Template.Spec.Volumes
+	if changed, updatedContainers := containersChanged(current.Spec.Template.Spec.Containers, desired.Spec.Template.Spec.Containers); changed {
+		updatedDS.Spec.Template.Spec.Containers = updatedContainers
+		updated = true
+	}
+
+	if changed, updatedVolumes := volumesChanged(updatedDS.Spec.Template.Spec.Volumes, desired.Spec.Template.Spec.Volumes); changed {
+		updatedDS.Spec.Template.Spec.Volumes = updatedVolumes
+		updated = true
+	}
+
+	if !cmp.Equal(current.Spec.Template.Spec.DNSPolicy, desired.Spec.Template.Spec.DNSPolicy) {
+		updatedDS.Spec.Template.Spec.DNSPolicy = desired.Spec.Template.Spec.DNSPolicy
 		updated = true
 	}
 
 	if updated {
-		err := r.Update(ctx, updatedDS)
-		if err != nil {
-			return false, fmt.Errorf("failed to update existing daemonset %s: %w", updatedDS.Name, err)
+		if err := r.Update(ctx, updatedDS); err != nil {
+			return false, err
 		}
 		return true, nil
 	}
@@ -261,143 +247,4 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 		},
 	}
 	return ds
-}
-
-// labelsForNodeObservability returns the labels for selecting the resources
-// belonging to the given node observability CR name.
-func labelsForNodeObservability(name string) map[string]string {
-	return map[string]string{"app": "nodeobservability", "nodeobs_cr": name}
-}
-
-// haveVolumesChanged if the current volumes differs from the desired volumes
-func haveVolumesChanged(current []corev1.Volume, desired []corev1.Volume) bool {
-	if len(current) != len(desired) {
-		return true
-	}
-	for i := 0; i < len(current); i++ {
-		cv := current[i]
-		dv := desired[i]
-		if cv.Name != dv.Name {
-			return true
-		}
-		if dv.Secret != nil {
-			if cv.Secret == nil {
-				return true
-			}
-			if cv.Secret.SecretName != dv.Secret.SecretName {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// hasContainerChanged checks if the current container differs from the
-// desired container
-func hasContainerChanged(current, desired corev1.Container) bool {
-	if current.Image != desired.Image {
-		return true
-	}
-	if !cmp.Equal(current.Args, desired.Args) {
-		return true
-	}
-
-	if hasSecurityContextChanged(current.SecurityContext, desired.SecurityContext) {
-		return true
-	}
-
-	if len(current.Env) != len(desired.Env) {
-		return true
-	}
-	currentEnvs := indexedContainerEnv(current.Env)
-	for _, e := range desired.Env {
-		if ce, ok := currentEnvs[e.Name]; !ok {
-			return true
-		} else if !cmp.Equal(ce, e) {
-			return true
-		}
-	}
-
-	if len(current.VolumeMounts) != len(desired.VolumeMounts) {
-		return true
-	}
-
-	for i := 0; i < len(current.VolumeMounts); i++ {
-		cvm := current.VolumeMounts[i]
-		dvm := desired.VolumeMounts[i]
-		if cvm.Name != dvm.Name || cvm.MountPath != dvm.MountPath {
-			return true
-		}
-	}
-
-	return false
-}
-
-func indexedContainerEnv(envs []corev1.EnvVar) map[string]corev1.EnvVar {
-	indexed := make(map[string]corev1.EnvVar)
-	for _, e := range envs {
-		indexed[e.Name] = e
-	}
-	return indexed
-}
-
-func hasSecurityContextChanged(current, desired *corev1.SecurityContext) bool {
-	if desired == nil {
-		return false
-	}
-
-	if current == nil {
-		return true
-	}
-
-	if desired.Capabilities != nil {
-		if current.Capabilities == nil {
-			return true
-		}
-
-		cmpCapabilities := cmpopts.SortSlices(func(a, b corev1.Capability) bool { return a < b })
-		if !cmp.Equal(desired.Capabilities.Add, current.Capabilities.Add, cmpCapabilities) {
-			return true
-		}
-
-		if !cmp.Equal(desired.Capabilities.Drop, current.Capabilities.Drop, cmpCapabilities) {
-			return true
-		}
-	}
-
-	if !equalBoolPtr(current.RunAsNonRoot, desired.RunAsNonRoot) {
-		return true
-	}
-
-	if !equalBoolPtr(current.Privileged, desired.Privileged) {
-		return true
-	}
-	if !equalBoolPtr(current.AllowPrivilegeEscalation, desired.AllowPrivilegeEscalation) {
-		return true
-	}
-
-	if desired.SeccompProfile != nil {
-		if current.SeccompProfile == nil {
-			return true
-		}
-		if desired.SeccompProfile.Type != "" && desired.SeccompProfile.Type != current.SeccompProfile.Type {
-			return true
-		}
-	}
-	return false
-}
-
-func equalBoolPtr(current, desired *bool) bool {
-	if desired == nil {
-		return true
-	}
-
-	if current == nil {
-		return false
-	}
-
-	if *current != *desired {
-		return false
-	}
-	return true
 }

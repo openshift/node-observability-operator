@@ -24,24 +24,24 @@ import (
 	"os"
 	"time"
 
-	"go.uber.org/zap/zapcore"
-
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
-	securityv1 "github.com/openshift/api/security/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	securityv1 "github.com/openshift/api/security/v1"
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+	"go.uber.org/zap/zapcore"
 
 	nodeobservabilityv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 	machineconfigcontroller "github.com/openshift/node-observability-operator/pkg/operator/controller/machineconfig"
@@ -58,7 +58,7 @@ const (
 
 var (
 	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("node-observability")
+	setupLog = ctrl.Log.WithName("operator")
 )
 
 func init() {
@@ -94,7 +94,8 @@ func main() {
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	logger := zap.New(zap.UseFlagOptions(&opts))
+	ctrl.SetLogger(logger)
 
 	token, err := ioutil.ReadFile(tokenFile)
 	if err != nil {
@@ -108,6 +109,7 @@ func main() {
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Logger:                 logger,
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
 		Port:                   9443,
@@ -148,29 +150,29 @@ func main() {
 		Client:            mgr.GetClient(),
 		ClusterWideClient: clusterWideCli,
 		Scheme:            mgr.GetScheme(),
-		Log:               ctrl.Log.WithName("controller").WithName("NodeObservability"),
+		Log:               ctrl.Log.WithName("controller.nodeobservability"),
 		Namespace:         operatorNamespace,
 		AgentImage:        agentImage,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "NodeObservability")
+		setupLog.Error(err, "unable to create controller", "controller", "nodeobservability")
 		os.Exit(1)
 	}
 
 	if err := machineconfigcontroller.New(mgr).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "NodeObservabilityMachineConfig")
+		setupLog.Error(err, "unable to create controller", "controller", "nodeobservabilitymachineconfig")
 		os.Exit(1)
 	}
 
 	if err := (&nodeobservabilityrun.NodeObservabilityRunReconciler{
 		Client:    mgr.GetClient(),
 		Scheme:    mgr.GetScheme(),
-		Log:       ctrl.Log.WithName("controller").WithName("NodeObservabilityRun"),
+		Log:       ctrl.Log.WithName("controller.nodeobservabilityrun"),
 		Namespace: operatorNamespace,
 		AgentName: agentName,
 		AuthToken: token,
 		CACert:    ca,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "NodeObservabilityRun")
+		setupLog.Error(err, "unable to create controller", "controller", "nodeobservabilityrun")
 		os.Exit(1)
 	}
 

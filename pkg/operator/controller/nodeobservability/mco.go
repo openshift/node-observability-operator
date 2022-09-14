@@ -30,23 +30,24 @@ import (
 	"github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
-func (r *NodeObservabilityReconciler) ensureNOMC(ctx context.Context, instance *v1alpha1.NodeObservability, ns string) (*v1alpha1.NodeObservabilityMachineConfig, error) {
-	nameSpace := types.NamespacedName{Name: instance.Name, Namespace: ns}
+func (r *NodeObservabilityReconciler) ensureNOMC(ctx context.Context, instance *v1alpha1.NodeObservability) (*v1alpha1.NodeObservabilityMachineConfig, error) {
+	nameSpace := types.NamespacedName{Name: instance.Name}
 
 	desired := r.desiredNOMC(instance, nameSpace)
 	if err := controllerutil.SetControllerReference(instance, desired, r.Scheme); err != nil {
-		return nil, fmt.Errorf("failed to set the controller reference for nomc %q: %w", nameSpace.Name, err)
+		return nil, fmt.Errorf("failed to set the controller reference for nodeobservabilitymachineconfig %q: %w", nameSpace.Name, err)
 	}
 
 	currentNOMC, err := r.currentNOMC(ctx, nameSpace)
 	if err != nil && !errors.IsNotFound(err) {
-		return nil, fmt.Errorf("failed to get nomc %s/%s due to: %w", nameSpace.Namespace, nameSpace.Name, err)
+		return nil, fmt.Errorf("failed to get nodeobservabilitymachineconfig %q due to: %w", nameSpace.Name, err)
 	} else if err != nil && errors.IsNotFound(err) {
 
 		// create NOMC since it doesn't exist
 		if err := r.createNOMC(ctx, desired); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create nodeobservabilitymachineconfig %q: %w", instance.Name, err)
 		}
+		r.Log.V(1).Info("created nodeobservabilitymachineconfig", "nomc.namespace", instance.Namespace, "nomc.name", instance.Name)
 		return r.currentNOMC(ctx, nameSpace)
 	}
 
@@ -66,8 +67,7 @@ func (r *NodeObservabilityReconciler) currentNOMC(ctx context.Context, nameSpace
 func (r *NodeObservabilityReconciler) desiredNOMC(instance *v1alpha1.NodeObservability, nameSpace types.NamespacedName) *v1alpha1.NodeObservabilityMachineConfig {
 	return &v1alpha1.NodeObservabilityMachineConfig{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      instance.Name,
-			Namespace: nameSpace.Namespace,
+			Name: nameSpace.Name,
 		},
 		Spec: r.desiredNOMCSpec(instance),
 	}
@@ -75,11 +75,7 @@ func (r *NodeObservabilityReconciler) desiredNOMC(instance *v1alpha1.NodeObserva
 
 // createNOMC creates the NodeObservabilityMachineConfig
 func (r *NodeObservabilityReconciler) createNOMC(ctx context.Context, instance *v1alpha1.NodeObservabilityMachineConfig) error {
-	if err := r.Create(ctx, instance); err != nil {
-		return fmt.Errorf("failed to create nomc %s/%s: %w", instance.Namespace, instance.Name, err)
-	}
-	r.Log.V(1).Info("created nomc", "nomc.namespace", instance.Namespace, "nomc.name", instance.Name)
-	return nil
+	return r.Create(ctx, instance)
 }
 
 // desiredNOMCSpec returns a NodeObservabilityMachineConfigSpec object
@@ -123,8 +119,8 @@ func (r *NodeObservabilityReconciler) deleteNOMC(ctx context.Context, nodeObs *v
 		if errors.IsNotFound(err) {
 			return nil
 		}
-		return fmt.Errorf("failed to delete nomc %s/%s: %w", mc.Namespace, mc.Name, err)
+		return fmt.Errorf("failed to delete nodeobservabilitymachineconfig %s/%s: %w", mc.Namespace, mc.Name, err)
 	}
-	r.Log.V(1).Info("deleted nomc", "nomc.name", mc.Name)
+	r.Log.V(1).Info("deleted nodeobservabilitymachineconfig", "nomc.name", mc.Name)
 	return nil
 }

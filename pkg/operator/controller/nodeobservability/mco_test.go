@@ -90,7 +90,7 @@ func TestEnsureMCO(t *testing.T) {
 				Log:    zap.New(zap.UseDevMode(true)),
 			}
 
-			obj, err := r.ensureNOMC(context.TODO(), nodeObs, test.TestNamespace)
+			obj, err := r.ensureNOMC(context.TODO(), nodeObs)
 			if err != nil {
 				t.Fatalf("unexpected error received: %v", err)
 			}

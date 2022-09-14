@@ -39,17 +39,17 @@ func (r *NodeObservabilityReconciler) ensureService(ctx context.Context, nodeObs
 
 	desired := r.desiredService(nodeObs, ns)
 	if err := controllerutil.SetControllerReference(nodeObs, desired, r.Scheme); err != nil {
-		return nil, fmt.Errorf("failed to set the controller reference for service %q: %w", nameSpace.Name, err)
+		return nil, fmt.Errorf("failed to set the controller reference for service %q: %w", nameSpace, err)
 	}
 
 	current, err := r.currentService(ctx, nameSpace)
 	if err != nil && !errors.IsNotFound(err) {
-		return nil, fmt.Errorf("failed to get service %s/%s due to: %w", nameSpace.Namespace, nameSpace.Name, err)
+		return nil, fmt.Errorf("failed to get service %q due to: %w", nameSpace, err)
 	} else if err != nil && errors.IsNotFound(err) {
 
 		// creating service since it is not found
 		if err := r.createService(ctx, desired); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create service %q: %w", nameSpace, err)
 		}
 		r.Log.V(1).Info("successfully created service", "svc.name", nameSpace.Name, "svc.namespace", nameSpace.Namespace)
 		return r.currentService(ctx, nameSpace)
@@ -59,22 +59,18 @@ func (r *NodeObservabilityReconciler) ensureService(ctx context.Context, nodeObs
 	return r.updateService(ctx, current, desired)
 }
 
-// currentService checks that the service exists
+// currentService gets the current service
 func (r *NodeObservabilityReconciler) currentService(ctx context.Context, nameSpace types.NamespacedName) (*corev1.Service, error) {
 	svc := &corev1.Service{}
 	if err := r.Get(ctx, nameSpace, svc); err != nil {
-		return nil, fmt.Errorf("failed to get service %s/%s due to: %w", nameSpace.Namespace, nameSpace.Name, err)
+		return nil, err
 	}
 	return svc, nil
 }
 
 // createService creates the service
 func (r *NodeObservabilityReconciler) createService(ctx context.Context, svc *corev1.Service) error {
-	if err := r.Create(ctx, svc); err != nil {
-		return fmt.Errorf("failed to create service %s/%s: %w", svc.Namespace, svc.Name, err)
-	}
-	r.Log.V(1).Info("created service", "svc.Namespace", svc.Namespace, "svc.Name", svc.Name)
-	return nil
+	return r.Create(ctx, svc)
 }
 
 func (r *NodeObservabilityReconciler) updateService(ctx context.Context, current, desired *corev1.Service) (*corev1.Service, error) {
@@ -101,7 +97,7 @@ func (r *NodeObservabilityReconciler) updateService(ctx context.Context, current
 		updated = true
 	}
 
-	if updatedService.Annotations == nil {
+	if updatedService.Annotations == nil && len(desired.Annotations) > 0 {
 		updatedService.Annotations = make(map[string]string)
 	}
 	for annotationKey, annotationValue := range desired.Annotations {
@@ -171,7 +167,7 @@ func portsMatch(current, desired SortableServicePort) bool {
 	for i := 0; i < len(currentCopy); i++ {
 		c := currentCopy[i]
 		d := desiredCopy[i]
-		if c.Name != d.Name || c.Port != d.Port || c.TargetPort.IntVal != d.TargetPort.IntVal {
+		if c.Name != d.Name || c.Port != d.Port || c.TargetPort.IntVal != d.TargetPort.IntVal || c.Protocol != d.Protocol {
 			return false
 		}
 	}
