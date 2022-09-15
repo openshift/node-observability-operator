@@ -69,6 +69,7 @@ func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeO
 		if err != nil {
 			return nil, fmt.Errorf("failed to get existing daemonset %q: %w", nameSpace, err)
 		}
+		r.Log.V(1).Info("successfully updated daemonset", "ds.name", nameSpace.Name, "ds.namespace", nameSpace.Namespace)
 	}
 	return current, nil
 }

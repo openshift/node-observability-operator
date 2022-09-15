@@ -122,9 +122,6 @@ func TestReconcile(t *testing.T) {
 			expectedResult:       reconcile.Result{},
 			expectReadyCondition: metav1.ConditionFalse,
 		},
-		{
-			name: "",
-		},
 	}
 
 	// loop through test cases (bootstrap and delete)

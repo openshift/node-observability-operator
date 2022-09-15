@@ -89,7 +89,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		r.Log = ctxLog
 	}
 
-	r.Log.V(3).Info("reconciling", "request", req)
+	r.Log.V(1).Info("reconciliation started")
 
 	// Fetch the NodeObservability instance
 	nodeObs := &operatorv1alpha1.NodeObservability{}

@@ -84,7 +84,8 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if ctxLog, err := logr.FromContext(ctx); err == nil {
 		r.Log = ctxLog
 	}
-	r.Log.V(1).Info("reconciling", "request", req)
+
+	r.Log.V(1).Info("reconciliation started")
 
 	// Fetch the NodeObservabilityMachineConfig CR
 	r.CtrlConfig = &v1alpha1.NodeObservabilityMachineConfig{}

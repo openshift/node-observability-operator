@@ -668,9 +668,6 @@ func TestUpdateDaemonSet(t *testing.T) {
 					testContainer("agent", "agent:v1").
 						withArgs([]string{"--arg1=1"}...).
 						build(),
-					testContainer("random-container", "agent:v1").
-						withArgs([]string{"--arg1=1"}...).
-						build(),
 				).build(),
 			expectedDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(
@@ -704,7 +701,7 @@ func TestUpdateDaemonSet(t *testing.T) {
 			expectUpdate: true,
 		},
 		{
-			name: "container volume mount modified",
+			name: "container volume mount modified and new volume mount injected",
 			existingDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(testContainer("agent", "agent:v1").
 					withVolumeMounts([]corev1.VolumeMount{
@@ -727,7 +724,7 @@ func TestUpdateDaemonSet(t *testing.T) {
 			expectUpdate: true,
 		},
 		{
-			name: "daemonset volumes modified",
+			name: "daemonset volumes modified and new volume injected",
 			existingDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(
 					testContainer("agent", "agent:v1").build()).
@@ -736,7 +733,7 @@ func TestUpdateDaemonSet(t *testing.T) {
 						Name: "volume",
 						VolumeSource: corev1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{
-								SecretName: "random-secret",
+								SecretName: "secret",
 							},
 						},
 					},
@@ -759,14 +756,6 @@ func TestUpdateDaemonSet(t *testing.T) {
 						VolumeSource: corev1.VolumeSource{
 							Secret: &corev1.SecretVolumeSource{
 								SecretName: "secret",
-							},
-						},
-					},
-					{
-						Name: "random-volume",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{
-								SecretName: "random-secret",
 							},
 						},
 					},
@@ -794,7 +783,7 @@ func TestUpdateDaemonSet(t *testing.T) {
 					},
 				}...).
 				build(),
-			expectUpdate: true,
+			expectUpdate: false,
 		},
 		{
 			name: "security context is modified",

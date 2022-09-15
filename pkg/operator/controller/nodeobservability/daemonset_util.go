@@ -184,7 +184,7 @@ func containersChanged(current, desired []corev1.Container) (bool, []corev1.Cont
 				updatedContainers[currCont.Index].Args = expCont.Args
 				changed = true
 			}
-			if !cmp.Equal(currCont.Command, expCont.Command, cmpOpts) {
+			if !cmp.Equal(currCont.Command, expCont.Command) {
 				updatedContainers[currCont.Index].Command = expCont.Command
 				changed = true
 			}
@@ -202,7 +202,6 @@ func containersChanged(current, desired []corev1.Container) (bool, []corev1.Cont
 			}
 
 		} else {
-			// if the current container is not expected: let's not dig deeper - reset all
 			updatedContainers = append(updatedContainers, currentContMap[currName].Container)
 			changed = false
 		}
@@ -220,11 +219,7 @@ func hasSecurityContextChanged(current, desired *corev1.SecurityContext) bool {
 		return true
 	}
 
-	if !equalBoolPtr(current.Privileged, desired.Privileged) {
-		return true
-	}
-
-	return false
+	return !equalBoolPtr(current.Privileged, desired.Privileged)
 }
 
 func equalBoolPtr(current, desired *bool) bool {

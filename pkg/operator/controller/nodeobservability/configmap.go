@@ -58,9 +58,9 @@ func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeO
 			if err := r.Create(ctx, configMap); err != nil {
 				return fmt.Errorf("failed to create target configmap %q: %w", configMapName, err)
 			}
+			r.Log.Info("created kubelet CA configmap", "configmap.namespace", configMapName.Namespace, "configmap.name", configMapName.Name)
 		}
 	}
 
-	r.Log.Info("created kubelet CA configmap", "configmap.namespace", configMapName.Namespace, "configmap.name", configMapName.Name)
 	return nil
 }

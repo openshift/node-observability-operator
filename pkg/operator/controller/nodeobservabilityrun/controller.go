@@ -76,7 +76,8 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 	if ctxLog, err := logr.FromContext(ctx); err == nil {
 		r.Log = ctxLog
 	}
-	r.Log.V(1).Info("reconciling", "request", req)
+
+	r.Log.V(1).Info("reconciliation started")
 
 	instance := &nodeobservabilityv1alpha1.NodeObservabilityRun{}
 	err = r.Get(ctx, req.NamespacedName, instance)
