@@ -21,8 +21,8 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/openshift/node-observability-operator/api/v1alpha1"
 	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
@@ -37,18 +37,28 @@ var _ = Describe("Node Observability Operator end-to-end test suite", Ordered, f
 
 	BeforeAll(func() {
 		nodeobservability = testNodeObservability()
-		By("deploying Node Observability Agents", func() {
-			Expect(k8sClient.Create(ctx, nodeobservability)).To(Succeed(), "test NodeObservability resource created")
-			Eventually(func() bool {
-				ds := &appsv1.DaemonSet{}
-				dsNamespacedName := types.NamespacedName{
-					Name:      "node-observability-ds",
-					Namespace: testNamespace,
-				}
-				Expect(client.IgnoreNotFound(k8sClient.Get(ctx, dsNamespacedName, ds))).To(Succeed())
-				return ds.Status.NumberReady != 0 && ds.Status.DesiredNumberScheduled == ds.Status.NumberReady
-			}, 60, time.Second).Should(BeTrue(), "number of ready agents != number of desired agents")
-		})
+		By("deploying Node Observability Agents",
+			func() {
+				Expect(k8sClient.Create(ctx, nodeobservability)).To(Succeed(), "test NodeObservability resource created")
+
+				Eventually(
+					func() bool {
+						ds := &appsv1.DaemonSet{}
+						dsNamespacedName := types.NamespacedName{
+							Name:      "node-observability-ds",
+							Namespace: testNamespace,
+						}
+
+						nobs := &v1alpha1.NodeObservability{}
+						nobsName := types.NamespacedName{Name: "cluster"}
+
+						Expect(k8sClient.Get(ctx, dsNamespacedName, ds)).To(Succeed())
+
+						Expect(k8sClient.Get(ctx, nobsName, nobs)).To(Succeed())
+						return ds.Status.NumberReady != 0 && ds.Status.DesiredNumberScheduled == ds.Status.NumberReady && nobs.Status.IsReady()
+					}, "10m").Should(BeTrue(), "number of ready agents != number of desired agents and nodeobservabilitymachineconfig and nodeobservability should be in ready state")
+			})
+
 	})
 	Context("Happy Path scenario - single scrape is initiated and it is expected to succeed", func() {
 		var (
