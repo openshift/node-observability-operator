@@ -31,7 +31,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	operatorv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 )
 
 const (
@@ -92,7 +92,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	r.Log.V(1).Info("reconciliation started")
 
 	// Fetch the NodeObservability instance
-	nodeObs := &operatorv1alpha1.NodeObservability{}
+	nodeObs := &operatorv1alpha2.NodeObservability{}
 	err := r.Get(ctx, req.NamespacedName, nodeObs)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -109,7 +109,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	err = isClusterNodeObservability(ctx, nodeObs)
 	if err != nil {
 		// Update nodeObs Status
-		nodeObs.Status.SetCondition(operatorv1alpha1.DebugReady, metav1.ConditionFalse, operatorv1alpha1.ReasonInvalid, err.Error())
+		nodeObs.Status.SetCondition(operatorv1alpha2.DebugReady, metav1.ConditionFalse, operatorv1alpha2.ReasonInvalid, err.Error())
 
 		nodeObs.Status.Count = 0
 		now := metav1.NewTime(clock.Now())
@@ -214,9 +214,9 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	msg := fmt.Sprintf("DaemonSet %s ready: %t NodeObservabilityMachineConfig ready: %t", ds.Name, dsReady, nomcReady)
 	if dsReady && nomcReady {
-		nodeObs.Status.SetCondition(operatorv1alpha1.DebugReady, metav1.ConditionTrue, operatorv1alpha1.ReasonReady, msg)
+		nodeObs.Status.SetCondition(operatorv1alpha2.DebugReady, metav1.ConditionTrue, operatorv1alpha2.ReasonReady, msg)
 	} else {
-		nodeObs.Status.SetCondition(operatorv1alpha1.DebugReady, metav1.ConditionFalse, operatorv1alpha1.ReasonInProgress, msg)
+		nodeObs.Status.SetCondition(operatorv1alpha2.DebugReady, metav1.ConditionFalse, operatorv1alpha2.ReasonInProgress, msg)
 	}
 
 	nodeObs.Status.Count = ds.Status.NumberReady
@@ -234,13 +234,13 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 // SetupWithManager sets up the controller with the Manager.
 func (r *NodeObservabilityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&operatorv1alpha1.NodeObservability{}).
+		For(&operatorv1alpha2.NodeObservability{}).
 		Owns(&appsv1.DaemonSet{}).
-		Owns(&operatorv1alpha1.NodeObservabilityMachineConfig{}).
+		Owns(&operatorv1alpha2.NodeObservabilityMachineConfig{}).
 		Complete(r)
 }
 
-func hasFinalizer(nodeObs *operatorv1alpha1.NodeObservability) bool {
+func hasFinalizer(nodeObs *operatorv1alpha2.NodeObservability) bool {
 	hasFinalizer := false
 	for _, f := range nodeObs.Finalizers {
 		if f == finalizer {
@@ -251,7 +251,7 @@ func hasFinalizer(nodeObs *operatorv1alpha1.NodeObservability) bool {
 	return hasFinalizer
 }
 
-func (r *NodeObservabilityReconciler) withoutFinalizers(ctx context.Context, nodeObs *operatorv1alpha1.NodeObservability, finalizerFlag string) (*operatorv1alpha1.NodeObservability, error) {
+func (r *NodeObservabilityReconciler) withoutFinalizers(ctx context.Context, nodeObs *operatorv1alpha2.NodeObservability, finalizerFlag string) (*operatorv1alpha2.NodeObservability, error) {
 	withoutFinalizers := nodeObs.DeepCopy()
 
 	newFinalizers := make([]string, 0)
@@ -273,7 +273,7 @@ func (r *NodeObservabilityReconciler) withoutFinalizers(ctx context.Context, nod
 	return withoutFinalizers, nil
 }
 
-func (r *NodeObservabilityReconciler) withFinalizers(ctx context.Context, nodeObs *operatorv1alpha1.NodeObservability) (*operatorv1alpha1.NodeObservability, error) {
+func (r *NodeObservabilityReconciler) withFinalizers(ctx context.Context, nodeObs *operatorv1alpha2.NodeObservability) (*operatorv1alpha2.NodeObservability, error) {
 	withFinalizers := nodeObs.DeepCopy()
 
 	if !hasFinalizer(withFinalizers) {
@@ -286,7 +286,7 @@ func (r *NodeObservabilityReconciler) withFinalizers(ctx context.Context, nodeOb
 	return withFinalizers, nil
 }
 
-func (r *NodeObservabilityReconciler) ensureNodeObservabilityDeleted(ctx context.Context, nodeObs *operatorv1alpha1.NodeObservability) error {
+func (r *NodeObservabilityReconciler) ensureNodeObservabilityDeleted(ctx context.Context, nodeObs *operatorv1alpha2.NodeObservability) error {
 	errs := []error{}
 
 	if err := r.deleteClusterRole(nodeObs); err != nil {
@@ -313,11 +313,11 @@ func (r *NodeObservabilityReconciler) ensureNodeObservabilityDeleted(ctx context
 
 // machineConfigChangeRequested returns true, when a given NodeObservabilityType needs
 // machine config change. Only CrioKubeletNodeObservabilityType requires a MC change, false otherwise
-func machineConfigChangeRequested(nodeObs *operatorv1alpha1.NodeObservability) bool {
-	return nodeObs.Spec.Type == operatorv1alpha1.CrioKubeletNodeObservabilityType
+func machineConfigChangeRequested(nodeObs *operatorv1alpha2.NodeObservability) bool {
+	return nodeObs.Spec.Type == operatorv1alpha2.CrioKubeletNodeObservabilityType
 }
 
-func isClusterNodeObservability(ctx context.Context, nodeObs *operatorv1alpha1.NodeObservability) error {
+func isClusterNodeObservability(ctx context.Context, nodeObs *operatorv1alpha2.NodeObservability) error {
 
 	if nodeObs.Name == nodeObsCRName {
 		return nil

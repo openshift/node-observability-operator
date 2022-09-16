@@ -69,7 +69,7 @@ SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
 PACKAGE=github.com/openshift/node-observability-operator
-MAIN_PACKAGE=$(PACKAGE)/cmd/node-observability-operator
+MAIN_PACKAGE=$(PACKAGE)
 
 BIN=bin/$(lastword $(subst /, ,$(MAIN_PACKAGE)))
 BIN_DIR=$(shell pwd)/bin
@@ -179,7 +179,7 @@ build: generate fmt vet build-operator ## Build manager binary.
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	$(GO) run -mod=vendor ./cmd/node-observability-operator/main.go
+	$(GO) run -mod=vendor ./main.go
 
 .PHONY: container-build
 container-build: test ## Build image with the manager.

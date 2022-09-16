@@ -3,7 +3,5 @@ kind: NodeObservabilityMachineConfig
 metadata:
   name: sample
 spec:
-  nodeSelector:
-    node-role.kubernetes.io/worker: ""
   debug:
     enableCrioProfiling: true

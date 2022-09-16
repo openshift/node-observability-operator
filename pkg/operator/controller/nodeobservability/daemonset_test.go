@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	operatorv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
@@ -77,7 +77,7 @@ func (b *testDaemonsetBuilder) withContainers(containers ...corev1.Container) *t
 func (b *testDaemonsetBuilder) withControllerReference(name string) *testDaemonsetBuilder {
 	b.ownerReference = []metav1.OwnerReference{
 		{
-			APIVersion:         operatorv1alpha1.GroupVersion.Identifier(),
+			APIVersion:         operatorv1alpha2.GroupVersion.Identifier(),
 			Kind:               "NodeObservability",
 			Name:               name,
 			Controller:         pointer.BoolPtr(true),
@@ -576,9 +576,9 @@ func TestEnsureDaemonset(t *testing.T) {
 				Log:               zap.New(zap.UseDevMode(true)),
 				AgentImage:        "node-observability-agent:latest",
 			}
-			nodeObs := &operatorv1alpha1.NodeObservability{
+			nodeObs := &operatorv1alpha2.NodeObservability{
 				ObjectMeta: metav1.ObjectMeta{Name: nodeObsInstanceName},
-				Spec: operatorv1alpha1.NodeObservabilitySpec{
+				Spec: operatorv1alpha2.NodeObservabilitySpec{
 					NodeSelector: map[string]string{
 						"node-role.kubernetes.io/worker": "",
 					},

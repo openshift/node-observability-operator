@@ -9,7 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	v1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 )
 
 const (
@@ -39,7 +39,7 @@ const (
 // ensureClusterRole ensures that the clusterrole exists
 // Returns a Boolean value indicating whether it exists, a pointer to
 // cluster role and an error when relevant
-func (r *NodeObservabilityReconciler) ensureClusterRole(ctx context.Context, nodeObs *v1alpha1.NodeObservability) (bool, *rbacv1.ClusterRole, error) {
+func (r *NodeObservabilityReconciler) ensureClusterRole(ctx context.Context, nodeObs *v1alpha2.NodeObservability) (bool, *rbacv1.ClusterRole, error) {
 	nameSpace := types.NamespacedName{Name: clusterRoleName}
 	desired := r.desiredClusterRole(nodeObs)
 	exist, current, err := r.currentClusterRole(ctx, nameSpace)
@@ -80,7 +80,7 @@ func (r *NodeObservabilityReconciler) createClusterRole(ctx context.Context, cr 
 }
 
 // desiredClusterRole returns a clusterrole object
-func (r *NodeObservabilityReconciler) desiredClusterRole(nodeObs *v1alpha1.NodeObservability) *rbacv1.ClusterRole {
+func (r *NodeObservabilityReconciler) desiredClusterRole(nodeObs *v1alpha2.NodeObservability) *rbacv1.ClusterRole {
 
 	cr := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
@@ -121,7 +121,7 @@ func (r *NodeObservabilityReconciler) desiredClusterRole(nodeObs *v1alpha1.NodeO
 // ensureClusterRoleBinding ensures that the clusterrolebinding exists
 // Returns a Boolean value indicating whether it exists, a pointer to the
 // clusterrolebinding and an error when relevant
-func (r *NodeObservabilityReconciler) ensureClusterRoleBinding(ctx context.Context, nodeObs *v1alpha1.NodeObservability, saName, ns string) (bool, *rbacv1.ClusterRoleBinding, error) {
+func (r *NodeObservabilityReconciler) ensureClusterRoleBinding(ctx context.Context, nodeObs *v1alpha2.NodeObservability, saName, ns string) (bool, *rbacv1.ClusterRoleBinding, error) {
 	nameSpace := types.NamespacedName{Namespace: ns, Name: clusterRoleBindingName}
 	desired := r.desiredClusterRoleBinding(nodeObs, saName, ns)
 	exist, current, err := r.currentClusterRoleBinding(ctx, nameSpace)
@@ -163,7 +163,7 @@ func (r *NodeObservabilityReconciler) createClusterRoleBinding(ctx context.Conte
 }
 
 // desiredClusterRoleBinding returns a clusterrolebinding object
-func (r *NodeObservabilityReconciler) desiredClusterRoleBinding(nodeObs *v1alpha1.NodeObservability, saName, ns string) *rbacv1.ClusterRoleBinding {
+func (r *NodeObservabilityReconciler) desiredClusterRoleBinding(nodeObs *v1alpha2.NodeObservability, saName, ns string) *rbacv1.ClusterRoleBinding {
 
 	crb := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -190,7 +190,7 @@ func labelsForClusterRole(name string) map[string]string {
 	return map[string]string{"scc": "node-observability-scc-role", "role": name}
 }
 
-func (r *NodeObservabilityReconciler) deleteClusterRole(nodeObs *v1alpha1.NodeObservability) error {
+func (r *NodeObservabilityReconciler) deleteClusterRole(nodeObs *v1alpha2.NodeObservability) error {
 	cr := &rbacv1.ClusterRole{}
 	cr.Name = clusterRoleName
 	if err := r.Client.Delete(context.TODO(), cr); err != nil {
@@ -202,7 +202,7 @@ func (r *NodeObservabilityReconciler) deleteClusterRole(nodeObs *v1alpha1.NodeOb
 	return nil
 }
 
-func (r *NodeObservabilityReconciler) deleteClusterRoleBinding(nodeObs *v1alpha1.NodeObservability) error {
+func (r *NodeObservabilityReconciler) deleteClusterRoleBinding(nodeObs *v1alpha2.NodeObservability) error {
 	crb := &rbacv1.ClusterRoleBinding{}
 	crb.Name = clusterRoleBindingName
 	if err := r.Client.Delete(context.TODO(), crb); err != nil {

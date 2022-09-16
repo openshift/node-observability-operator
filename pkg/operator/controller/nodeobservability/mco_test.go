@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"github.com/openshift/node-observability-operator/api/v1alpha1"
+	"github.com/openshift/node-observability-operator/api/v1alpha2"
 	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
@@ -37,27 +37,27 @@ const (
 )
 
 func TestEnsureMCO(t *testing.T) {
-	nomc := &v1alpha1.NodeObservabilityMachineConfig{
+	nomc := &v1alpha2.NodeObservabilityMachineConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: NodeObservabilityMachineConfigTest,
 		},
-		Spec: v1alpha1.NodeObservabilityMachineConfigSpec{
-			Debug: v1alpha1.NodeObservabilityDebug{
+		Spec: v1alpha2.NodeObservabilityMachineConfigSpec{
+			Debug: v1alpha2.NodeObservabilityDebug{
 				EnableCrioProfiling: true,
 			},
 		},
 	}
-	nodeObs := &v1alpha1.NodeObservability{
+	nodeObs := &v1alpha2.NodeObservability{
 		ObjectMeta: metav1.ObjectMeta{Name: NodeObservabilityMachineConfigTest},
-		Spec: v1alpha1.NodeObservabilitySpec{
-			Type: v1alpha1.CrioKubeletNodeObservabilityType,
+		Spec: v1alpha2.NodeObservabilitySpec{
+			Type: v1alpha2.CrioKubeletNodeObservabilityType,
 		},
 	}
 
 	testCases := []struct {
 		name            string
 		existingObjects []runtime.Object
-		expectedMCO     *v1alpha1.NodeObservabilityMachineConfig
+		expectedMCO     *v1alpha2.NodeObservabilityMachineConfig
 	}{
 		{
 			name:            "Does not exist",
@@ -67,12 +67,12 @@ func TestEnsureMCO(t *testing.T) {
 		{
 			name: "Exists but needs to be updated",
 			existingObjects: []runtime.Object{
-				&v1alpha1.NodeObservabilityMachineConfig{
+				&v1alpha2.NodeObservabilityMachineConfig{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: NodeObservabilityMachineConfigTest,
 					},
-					Spec: v1alpha1.NodeObservabilityMachineConfigSpec{
-						Debug: v1alpha1.NodeObservabilityDebug{
+					Spec: v1alpha2.NodeObservabilityMachineConfigSpec{
+						Debug: v1alpha2.NodeObservabilityDebug{
 							EnableCrioProfiling: false,
 						},
 					},
@@ -95,7 +95,7 @@ func TestEnsureMCO(t *testing.T) {
 				t.Fatalf("unexpected error received: %v", err)
 			}
 
-			nomc := &v1alpha1.NodeObservabilityMachineConfig{}
+			nomc := &v1alpha2.NodeObservabilityMachineConfig{}
 			err = r.Client.Get(context.Background(), types.NamespacedName{Namespace: test.TestNamespace, Name: NodeObservabilityMachineConfigTest}, nomc)
 			if err != nil {
 				t.Fatalf("failed to get daemonset: %v", err)

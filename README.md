@@ -99,9 +99,6 @@ NodeObservability Operator can be installed by building and pushing the custom O
     metadata:
       name: node-observability-operator
       namespace: node-observability-operator
-    spec:
-      targetNamespaces:
-      - node-observability-operator
     EOF
     ```
 
@@ -162,5 +159,5 @@ oc -n node-observability-operator get deployment/node-observability-operator
 
 Run the following command to create an instance of `NodeObservability`:
 ```sh
-oc apply -f config/samples/nodeobservability_v1alpha1_nodeobservability-all.yaml
+oc apply -f config/samples/nodeobservability_v1alpha2_nodeobservability-all.yaml
 ```

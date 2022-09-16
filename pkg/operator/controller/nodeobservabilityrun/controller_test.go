@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	operatorv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
@@ -104,34 +104,34 @@ func TestGetAgentEndpoints(t *testing.T) {
 func TestHandleFailingAgent(t *testing.T) {
 	testInstance := testNodeObservabilityRun()
 	cases := []struct {
-		inputAgents    []operatorv1alpha1.AgentNode
-		inputFailed    []operatorv1alpha1.AgentNode
-		failingNode    operatorv1alpha1.AgentNode
-		expectedAgents []operatorv1alpha1.AgentNode
-		expectedFailed []operatorv1alpha1.AgentNode
+		inputAgents    []operatorv1alpha2.AgentNode
+		inputFailed    []operatorv1alpha2.AgentNode
+		failingNode    operatorv1alpha2.AgentNode
+		expectedAgents []operatorv1alpha2.AgentNode
+		expectedFailed []operatorv1alpha2.AgentNode
 	}{
 		{
-			inputAgents:    []operatorv1alpha1.AgentNode{{Name: "good"}, {Name: "failing"}},
+			inputAgents:    []operatorv1alpha2.AgentNode{{Name: "good"}, {Name: "failing"}},
 			inputFailed:    nil,
-			failingNode:    operatorv1alpha1.AgentNode{Name: "failing"},
-			expectedAgents: []operatorv1alpha1.AgentNode{{Name: "good"}},
-			expectedFailed: []operatorv1alpha1.AgentNode{{Name: "failing"}},
+			failingNode:    operatorv1alpha2.AgentNode{Name: "failing"},
+			expectedAgents: []operatorv1alpha2.AgentNode{{Name: "good"}},
+			expectedFailed: []operatorv1alpha2.AgentNode{{Name: "failing"}},
 		},
 		{
 			// not in list
-			inputAgents:    []operatorv1alpha1.AgentNode{{Name: "one"}, {Name: "two"}, {Name: "three"}},
+			inputAgents:    []operatorv1alpha2.AgentNode{{Name: "one"}, {Name: "two"}, {Name: "three"}},
 			inputFailed:    nil,
-			failingNode:    operatorv1alpha1.AgentNode{Name: "failing"},
-			expectedAgents: []operatorv1alpha1.AgentNode{{Name: "one"}, {Name: "two"}, {Name: "three"}},
+			failingNode:    operatorv1alpha2.AgentNode{Name: "failing"},
+			expectedAgents: []operatorv1alpha2.AgentNode{{Name: "one"}, {Name: "two"}, {Name: "three"}},
 			expectedFailed: nil,
 		},
 		{
 			// last non-failing agent
-			inputAgents:    []operatorv1alpha1.AgentNode{{Name: "failing"}},
-			inputFailed:    []operatorv1alpha1.AgentNode{{Name: "one"}, {Name: "two"}, {Name: "three"}},
-			failingNode:    operatorv1alpha1.AgentNode{Name: "failing"},
+			inputAgents:    []operatorv1alpha2.AgentNode{{Name: "failing"}},
+			inputFailed:    []operatorv1alpha2.AgentNode{{Name: "one"}, {Name: "two"}, {Name: "three"}},
+			failingNode:    operatorv1alpha2.AgentNode{Name: "failing"},
 			expectedAgents: nil,
-			expectedFailed: []operatorv1alpha1.AgentNode{{Name: "one"}, {Name: "two"}, {Name: "three"}, {Name: "failing"}},
+			expectedFailed: []operatorv1alpha2.AgentNode{{Name: "one"}, {Name: "two"}, {Name: "three"}, {Name: "failing"}},
 		},
 	}
 	for _, tc := range cases {
@@ -239,7 +239,7 @@ func TestReconcile(t *testing.T) {
 		{
 			name: "finished",
 			existingObjects: []runtime.Object{
-				testNodeObservabilityRunWithStatus(operatorv1alpha1.NodeObservabilityRunStatus{
+				testNodeObservabilityRunWithStatus(operatorv1alpha2.NodeObservabilityRunStatus{
 					FinishedTimestamp: &now,
 				}),
 			},
@@ -270,7 +270,7 @@ func TestReconcile(t *testing.T) {
 			name: "run in progress",
 			existingObjects: []runtime.Object{
 				testNodeObservability(),
-				testNodeObservabilityRunWithStatus(operatorv1alpha1.NodeObservabilityRunStatus{
+				testNodeObservabilityRunWithStatus(operatorv1alpha2.NodeObservabilityRunStatus{
 					StartTimestamp: &now,
 				}),
 				&corev1.Endpoints{
@@ -307,7 +307,7 @@ func TestReconcile(t *testing.T) {
 			t.Fatalf("%s: expected result %v, got %v", tc.name, tc.res, res)
 		}
 
-		got := &operatorv1alpha1.NodeObservabilityRun{}
+		got := &operatorv1alpha2.NodeObservabilityRun{}
 		if err := cl.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, got); err != nil && !errors.IsNotFound(err) {
 			t.Fatalf("%s: error while trying to get NodeObservabilityRun  %v", tc.name, res)
 		}
@@ -323,8 +323,8 @@ func TestReconcile(t *testing.T) {
 }
 
 // testNodeObservabilityRun - minimal CR for the test
-func testNodeObservabilityRun() *operatorv1alpha1.NodeObservabilityRun {
-	return &operatorv1alpha1.NodeObservabilityRun{
+func testNodeObservabilityRun() *operatorv1alpha2.NodeObservabilityRun {
+	return &operatorv1alpha2.NodeObservabilityRun{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
@@ -334,27 +334,27 @@ func testNodeObservabilityRun() *operatorv1alpha1.NodeObservabilityRun {
 				},
 			},
 		},
-		Spec: operatorv1alpha1.NodeObservabilityRunSpec{
-			NodeObservabilityRef: &operatorv1alpha1.NodeObservabilityRef{
+		Spec: operatorv1alpha2.NodeObservabilityRunSpec{
+			NodeObservabilityRef: &operatorv1alpha2.NodeObservabilityRef{
 				Name: nodeObsName,
 			},
 		},
-		Status: operatorv1alpha1.NodeObservabilityRunStatus{},
+		Status: operatorv1alpha2.NodeObservabilityRunStatus{},
 	}
 }
 
 // testNodeObservability - minimal CR for the test
-func testNodeObservability() *operatorv1alpha1.NodeObservability {
-	return &operatorv1alpha1.NodeObservability{
+func testNodeObservability() *operatorv1alpha2.NodeObservability {
+	return &operatorv1alpha2.NodeObservability{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: nodeObsName,
 		},
-		Spec: operatorv1alpha1.NodeObservabilitySpec{},
-		Status: operatorv1alpha1.NodeObservabilityStatus{
-			ConditionalStatus: operatorv1alpha1.ConditionalStatus{
+		Spec: operatorv1alpha2.NodeObservabilitySpec{},
+		Status: operatorv1alpha2.NodeObservabilityStatus{
+			ConditionalStatus: operatorv1alpha2.ConditionalStatus{
 				Conditions: []metav1.Condition{
 					{
-						Type:   operatorv1alpha1.DebugReady,
+						Type:   operatorv1alpha2.DebugReady,
 						Status: metav1.ConditionTrue,
 					},
 				},
@@ -363,7 +363,7 @@ func testNodeObservability() *operatorv1alpha1.NodeObservability {
 	}
 }
 
-func testNodeObservabilityRunWithStatus(s operatorv1alpha1.NodeObservabilityRunStatus) *operatorv1alpha1.NodeObservabilityRun {
+func testNodeObservabilityRunWithStatus(s operatorv1alpha2.NodeObservabilityRunStatus) *operatorv1alpha2.NodeObservabilityRun {
 	run := testNodeObservabilityRun()
 	run.Status = s
 	return run

@@ -29,13 +29,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	operatorv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 	test "github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
 func makeScc() *securityv1.SecurityContextConstraints {
 	var priority int32 = 10
-	nodeObs := &operatorv1alpha1.NodeObservability{}
+	nodeObs := &operatorv1alpha2.NodeObservability{}
 	scc := securityv1.SecurityContextConstraints{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      sccName,
@@ -103,7 +103,7 @@ func TestEnsureScc(t *testing.T) {
 				Scheme: test.Scheme,
 				Log:    zap.New(zap.UseDevMode(true)),
 			}
-			nodeObs := &operatorv1alpha1.NodeObservability{}
+			nodeObs := &operatorv1alpha2.NodeObservability{}
 			gotExist, _, err := r.ensureSecurityContextConstraints(context.TODO(), nodeObs)
 			if err != nil {
 				if !tc.errExpected {

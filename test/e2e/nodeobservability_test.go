@@ -24,7 +24,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	operatorv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 )
 
 var (
@@ -33,7 +33,7 @@ var (
 
 var _ = Describe("Node Observability Operator end-to-end test suite", Ordered, func() {
 	var (
-		nodeobservability *operatorv1alpha1.NodeObservability
+		nodeobservability *operatorv1alpha2.NodeObservability
 	)
 
 	BeforeAll(func() {
@@ -53,7 +53,7 @@ var _ = Describe("Node Observability Operator end-to-end test suite", Ordered, f
 	})
 	Context("Happy Path scenario - single scrape is initiated and it is expected to succeed", func() {
 		var (
-			nodeobservabilityRun *operatorv1alpha1.NodeObservabilityRun
+			nodeobservabilityRun *operatorv1alpha2.NodeObservabilityRun
 		)
 		BeforeEach(func() {
 			nodeobservabilityRun = testNodeObservabilityRun(defaultTestName)
@@ -67,7 +67,7 @@ var _ = Describe("Node Observability Operator end-to-end test suite", Ordered, f
 			})
 
 			By("by collecting status", func() {
-				run := &operatorv1alpha1.NodeObservabilityRun{}
+				run := &operatorv1alpha2.NodeObservabilityRun{}
 				runNamespacedName := types.NamespacedName{
 					Name:      defaultTestName,
 					Namespace: testNamespace,
@@ -92,8 +92,8 @@ var _ = Describe("Node Observability Operator end-to-end test suite", Ordered, f
 			testName = defaultTestName
 		)
 		var (
-			nodeobservabilityRun1 *operatorv1alpha1.NodeObservabilityRun
-			nodeobservabilityRun2 *operatorv1alpha1.NodeObservabilityRun
+			nodeobservabilityRun1 *operatorv1alpha2.NodeObservabilityRun
+			nodeobservabilityRun2 *operatorv1alpha2.NodeObservabilityRun
 		)
 		BeforeEach(func() {
 			nodeobservabilityRun1 = testNodeObservabilityRun(run1)
@@ -109,7 +109,7 @@ var _ = Describe("Node Observability Operator end-to-end test suite", Ordered, f
 			})
 
 			By("by verifying successful status for run1", func() {
-				firstrun := &operatorv1alpha1.NodeObservabilityRun{}
+				firstrun := &operatorv1alpha2.NodeObservabilityRun{}
 				runNamespacedName := types.NamespacedName{
 					Name:      run1,
 					Namespace: testNamespace,
@@ -122,7 +122,7 @@ var _ = Describe("Node Observability Operator end-to-end test suite", Ordered, f
 			})
 
 			By("by verifying failed status for run2", func() {
-				secondrun := &operatorv1alpha1.NodeObservabilityRun{}
+				secondrun := &operatorv1alpha2.NodeObservabilityRun{}
 				runNamespacedName := types.NamespacedName{
 					Name:      run2,
 					Namespace: testNamespace,

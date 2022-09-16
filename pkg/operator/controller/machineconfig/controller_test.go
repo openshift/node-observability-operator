@@ -36,7 +36,7 @@ import (
 
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 
-	"github.com/openshift/node-observability-operator/api/v1alpha1"
+	"github.com/openshift/node-observability-operator/api/v1alpha2"
 	"github.com/openshift/node-observability-operator/pkg/operator/controller/machineconfig/machineconfigfakes"
 	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
@@ -67,17 +67,17 @@ func testReconcileRequest() ctrl.Request {
 	}
 }
 
-func testNodeObsMC() *v1alpha1.NodeObservabilityMachineConfig {
-	return &v1alpha1.NodeObservabilityMachineConfig{
+func testNodeObsMC() *v1alpha2.NodeObservabilityMachineConfig {
+	return &v1alpha2.NodeObservabilityMachineConfig{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "NodeObservabilityMachineConfig",
-			APIVersion: "nodeobservability.olm.openshift.io/v1alpha1",
+			APIVersion: "nodeobservability.olm.openshift.io/v1alpha2",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: TestControllerResourceName,
 		},
-		Spec: v1alpha1.NodeObservabilityMachineConfigSpec{
-			Debug: v1alpha1.NodeObservabilityDebug{
+		Spec: v1alpha2.NodeObservabilityMachineConfigSpec{
+			Debug: v1alpha2.NodeObservabilityDebug{
 				EnableCrioProfiling: true,
 			},
 		},
@@ -294,7 +294,7 @@ func TestReconcile(t *testing.T) {
 		name       string
 		reqObjs    []runtime.Object
 		preReq     func(*MachineConfigReconciler, *[]runtime.Object)
-		asExpected func(v1alpha1.NodeObservabilityMachineConfigStatus, ctrl.Result) bool
+		asExpected func(v1alpha2.NodeObservabilityMachineConfigStatus, ctrl.Result) bool
 		newNOMC    bool
 		wantErr    bool
 	}{
@@ -302,7 +302,7 @@ func TestReconcile(t *testing.T) {
 			name:    "controller resource exists and debug enabled",
 			reqObjs: append([]runtime.Object{workerMCP}, nodes...),
 			wantErr: false,
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != defaultRequeueTime ||
 					!status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
@@ -319,7 +319,7 @@ func TestReconcile(t *testing.T) {
 				r.CtrlConfig.Status.LastReconcile = metav1.Now()
 			},
 			wantErr: false,
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter > defaultRequeueTime ||
 					!status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
@@ -336,7 +336,7 @@ func TestReconcile(t *testing.T) {
 				r.CtrlConfig.Status.LastReconcile = metav1.Time{Time: metav1.Now().Time.Add(-30 * time.Second)}
 			},
 			wantErr: false,
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter > 30*time.Second ||
 					!status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
@@ -353,7 +353,7 @@ func TestReconcile(t *testing.T) {
 				r.CtrlConfig.Status.LastReconcile = metav1.Time{Time: metav1.Now().Time.Add(-defaultRequeueTime)}
 			},
 			wantErr: false,
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != 0 ||
 					!status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
@@ -375,7 +375,7 @@ func TestReconcile(t *testing.T) {
 				*o = append(*o, mcp)
 			},
 			wantErr: false,
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != 0 ||
 					!status.IsDebuggingEnabled() ||
 					status.IsMachineConfigInProgress() ||
@@ -392,7 +392,7 @@ func TestReconcile(t *testing.T) {
 				r.CtrlConfig.Spec.Debug.EnableCrioProfiling = false
 			},
 			wantErr: false,
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != defaultRequeueTime ||
 					status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
@@ -406,7 +406,7 @@ func TestReconcile(t *testing.T) {
 			name:    "controller resource exists and debug already disabled",
 			reqObjs: append([]runtime.Object{mcp, criomc, workerMCP}, nodes...),
 			wantErr: false,
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != 0 ||
 					status.IsDebuggingEnabled() ||
 					status.IsMachineConfigInProgress() ||
@@ -425,7 +425,7 @@ func TestReconcile(t *testing.T) {
 				r.CtrlConfig.DeletionTimestamp = &now
 			},
 			wantErr: false,
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != defaultRequeueTime ||
 					status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
@@ -439,7 +439,7 @@ func TestReconcile(t *testing.T) {
 			name:    "controller resource deletion completed",
 			reqObjs: append([]runtime.Object{mcp, criomc, workerMCP}, nodes...),
 			wantErr: false,
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != 0 ||
 					status.IsDebuggingEnabled() ||
 					status.IsMachineConfigInProgress() ||
@@ -499,18 +499,18 @@ func TestMonitorProgress(t *testing.T) {
 		name       string
 		reqObjs    []runtime.Object
 		preReq     func(*MachineConfigReconciler, *[]runtime.Object)
-		asExpected func(v1alpha1.NodeObservabilityMachineConfigStatus, ctrl.Result) bool
+		asExpected func(v1alpha2.NodeObservabilityMachineConfigStatus, ctrl.Result) bool
 		wantErr    bool
 	}{
 		{
 			name: "nodeobservability MCP does not exist",
 			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled,
-					metav1.ConditionTrue, v1alpha1.ReasonEnabled, Empty)
-				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady,
-					metav1.ConditionFalse, v1alpha1.ReasonInProgress, Empty)
+				r.CtrlConfig.Status.SetCondition(v1alpha2.DebugEnabled,
+					metav1.ConditionTrue, v1alpha2.ReasonEnabled, Empty)
+				r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady,
+					metav1.ConditionFalse, v1alpha2.ReasonInProgress, Empty)
 			},
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != 0 ||
 					!status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
@@ -531,7 +531,7 @@ func TestMonitorProgress(t *testing.T) {
 					mcv1.MachineConfigPoolUpdating, corev1.ConditionTrue)
 				*o = append(*o, mcp)
 			},
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != 0 ||
 					!status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
@@ -554,7 +554,7 @@ func TestMonitorProgress(t *testing.T) {
 					mcv1.MachineConfigPoolDegraded, corev1.ConditionTrue)
 				*o = append(*o, mcp)
 			},
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != 0 ||
 					!status.IsDebuggingEnabled() ||
 					status.IsMachineConfigInProgress() ||
@@ -568,13 +568,13 @@ func TestMonitorProgress(t *testing.T) {
 		{
 			name: "worker MCP does not exist",
 			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				r.CtrlConfig.Status = v1alpha1.NodeObservabilityMachineConfigStatus{}
-				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled,
-					metav1.ConditionFalse, v1alpha1.ReasonDisabled, Empty)
-				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady,
-					metav1.ConditionFalse, v1alpha1.ReasonInProgress, Empty)
+				r.CtrlConfig.Status = v1alpha2.NodeObservabilityMachineConfigStatus{}
+				r.CtrlConfig.Status.SetCondition(v1alpha2.DebugEnabled,
+					metav1.ConditionFalse, v1alpha2.ReasonDisabled, Empty)
+				r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady,
+					metav1.ConditionFalse, v1alpha2.ReasonInProgress, Empty)
 			},
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != 0 ||
 					status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
@@ -588,8 +588,8 @@ func TestMonitorProgress(t *testing.T) {
 		{
 			name: "worker MCP update progressing",
 			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled,
-					metav1.ConditionFalse, v1alpha1.ReasonDisabled, Empty)
+				r.CtrlConfig.Status.SetCondition(v1alpha2.DebugEnabled,
+					metav1.ConditionFalse, v1alpha2.ReasonDisabled, Empty)
 				workerMCP.Status.MachineCount = 3
 				workerMCP.Status.UpdatedMachineCount = 2
 				workerMCP.Status.ReadyMachineCount = 1
@@ -599,7 +599,7 @@ func TestMonitorProgress(t *testing.T) {
 					mcv1.MachineConfigPoolUpdating, corev1.ConditionTrue)
 				*o = append(*o, workerMCP)
 			},
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != 0 ||
 					status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
@@ -621,7 +621,7 @@ func TestMonitorProgress(t *testing.T) {
 					mcv1.MachineConfigPoolDegraded, corev1.ConditionTrue)
 				*o = append(*o, workerMCP)
 			},
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != defaultRequeueTime ||
 					status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
@@ -635,11 +635,11 @@ func TestMonitorProgress(t *testing.T) {
 		{
 			name: "worker MCP update progressing due to a failure",
 			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				r.CtrlConfig.Status = v1alpha1.NodeObservabilityMachineConfigStatus{}
-				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled,
-					metav1.ConditionFalse, v1alpha1.ReasonFailed, Empty)
-				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady,
-					metav1.ConditionFalse, v1alpha1.ReasonFailed, Empty)
+				r.CtrlConfig.Status = v1alpha2.NodeObservabilityMachineConfigStatus{}
+				r.CtrlConfig.Status.SetCondition(v1alpha2.DebugEnabled,
+					metav1.ConditionFalse, v1alpha2.ReasonFailed, Empty)
+				r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady,
+					metav1.ConditionFalse, v1alpha2.ReasonFailed, Empty)
 				workerMCP = testWorkerMCP()
 				workerMCP.Status.MachineCount = 3
 				workerMCP.Status.UpdatedMachineCount = 2
@@ -648,7 +648,7 @@ func TestMonitorProgress(t *testing.T) {
 					mcv1.MachineConfigPoolUpdating, corev1.ConditionTrue)
 				*o = append(*o, workerMCP)
 			},
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != 0 ||
 					status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
@@ -670,7 +670,7 @@ func TestMonitorProgress(t *testing.T) {
 					mcv1.MachineConfigPoolDegraded, corev1.ConditionTrue)
 				*o = append(*o, workerMCP)
 			},
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != 0 ||
 					status.IsDebuggingEnabled() ||
 					status.IsMachineConfigInProgress() ||
@@ -684,11 +684,11 @@ func TestMonitorProgress(t *testing.T) {
 		{
 			name: "worker MCP initializing disabled condition",
 			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				r.CtrlConfig.Status = v1alpha1.NodeObservabilityMachineConfigStatus{}
-				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled,
-					metav1.ConditionFalse, v1alpha1.ReasonDisabled, Empty)
-				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady,
-					metav1.ConditionFalse, v1alpha1.ReasonDisabled, Empty)
+				r.CtrlConfig.Status = v1alpha2.NodeObservabilityMachineConfigStatus{}
+				r.CtrlConfig.Status.SetCondition(v1alpha2.DebugEnabled,
+					metav1.ConditionFalse, v1alpha2.ReasonDisabled, Empty)
+				r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady,
+					metav1.ConditionFalse, v1alpha2.ReasonDisabled, Empty)
 				wmcp := testWorkerMCP()
 				wmcp.Status.MachineCount = 0
 				wmcp.Status.UpdatedMachineCount = 0
@@ -697,7 +697,7 @@ func TestMonitorProgress(t *testing.T) {
 					mcv1.MachineConfigPoolUpdated, corev1.ConditionFalse)
 				*o = append(*o, wmcp)
 			},
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != 0 ||
 					status.IsDebuggingEnabled() ||
 					status.IsMachineConfigInProgress() ||
@@ -711,11 +711,11 @@ func TestMonitorProgress(t *testing.T) {
 		{
 			name: "worker MCP initializing failed condition",
 			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				r.CtrlConfig.Status = v1alpha1.NodeObservabilityMachineConfigStatus{}
-				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled,
-					metav1.ConditionFalse, v1alpha1.ReasonFailed, Empty)
-				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady,
-					metav1.ConditionFalse, v1alpha1.ReasonFailed, Empty)
+				r.CtrlConfig.Status = v1alpha2.NodeObservabilityMachineConfigStatus{}
+				r.CtrlConfig.Status.SetCondition(v1alpha2.DebugEnabled,
+					metav1.ConditionFalse, v1alpha2.ReasonFailed, Empty)
+				r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady,
+					metav1.ConditionFalse, v1alpha2.ReasonFailed, Empty)
 				wmcp := testWorkerMCP()
 				wmcp.Status.MachineCount = 0
 				wmcp.Status.UpdatedMachineCount = 0
@@ -724,7 +724,7 @@ func TestMonitorProgress(t *testing.T) {
 					mcv1.MachineConfigPoolUpdated, corev1.ConditionFalse)
 				*o = append(*o, wmcp)
 			},
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != 0 ||
 					status.IsDebuggingEnabled() ||
 					status.IsMachineConfigInProgress() ||
@@ -773,14 +773,14 @@ func TestReconcileClientFakes(t *testing.T) {
 		arg1       context.Context
 		arg2       ctrl.Request
 		preReq     func(*MachineConfigReconciler, *machineconfigfakes.FakeImpl)
-		asExpected func(v1alpha1.NodeObservabilityMachineConfigStatus, ctrl.Result) bool
+		asExpected func(v1alpha2.NodeObservabilityMachineConfigStatus, ctrl.Result) bool
 		wantErr    bool
 	}{
 		{
 			name: "logger init failure",
 			arg1: context.Background(),
 			arg2: request,
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != 0 ||
 					status.IsDebuggingEnabled() ||
 					status.IsMachineConfigInProgress() ||
@@ -798,7 +798,7 @@ func TestReconcileClientFakes(t *testing.T) {
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
 				m.ClientGetReturns(testError)
 			},
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != defaultRequeueTime ||
 					status.IsDebuggingEnabled() ||
 					status.IsMachineConfigInProgress() ||
@@ -828,21 +828,21 @@ func TestReconcileClientFakes(t *testing.T) {
 					case *mcv1.MachineConfig:
 						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
-					case *v1alpha1.NodeObservabilityMachineConfig:
+					case *v1alpha2.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
 						now := metav1.Now()
 						nomc.DeletionTimestamp = &now
-						nomc.Status.SetCondition(v1alpha1.DebugEnabled,
-							metav1.ConditionTrue, v1alpha1.ReasonEnabled, Empty)
-						nomc.Status.SetCondition(v1alpha1.DebugReady,
-							metav1.ConditionFalse, v1alpha1.ReasonInProgress, Empty)
+						nomc.Status.SetCondition(v1alpha2.DebugEnabled,
+							metav1.ConditionTrue, v1alpha2.ReasonEnabled, Empty)
+						nomc.Status.SetCondition(v1alpha2.DebugReady,
+							metav1.ConditionFalse, v1alpha2.ReasonInProgress, Empty)
 						nomc.DeepCopyInto(o)
 					}
 					return nil
 				})
 				m.ClientStatusUpdateReturns(testError)
 			},
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != defaultRequeueTime ||
 					!status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
@@ -872,7 +872,7 @@ func TestReconcileClientFakes(t *testing.T) {
 					case *mcv1.MachineConfig:
 						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
-					case *v1alpha1.NodeObservabilityMachineConfig:
+					case *v1alpha2.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
 						nomc.DeepCopyInto(o)
 					}
@@ -880,7 +880,7 @@ func TestReconcileClientFakes(t *testing.T) {
 				})
 				m.ClientUpdateReturns(testError)
 			},
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != 0 ||
 					status.IsDebuggingEnabled() ||
 					status.IsMachineConfigInProgress() ||
@@ -927,7 +927,7 @@ func TestReconcileClientFakes(t *testing.T) {
 					case *mcv1.MachineConfig:
 						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
-					case *v1alpha1.NodeObservabilityMachineConfig:
+					case *v1alpha2.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
 						nomc.DeepCopyInto(o)
 					}
@@ -935,7 +935,7 @@ func TestReconcileClientFakes(t *testing.T) {
 				})
 				m.ClientStatusUpdateReturns(testError)
 			},
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != defaultRequeueTime ||
 					!status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
@@ -968,7 +968,7 @@ func TestReconcileClientFakes(t *testing.T) {
 					case *mcv1.MachineConfig:
 						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
-					case *v1alpha1.NodeObservabilityMachineConfig:
+					case *v1alpha2.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
 						nomc.DeepCopyInto(o)
 					case *corev1.Node:
@@ -1017,7 +1017,7 @@ func TestReconcileClientFakes(t *testing.T) {
 					return nil
 				})
 			},
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != defaultRequeueTime ||
 					status.IsDebuggingEnabled() ||
 					status.IsMachineConfigInProgress() ||
@@ -1057,7 +1057,7 @@ func TestReconcileClientFakes(t *testing.T) {
 					case *mcv1.MachineConfig:
 						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
-					case *v1alpha1.NodeObservabilityMachineConfig:
+					case *v1alpha2.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
 						nomc.DeepCopyInto(o)
 					case *corev1.Node:
@@ -1072,7 +1072,7 @@ func TestReconcileClientFakes(t *testing.T) {
 				})
 				m.ClientCreateReturns(testError)
 			},
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != defaultRequeueTime ||
 					status.IsDebuggingEnabled() ||
 					status.IsMachineConfigInProgress() ||
@@ -1118,7 +1118,7 @@ func TestReconcileClientFakes(t *testing.T) {
 						mcp.DeepCopyInto(o)
 					case *mcv1.MachineConfig:
 						return testError
-					case *v1alpha1.NodeObservabilityMachineConfig:
+					case *v1alpha2.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
 						nomc.DeepCopyInto(o)
 					case *corev1.Node:
@@ -1142,7 +1142,7 @@ func TestReconcileClientFakes(t *testing.T) {
 					return nil
 				})
 			},
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != defaultRequeueTime ||
 					status.IsDebuggingEnabled() ||
 					status.IsMachineConfigInProgress() ||
@@ -1172,7 +1172,7 @@ func TestReconcileClientFakes(t *testing.T) {
 					case *mcv1.MachineConfig:
 						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
-					case *v1alpha1.NodeObservabilityMachineConfig:
+					case *v1alpha2.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
 						nomc.Spec.Debug.EnableCrioProfiling = false
 						nomc.DeepCopyInto(o)
@@ -1222,7 +1222,7 @@ func TestReconcileClientFakes(t *testing.T) {
 					return nil
 				})
 			},
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != defaultRequeueTime ||
 					status.IsDebuggingEnabled() ||
 					status.IsMachineConfigInProgress() ||
@@ -1251,11 +1251,11 @@ func TestReconcileClientFakes(t *testing.T) {
 					case *mcv1.MachineConfig:
 						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
-					case *v1alpha1.NodeObservabilityMachineConfig:
+					case *v1alpha2.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
 						nomc.Spec.Debug.EnableCrioProfiling = false
-						nomc.Status.SetCondition(v1alpha1.DebugReady,
-							metav1.ConditionFalse, v1alpha1.ReasonInProgress, Empty)
+						nomc.Status.SetCondition(v1alpha2.DebugReady,
+							metav1.ConditionFalse, v1alpha2.ReasonInProgress, Empty)
 						nomc.DeepCopyInto(o)
 					case *corev1.Node:
 						nodes := testNodeObsNodes()
@@ -1294,7 +1294,7 @@ func TestReconcileClientFakes(t *testing.T) {
 					return nil
 				})
 			},
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != defaultRequeueTime ||
 					status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
@@ -1323,11 +1323,11 @@ func TestReconcileClientFakes(t *testing.T) {
 					case *mcv1.MachineConfig:
 						mc, _ := r.getCrioProfMachineConfig()
 						mc.DeepCopyInto(o)
-					case *v1alpha1.NodeObservabilityMachineConfig:
+					case *v1alpha2.NodeObservabilityMachineConfig:
 						nomc := testNodeObsMC()
 						nomc.Spec.Debug.EnableCrioProfiling = false
-						nomc.Status.SetCondition(v1alpha1.DebugReady,
-							metav1.ConditionFalse, v1alpha1.ReasonInProgress, Empty)
+						nomc.Status.SetCondition(v1alpha2.DebugReady,
+							metav1.ConditionFalse, v1alpha2.ReasonInProgress, Empty)
 						nomc.DeepCopyInto(o)
 					case *corev1.Node:
 						nodes := testNodeObsNodes()
@@ -1366,7 +1366,7 @@ func TestReconcileClientFakes(t *testing.T) {
 					return nil
 				})
 			},
-			asExpected: func(status v1alpha1.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
+			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
 				if result.RequeueAfter != defaultRequeueTime ||
 					status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
@@ -1440,8 +1440,8 @@ func TestCleanUp(t *testing.T) {
 		{
 			name: "worker mcp fetch fails",
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady,
-					metav1.ConditionFalse, v1alpha1.ReasonInProgress, Empty)
+				r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady,
+					metav1.ConditionFalse, v1alpha2.ReasonInProgress, Empty)
 				m.ClientGetReturns(testError)
 			},
 			wantErr: true,
@@ -1449,8 +1449,8 @@ func TestCleanUp(t *testing.T) {
 		{
 			name: "debug disabled condition set",
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled,
-					metav1.ConditionFalse, v1alpha1.ReasonDisabled, Empty)
+				r.CtrlConfig.Status.SetCondition(v1alpha2.DebugEnabled,
+					metav1.ConditionFalse, v1alpha2.ReasonDisabled, Empty)
 				r.CtrlConfig.Finalizers = append(r.CtrlConfig.Finalizers, finalizer)
 				m.ClientGetCalls(func(
 					ctx context.Context,
@@ -1459,7 +1459,7 @@ func TestCleanUp(t *testing.T) {
 					switch obj.(type) {
 					case *mcv1.MachineConfigPool:
 						return testError
-					case *v1alpha1.NodeObservabilityMachineConfig:
+					case *v1alpha2.NodeObservabilityMachineConfig:
 						return testError
 					}
 					return nil
@@ -1470,8 +1470,8 @@ func TestCleanUp(t *testing.T) {
 		{
 			name: "debug failed condition set",
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady,
-					metav1.ConditionFalse, v1alpha1.ReasonFailed, Empty)
+				r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady,
+					metav1.ConditionFalse, v1alpha2.ReasonFailed, Empty)
 				r.CtrlConfig.Finalizers = append(r.CtrlConfig.Finalizers, finalizer)
 				m.ClientGetReturns(testError)
 			},
@@ -1503,7 +1503,7 @@ func TestAddFinalizer(t *testing.T) {
 	tests := []struct {
 		name       string
 		preReq     func(*MachineConfigReconciler, *machineconfigfakes.FakeImpl)
-		asExpected func(*v1alpha1.NodeObservabilityMachineConfig, error) bool
+		asExpected func(*v1alpha2.NodeObservabilityMachineConfig, error) bool
 	}{
 		{
 			name: "nomc fetch fails",
@@ -1511,7 +1511,7 @@ func TestAddFinalizer(t *testing.T) {
 				r.CtrlConfig.Finalizers = append(r.CtrlConfig.Finalizers, finalizer)
 				m.ClientGetReturns(testError)
 			},
-			asExpected: func(nomc *v1alpha1.NodeObservabilityMachineConfig, err error) bool {
+			asExpected: func(nomc *v1alpha2.NodeObservabilityMachineConfig, err error) bool {
 				return err != nil
 			},
 		},
@@ -1524,13 +1524,13 @@ func TestAddFinalizer(t *testing.T) {
 					ns types.NamespacedName,
 					obj client.Object) error {
 					switch o := obj.(type) {
-					case *v1alpha1.NodeObservabilityMachineConfig:
+					case *v1alpha2.NodeObservabilityMachineConfig:
 						r.CtrlConfig.DeepCopyInto(o)
 					}
 					return nil
 				})
 			},
-			asExpected: func(nomc *v1alpha1.NodeObservabilityMachineConfig, err error) bool {
+			asExpected: func(nomc *v1alpha2.NodeObservabilityMachineConfig, err error) bool {
 				if err != nil || !hasFinalizer(nomc) {
 					return false
 				}
@@ -1566,7 +1566,7 @@ func TestRemoveFinalizer(t *testing.T) {
 	tests := []struct {
 		name       string
 		preReq     func(*MachineConfigReconciler, *machineconfigfakes.FakeImpl)
-		asExpected func(*v1alpha1.NodeObservabilityMachineConfig, error) bool
+		asExpected func(*v1alpha2.NodeObservabilityMachineConfig, error) bool
 	}{
 		{
 			name: "finalizer not present",
@@ -1576,13 +1576,13 @@ func TestRemoveFinalizer(t *testing.T) {
 					ns types.NamespacedName,
 					obj client.Object) error {
 					switch o := obj.(type) {
-					case *v1alpha1.NodeObservabilityMachineConfig:
+					case *v1alpha2.NodeObservabilityMachineConfig:
 						r.CtrlConfig.DeepCopyInto(o)
 					}
 					return nil
 				})
 			},
-			asExpected: func(nomc *v1alpha1.NodeObservabilityMachineConfig, err error) bool {
+			asExpected: func(nomc *v1alpha2.NodeObservabilityMachineConfig, err error) bool {
 				return err == nil
 			},
 		},
@@ -1595,13 +1595,13 @@ func TestRemoveFinalizer(t *testing.T) {
 					ns types.NamespacedName,
 					obj client.Object) error {
 					switch o := obj.(type) {
-					case *v1alpha1.NodeObservabilityMachineConfig:
+					case *v1alpha2.NodeObservabilityMachineConfig:
 						r.CtrlConfig.DeepCopyInto(o)
 					}
 					return nil
 				})
 			},
-			asExpected: func(nomc *v1alpha1.NodeObservabilityMachineConfig, err error) bool {
+			asExpected: func(nomc *v1alpha2.NodeObservabilityMachineConfig, err error) bool {
 				if err != nil || hasFinalizer(nomc) {
 					return false
 				}
@@ -1617,14 +1617,14 @@ func TestRemoveFinalizer(t *testing.T) {
 					ns types.NamespacedName,
 					obj client.Object) error {
 					switch o := obj.(type) {
-					case *v1alpha1.NodeObservabilityMachineConfig:
+					case *v1alpha2.NodeObservabilityMachineConfig:
 						r.CtrlConfig.DeepCopyInto(o)
 					}
 					return nil
 				})
 				m.ClientUpdateReturns(testError)
 			},
-			asExpected: func(nomc *v1alpha1.NodeObservabilityMachineConfig, err error) bool {
+			asExpected: func(nomc *v1alpha2.NodeObservabilityMachineConfig, err error) bool {
 				return err != nil
 			},
 		},

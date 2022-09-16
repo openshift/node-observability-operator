@@ -3,6 +3,6 @@ kind: NodeObservability
 metadata:
   name: cluster
 spec:
-  nodeSelector:
+  labels:
     node-role.kubernetes.io/worker: ""
   type: crio-kubelet

@@ -17,13 +17,31 @@ spec:
       displayName: Node Observability
       kind: NodeObservability
       name: nodeobservabilities.nodeobservability.olm.openshift.io
+      version: v1alpha2
+    - description: NodeObservability prepares a subset of worker nodes (identified
+        by a label) for running node observability queries, such as profiling
+      displayName: Node Observability
+      kind: NodeObservability
+      name: nodeobservabilities.nodeobservability.olm.openshift.io
       version: v1alpha1
     - description: NodeObservabilityMachineConfig is the Schema for the nodeobservabilitymachineconfigs
         API
       displayName: Node Observability Machine Config
       kind: NodeObservabilityMachineConfig
       name: nodeobservabilitymachineconfigs.nodeobservability.olm.openshift.io
+      version: v1alpha2
+    - description: NodeObservabilityMachineConfig is the Schema for the nodeobservabilitymachineconfigs
+        API
+      displayName: Node Observability Machine Config
+      kind: NodeObservabilityMachineConfig
+      name: nodeobservabilitymachineconfigs.nodeobservability.olm.openshift.io
       version: v1alpha1
+    - description: NodeObservabilityRun is a request to run observability actions
+        on the nodes previously selected in NodeObservability resource
+      displayName: Node Observability Run
+      kind: NodeObservabilityRun
+      name: nodeobservabilityruns.nodeobservability.olm.openshift.io
+      version: v1alpha2
     - description: NodeObservabilityRun is a request to run observability actions
         on the nodes previously selected in NodeObservability resource
       displayName: Node Observability Run
@@ -49,7 +67,7 @@ spec:
     type: SingleNamespace
   - supported: false
     type: MultiNamespace
-  - supported: false
+  - supported: true
     type: AllNamespaces
   keywords:
   - node-observability-operator

@@ -44,6 +44,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	nodeobservabilityv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	nodeobservabilityv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 	machineconfigcontroller "github.com/openshift/node-observability-operator/pkg/operator/controller/machineconfig"
 	nodeobservabilitycontroller "github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservability"
 	nodeobservabilityrun "github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservabilityrun"
@@ -64,6 +65,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(nodeobservabilityv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(nodeobservabilityv1alpha2.AddToScheme(scheme))
 	utilruntime.Must(securityv1.AddToScheme(scheme))
 	utilruntime.Must(rbacv1.AddToScheme(scheme))
 	utilruntime.Must(mcv1.AddToScheme(scheme))
@@ -71,13 +73,16 @@ func init() {
 }
 
 func main() {
-	var metricsAddr string
-	var enableLeaderElection bool
-	var probeAddr string
-	var operatorNamespace string
-	var agentImage string
-	var tokenFile string
-	var caCertFile string
+	var (
+		metricsAddr          string
+		enableLeaderElection bool
+		probeAddr            string
+		operatorNamespace    string
+		agentImage           string
+		tokenFile            string
+		caCertFile           string
+		enableWebhook        bool
+	)
 
 	flag.StringVar(&operatorNamespace, "operator-namespace", "node-observability-operator", "The node observability operator namespace.")
 	flag.StringVar(&agentImage, "agent-image", "quay.io/node-observability-operator/node-observability-agent:latest", "The node observability agent container image to use.")
@@ -86,6 +91,7 @@ func main() {
 	flag.StringVar(&tokenFile, "token-file", defaultTokenFile, "The path of the service account token.")
 	flag.StringVar(&caCertFile, "ca-cert-file", defaultCACertFile, "The path of the CA cert of the Agents' signing key pair.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager. "+"Enabling this will ensure there is only one active controller manager.")
+	flag.BoolVar(&enableWebhook, "enable-webhook", false, "Enable the webhook server(s). Defaults to false.")
 	opts := zap.Options{
 		TimeEncoder: zapcore.TimeEncoder(func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 			enc.AppendString(t.UTC().Format("2006-01-02T15:04:05.000Z"))
@@ -176,6 +182,25 @@ func main() {
 		os.Exit(1)
 	}
 
+	if enableWebhook {
+		setupLog.Info("starting webhooks")
+		if err = (&nodeobservabilityv1alpha1.NodeObservability{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "nodeobservability", "version", "v1alpha1")
+			os.Exit(1)
+		}
+		if err = (&nodeobservabilityv1alpha1.NodeObservabilityMachineConfig{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "nodeobservabilitymachineconfig", "version", "v1alpha1")
+			os.Exit(1)
+		}
+		if err = (&nodeobservabilityv1alpha2.NodeObservability{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "nodeobservability", "version", "v1alpha2")
+			os.Exit(1)
+		}
+		if err = (&nodeobservabilityv1alpha2.NodeObservabilityMachineConfig{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "nodeobservabilitymachineconfig", "version", "v1alpha2")
+			os.Exit(1)
+		}
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

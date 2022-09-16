@@ -26,9 +26,6 @@ import (
 // NodeObservabilityMachineConfigSpec defines the desired state of NodeObservabilityMachineConfig
 type NodeObservabilityMachineConfigSpec struct {
 	Debug NodeObservabilityDebug `json:"debug,omitempty"`
-	// +kubebuilder:validation:Required
-	// NodeSelector is a map of key:value pair that are used to match against node labels to be configured
-	NodeSelector map[string]string `json:"nodeSelector"`
 }
 
 // NodeObservabilityDebug is for holding the configurations defined for

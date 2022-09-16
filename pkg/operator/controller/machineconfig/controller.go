@@ -37,7 +37,7 @@ import (
 
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 
-	"github.com/openshift/node-observability-operator/api/v1alpha1"
+	"github.com/openshift/node-observability-operator/api/v1alpha2"
 )
 
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilitymachineconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -56,7 +56,7 @@ type MachineConfigReconciler struct {
 	Scheme        *runtime.Scheme
 	EventRecorder record.EventRecorder
 
-	CtrlConfig *v1alpha1.NodeObservabilityMachineConfig
+	CtrlConfig *v1alpha2.NodeObservabilityMachineConfig
 }
 
 // New returns a new MachineConfigReconciler instance.
@@ -88,7 +88,7 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	r.Log.V(1).Info("reconciliation started")
 
 	// Fetch the NodeObservabilityMachineConfig CR
-	r.CtrlConfig = &v1alpha1.NodeObservabilityMachineConfig{}
+	r.CtrlConfig = &v1alpha2.NodeObservabilityMachineConfig{}
 	if err = r.ClientGet(ctx, req.NamespacedName, r.CtrlConfig); err != nil {
 		if kerrors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -158,7 +158,7 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 // SetupWithManager sets up the controller with the Manager.
 func (r *MachineConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.NodeObservabilityMachineConfig{}, builder.WithPredicates(ignoreNOMCStatusUpdates())).
+		For(&v1alpha2.NodeObservabilityMachineConfig{}, builder.WithPredicates(ignoreNOMCStatusUpdates())).
 		Owns(&mcv1.MachineConfig{}).
 		Owns(&mcv1.MachineConfigPool{}).
 		Complete(r)
@@ -209,8 +209,8 @@ func (r *MachineConfigReconciler) cleanUp(ctx context.Context, req ctrl.Request)
 
 // addFinalizer adds finalizer to NodeObservabilityMachineConfig resource
 // if does not exist
-func (r *MachineConfigReconciler) addFinalizer(ctx context.Context, req ctrl.Request) (*v1alpha1.NodeObservabilityMachineConfig, error) {
-	withFinalizers := &v1alpha1.NodeObservabilityMachineConfig{}
+func (r *MachineConfigReconciler) addFinalizer(ctx context.Context, req ctrl.Request) (*v1alpha2.NodeObservabilityMachineConfig, error) {
+	withFinalizers := &v1alpha2.NodeObservabilityMachineConfig{}
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		if err := r.ClientGet(ctx, req.NamespacedName, withFinalizers); err != nil {
@@ -234,8 +234,8 @@ func (r *MachineConfigReconciler) addFinalizer(ctx context.Context, req ctrl.Req
 
 // removeFinalizer removes finalizers added to
 // NodeObservabilityMachineConfig resource if present
-func (r *MachineConfigReconciler) removeFinalizer(ctx context.Context, req ctrl.Request, finalizer string) (*v1alpha1.NodeObservabilityMachineConfig, error) {
-	withoutFinalizers := &v1alpha1.NodeObservabilityMachineConfig{}
+func (r *MachineConfigReconciler) removeFinalizer(ctx context.Context, req ctrl.Request, finalizer string) (*v1alpha2.NodeObservabilityMachineConfig, error) {
+	withoutFinalizers := &v1alpha2.NodeObservabilityMachineConfig{}
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		if err := r.ClientGet(ctx, req.NamespacedName, withoutFinalizers); err != nil {
@@ -277,7 +277,7 @@ func (r *MachineConfigReconciler) updateStatus(ctx context.Context) error {
 	namespace := types.NamespacedName{Name: r.CtrlConfig.Name}
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		r.Log.V(1).Info("Updating nodeobservabilitymachineconfig status")
-		nomc := &v1alpha1.NodeObservabilityMachineConfig{}
+		nomc := &v1alpha2.NodeObservabilityMachineConfig{}
 		if err := r.ClientGet(ctx, namespace, nomc); err != nil {
 			return err
 		}
@@ -336,9 +336,9 @@ func (r *MachineConfigReconciler) ensureProfConfEnabled(ctx context.Context) (bo
 	if !r.CtrlConfig.Status.IsDebuggingEnabled() {
 		// we just applied all the config for CRI-O profiling,
 		// setup the status and requeue to wait for the MCO
-		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled, metav1.ConditionTrue, v1alpha1.ReasonEnabled,
+		r.CtrlConfig.Status.SetCondition(v1alpha2.DebugEnabled, metav1.ConditionTrue, v1alpha2.ReasonEnabled,
 			"debug configurations enabled")
-		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress,
+		r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonInProgress,
 			"applying debug configurations in progress")
 		return true, nil
 	}
@@ -356,9 +356,9 @@ func (r *MachineConfigReconciler) ensureProfConfDisabled(ctx context.Context) (b
 	}
 
 	if modCount > 0 {
-		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugEnabled, metav1.ConditionFalse, v1alpha1.ReasonDisabled,
+		r.CtrlConfig.Status.SetCondition(v1alpha2.DebugEnabled, metav1.ConditionFalse, v1alpha2.ReasonDisabled,
 			"debug configurations disabled")
-		r.CtrlConfig.Status.SetCondition(v1alpha1.DebugReady, metav1.ConditionFalse, v1alpha1.ReasonInProgress,
+		r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonInProgress,
 			"removing debug configurations in progress")
 		return true, nil
 	}
@@ -412,7 +412,7 @@ func ignoreNOMCStatusUpdates() predicate.Predicate {
 			// if NOMC generated count is unchanged, it indicates
 			// spec or metadata has not changed and the event could be for
 			// status update which need not be queued for reconciliation
-			if _, ok := e.ObjectOld.(*v1alpha1.NodeObservabilityMachineConfig); ok {
+			if _, ok := e.ObjectOld.(*v1alpha2.NodeObservabilityMachineConfig); ok {
 				return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration()
 			}
 			return true
@@ -422,7 +422,7 @@ func ignoreNOMCStatusUpdates() predicate.Predicate {
 
 // hasFinalizer checks if the required finalizer is present
 // in the NodeObservabilityMachineConfig resource
-func hasFinalizer(mc *v1alpha1.NodeObservabilityMachineConfig) bool {
+func hasFinalizer(mc *v1alpha2.NodeObservabilityMachineConfig) bool {
 	hasFinalizer := false
 	for _, f := range mc.Finalizers {
 		if f == finalizer {
