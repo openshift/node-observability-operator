@@ -20,13 +20,14 @@ import (
 	"context"
 	"fmt"
 
-	logr "github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilclock "k8s.io/apimachinery/pkg/util/clock"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+
+	logr "github.com/go-logr/logr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -70,10 +71,10 @@ type NodeObservabilityReconciler struct {
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=list;get;create;watch;delete;
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,verbs=list;get;create;watch;delete;
 //+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=list;get;create;watch;use;delete;
-//+kubebuilder:rbac:groups=apps,namespace=node-observability-operator,resources=daemonsets,verbs=list;get;create;watch;
+//+kubebuilder:rbac:groups=apps,namespace=node-observability-operator,resources=daemonsets,verbs=list;get;create;watch;update;patch;
 //+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=secrets,verbs=list;get;create;watch;delete;
-//+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=services,verbs=list;get;create;watch;delete;
-//+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=serviceaccounts,verbs=list;get;create;watch;delete;
+//+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=services,verbs=list;get;create;watch;delete;update;patch;
+//+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=serviceaccounts,verbs=list;get;create;watch;delete;update;patch;
 //+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=configmaps,verbs=list;get;create;watch;delete;update;
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,namespace=node-observability-operator,resources=roles,verbs=list;get;create;watch;delete;
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,namespace=node-observability-operator,resources=rolebindings,verbs=list;get;create;watch;delete;
@@ -84,10 +85,11 @@ type NodeObservabilityReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.10.0/pkg/reconcile
 func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-
 	if ctxLog, err := logr.FromContext(ctx); err == nil {
 		r.Log = ctxLog
 	}
+
+	r.Log.V(1).Info("reconciliation started")
 
 	// Fetch the NodeObservability instance
 	nodeObs := &operatorv1alpha1.NodeObservability{}
@@ -97,13 +99,12 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
-			r.Log.V(1).Info("NodeObservability resource not found. Ignoring since object must be deleted")
+			r.Log.V(1).Info("nodeobservability resource not found. Ignoring since object must be deleted")
 			return ctrl.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
-		return ctrl.Result{}, fmt.Errorf("failed to get NodeObservability: %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to get nodeobservability: %w", err)
 	}
-	r.Log.V(3).Info("Reconciling:", "NodeObservability", nodeObs)
 
 	err = isClusterNodeObservability(ctx, nodeObs)
 	if err != nil {
@@ -120,15 +121,15 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 			errUpdate = fmt.Errorf("failed to update status for NodeObservability %v: %w", nodeObs, errUpdate)
 			return ctrl.Result{}, utilerrors.NewAggregate([]error{err, errUpdate})
 		}
-		r.Log.V(3).Info("Status updated ", "Count", "0", "LastUpdated", now, "Ready", false)
-		r.Log.Error(err, "Exiting reconcile")
+		r.Log.V(3).Info("Status updated:", "Count", "0", "LastUpdated", now, "Ready", false)
+		r.Log.Error(err, "exiting reconcile")
 		// Return without err, to prevent requeuing
 		return ctrl.Result{}, nil
 	}
 
 	// nodeObs is named cluster: proceed
 	if nodeObs.DeletionTimestamp != nil {
-		r.Log.V(1).Info("NodeObservability resource is going to be deleted. Taking action")
+		r.Log.V(1).Info("nodeobservability resource is going to be deleted. Taking action")
 		if err := r.ensureNodeObservabilityDeleted(ctx, nodeObs); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to ensure nodeobservability deletion: %w", err)
 		}
@@ -140,7 +141,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	// Set finalizers on the NodeObservability resource
 	updated, err := r.withFinalizers(ctx, nodeObs)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to update NodeObservability with finalizers:, %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to update nodeobservability with finalizers:, %w", err)
 	}
 	nodeObs = updated
 
@@ -157,25 +158,21 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	} else if !haveSCC {
 		return ctrl.Result{}, fmt.Errorf("failed to get securitycontextconstraints")
 	}
-	r.Log.V(1).Info("SecurityContextConstraints ensured", "Name", scc.Name)
+	r.Log.V(1).Info("securitycontextconstraint ensured", "scc.name", scc.Name)
 
 	// ensure serviceaccount
-	haveSA, sa, err := r.ensureServiceAccount(ctx, nodeObs, r.Namespace)
+	sa, err := r.ensureServiceAccount(ctx, nodeObs, r.Namespace)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure serviceaccount : %w", err)
-	} else if !haveSA {
-		return ctrl.Result{}, fmt.Errorf("failed to get serviceaccount")
 	}
-	r.Log.V(1).Info("ServiceAccount ensured", "Namespace", sa.Namespace, "Name", sa.Name)
+	r.Log.V(1).Info("serviceaccount ensured", "sa.namespace", sa.Namespace, "sa.name", sa.Name)
 
 	// ensure service
-	haveSvc, svc, err := r.ensureService(ctx, nodeObs, r.Namespace)
+	svc, err := r.ensureService(ctx, nodeObs, r.Namespace)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure service : %w", err)
-	} else if !haveSvc {
-		return ctrl.Result{}, fmt.Errorf("failed to get service")
 	}
-	r.Log.V(1).Info("Service ensured", "Namespace", svc.Namespace, "Name", svc.Name)
+	r.Log.V(1).Info("service ensured", "svc.namespace", svc.Namespace, "svc.name", svc.Name)
 
 	// check clusterrole
 	haveCR, cr, err := r.ensureClusterRole(ctx, nodeObs)
@@ -184,7 +181,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	} else if !haveCR {
 		return ctrl.Result{}, fmt.Errorf("failed to get clusterrole")
 	}
-	r.Log.V(1).Info("ClusterRole ensured", "Name", cr.Name)
+	r.Log.V(1).Info("clusterrole ensured", "clusterrole.name", cr.Name)
 
 	// check clusterolebinding with serviceaccount
 	haveCRB, crb, err := r.ensureClusterRoleBinding(ctx, nodeObs, sa.Name, r.Namespace)
@@ -193,29 +190,25 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	} else if !haveCRB {
 		return ctrl.Result{}, fmt.Errorf("failed to get clusterrolebinding")
 	}
-	r.Log.V(1).Info("ClusterRoleBinding ensured", "Name", crb.Name)
+	r.Log.V(1).Info("clusterrolebinding ensured", "clusterrolebinding.name", crb.Name)
 
 	// check daemonset
-	haveDS, ds, err := r.ensureDaemonSet(ctx, nodeObs, sa, r.Namespace)
+	ds, err := r.ensureDaemonSet(ctx, nodeObs, sa, r.Namespace)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure daemonset : %w", err)
-	} else if !haveDS {
-		return ctrl.Result{}, fmt.Errorf("failed to get daemonset")
 	}
-	r.Log.V(1).Info("DaemonSet ensured", "Namespace", ds.Namespace, "Name", ds.Name)
+	r.Log.V(1).Info("daemonset ensured", "ds.namespace", ds.Namespace, "ds.name", ds.Name)
 
 	dsReady := ds.Status.NumberReady == ds.Status.DesiredNumberScheduled
 
 	// if machine config change is not requested, we can mark it as ready
 	var nomcReady bool = true
 	if machineConfigChangeRequested(nodeObs) {
-		haveNOMC, nomc, err := r.ensureNOMC(ctx, nodeObs)
+		nomc, err := r.ensureNOMC(ctx, nodeObs)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to ensure nodeobservabilitymachineconfig : %w", err)
-		} else if !haveNOMC {
-			return ctrl.Result{}, fmt.Errorf("failed to get nodeobservabilitymachineconfig")
 		}
-		r.Log.V(1).Info("NodeObservabilityMachineConfig ensured", "Name", nomc.Name)
+		r.Log.V(1).Info("nodeobservabilitymachineconfig ensured", "nomc.name", nomc.Name)
 		nomcReady = nomc.Status.IsReady()
 	}
 

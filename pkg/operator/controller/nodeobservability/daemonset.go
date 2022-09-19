@@ -9,6 +9,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/google/go-cmp/cmp"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
@@ -31,59 +33,102 @@ const (
 // ensureDaemonSet ensures that the daemonset exists
 // Returns a Boolean value indicating whether it exists, a pointer to the
 // daemonset and an error when relevant
-func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeObs *v1alpha1.NodeObservability, sa *corev1.ServiceAccount, ns string) (bool, *appsv1.DaemonSet, error) {
+func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeObs *v1alpha1.NodeObservability, sa *corev1.ServiceAccount, ns string) (*appsv1.DaemonSet, error) {
 	nameSpace := types.NamespacedName{Namespace: ns, Name: daemonSetName}
 	desired := r.desiredDaemonSet(nodeObs, sa, ns)
 	if err := controllerutil.SetControllerReference(nodeObs, desired, r.Scheme); err != nil {
-		return false, nil, fmt.Errorf("failed to set the controller reference for daemonset: %w", err)
+		return nil, fmt.Errorf("failed to set the controller reference for daemonset: %w", err)
 	}
-	exist, current, err := r.currentDaemonSet(ctx, nameSpace)
-	if err != nil {
-		return false, nil, fmt.Errorf("failed to get DaemonSet: %w", err)
-	}
-	if !exist {
-		cmExists, err := r.createConfigMap(ctx, nodeObs, ns)
+
+	current, err := r.currentDaemonSet(ctx, nameSpace)
+	if err != nil && !errors.IsNotFound(err) {
+		return nil, fmt.Errorf("failed to get daemonset %q due to: %w", nameSpace, err)
+	} else if err != nil && errors.IsNotFound(err) {
+
+		// create daemon since it doesn't exist
+		err := r.createConfigMap(ctx, nodeObs, ns)
 		if err != nil {
-			return false, nil, fmt.Errorf("failed to create the configMap for kubelet-serving-ca: %w", err)
+			return nil, fmt.Errorf("failed to create the configmap for kubelet-serving-ca: %w", err)
 		}
-		if !cmExists {
-			return false, nil, fmt.Errorf("failed to get the configMap for kubelet-serving-ca: %w", err)
-		}
+
 		if err := r.createDaemonSet(ctx, desired); err != nil {
-			return false, nil, err
+			return nil, fmt.Errorf("failed to create daemonset %q: %w", nameSpace, err)
 		}
+		r.Log.V(1).Info("created daemonset", "ds.namespace", nameSpace.Namespace, "ds.name", nameSpace.Name)
+
 		return r.currentDaemonSet(ctx, nameSpace)
 	}
-	return true, current, err
+
+	updated, err := r.updateDaemonset(ctx, current, desired)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update the daemonset %q: %w", nameSpace, err)
+	}
+
+	if updated {
+		current, err = r.currentDaemonSet(ctx, nameSpace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get existing daemonset %q: %w", nameSpace, err)
+		}
+		r.Log.V(1).Info("successfully updated daemonset", "ds.name", nameSpace.Name, "ds.namespace", nameSpace.Namespace)
+	}
+	return current, nil
 }
 
 // currentDaemonSet check if the daemonset exists
-func (r *NodeObservabilityReconciler) currentDaemonSet(ctx context.Context, nameSpace types.NamespacedName) (bool, *appsv1.DaemonSet, error) {
+func (r *NodeObservabilityReconciler) currentDaemonSet(ctx context.Context, nameSpace types.NamespacedName) (*appsv1.DaemonSet, error) {
 	ds := &appsv1.DaemonSet{}
-	if err := r.Get(ctx, nameSpace, ds); err != nil || r.Err.Set[dsObj] {
-		if errors.IsNotFound(err) || r.Err.NotFound[dsObj] {
-			return false, nil, nil
-		}
-		if r.Err.Set[dsObj] {
-			err = fmt.Errorf("failed to get DaemonSet: simulated error")
-		}
-		return false, nil, err
+	if err := r.Get(ctx, nameSpace, ds); err != nil {
+		return nil, err
 	}
-	return true, ds, nil
+	return ds, nil
 }
 
 // createDaemonSet creates the serviceaccount
 func (r *NodeObservabilityReconciler) createDaemonSet(ctx context.Context, ds *appsv1.DaemonSet) error {
-	if err := r.Create(ctx, ds); err != nil {
-		return fmt.Errorf("failed to create DaemonSet %s/%s: %w", ds.Namespace, ds.Name, err)
+	return r.Create(ctx, ds)
+}
+
+func (r *NodeObservabilityReconciler) updateDaemonset(ctx context.Context, current, desired *appsv1.DaemonSet) (bool, error) {
+	updatedDS := current.DeepCopy()
+	updated := false
+
+	if !cmp.Equal(current.ObjectMeta.OwnerReferences, desired.ObjectMeta.OwnerReferences) {
+		updatedDS.ObjectMeta.OwnerReferences = desired.ObjectMeta.OwnerReferences
+		updated = true
 	}
-	r.Log.Info("created DaemonSet", "DaemonSet.Namespace", ds.Namespace, "DaemonSet.Name", ds.Name)
-	return nil
+
+	if !cmp.Equal(current.Spec.Template.Labels, desired.Spec.Template.Labels) {
+		updatedDS.Spec.Template.Labels = desired.Spec.Template.Labels
+		updated = true
+	}
+
+	if changed, updatedContainers := containersChanged(current.Spec.Template.Spec.Containers, desired.Spec.Template.Spec.Containers); changed {
+		updatedDS.Spec.Template.Spec.Containers = updatedContainers
+		updated = true
+	}
+
+	if changed, updatedVolumes := volumesChanged(updatedDS.Spec.Template.Spec.Volumes, desired.Spec.Template.Spec.Volumes); changed {
+		updatedDS.Spec.Template.Spec.Volumes = updatedVolumes
+		updated = true
+	}
+
+	if !cmp.Equal(current.Spec.Template.Spec.DNSPolicy, desired.Spec.Template.Spec.DNSPolicy) {
+		updatedDS.Spec.Template.Spec.DNSPolicy = desired.Spec.Template.Spec.DNSPolicy
+		updated = true
+	}
+
+	if updated {
+		if err := r.Update(ctx, updatedDS); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // desiredDaemonSet returns a DaemonSet object
 func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObservability, sa *corev1.ServiceAccount, ns string) *appsv1.DaemonSet {
-
 	ls := labelsForNodeObservability(nodeObs.Name)
 	tgp := int64(30)
 	vst := corev1.HostPathSocket
@@ -119,14 +164,16 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 							SecurityContext: &corev1.SecurityContext{
 								Privileged: &privileged,
 							},
-							Env: []corev1.EnvVar{{
-								Name: "NODE_IP",
-								ValueFrom: &corev1.EnvVarSource{
-									FieldRef: &corev1.ObjectFieldSelector{
-										FieldPath: "status.hostIP",
+							Env: []corev1.EnvVar{
+								{
+									Name: "NODE_IP",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{
+											FieldPath: "status.hostIP",
+										},
 									},
 								},
-							}},
+							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									MountPath: socketMountPath,
@@ -201,10 +248,4 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObs
 		},
 	}
 	return ds
-}
-
-// labelsForNodeObservability returns the labels for selecting the resources
-// belonging to the given node observability CR name.
-func labelsForNodeObservability(name string) map[string]string {
-	return map[string]string{"app": "nodeobservability", "nodeobs_cr": name}
 }

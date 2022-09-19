@@ -3,12 +3,18 @@ package nodeobservabilitycontroller
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	"github.com/google/go-cmp/cmp"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
@@ -28,44 +34,83 @@ var (
 // ensureService ensures that the service exists
 // Returns a Boolean value indicating whether it exists, a pointer to the
 // service and an error when relevant
-func (r *NodeObservabilityReconciler) ensureService(ctx context.Context, nodeObs *v1alpha1.NodeObservability, ns string) (bool, *corev1.Service, error) {
+func (r *NodeObservabilityReconciler) ensureService(ctx context.Context, nodeObs *v1alpha1.NodeObservability, ns string) (*corev1.Service, error) {
 	nameSpace := types.NamespacedName{Namespace: ns, Name: serviceName}
+
 	desired := r.desiredService(nodeObs, ns)
-	exist, current, err := r.currentService(ctx, nameSpace)
-	if err != nil {
-		return false, nil, fmt.Errorf("failed to get Service: %v", err)
+	if err := controllerutil.SetControllerReference(nodeObs, desired, r.Scheme); err != nil {
+		return nil, fmt.Errorf("failed to set the controller reference for service %q: %w", nameSpace, err)
 	}
-	if !exist {
+
+	current, err := r.currentService(ctx, nameSpace)
+	if err != nil && !errors.IsNotFound(err) {
+		return nil, fmt.Errorf("failed to get service %q due to: %w", nameSpace, err)
+	} else if err != nil && errors.IsNotFound(err) {
+
+		// creating service since it is not found
 		if err := r.createService(ctx, desired); err != nil {
-			return false, nil, err
+			return nil, fmt.Errorf("failed to create service %q: %w", nameSpace, err)
 		}
+		r.Log.V(1).Info("successfully created service", "svc.name", nameSpace.Name, "svc.namespace", nameSpace.Namespace)
 		return r.currentService(ctx, nameSpace)
 	}
-	return true, current, err
+
+	// update service since it already exists
+	return r.updateService(ctx, current, desired)
 }
 
-// currentService checks that the service exists
-func (r *NodeObservabilityReconciler) currentService(ctx context.Context, nameSpace types.NamespacedName) (bool, *corev1.Service, error) {
+// currentService gets the current service
+func (r *NodeObservabilityReconciler) currentService(ctx context.Context, nameSpace types.NamespacedName) (*corev1.Service, error) {
 	svc := &corev1.Service{}
-	if err := r.Get(ctx, nameSpace, svc); err != nil || r.Err.Set[svcObj] {
-		if errors.IsNotFound(err) || r.Err.NotFound[svcObj] {
-			return false, nil, nil
-		}
-		if r.Err.Set[svcObj] {
-			err = fmt.Errorf("failed to get Service: simulated error")
-		}
-		return false, nil, err
+	if err := r.Get(ctx, nameSpace, svc); err != nil {
+		return nil, err
 	}
-	return true, svc, nil
+	return svc, nil
 }
 
 // createService creates the service
 func (r *NodeObservabilityReconciler) createService(ctx context.Context, svc *corev1.Service) error {
-	if err := r.Create(ctx, svc); err != nil {
-		return fmt.Errorf("failed to create Service %s/%s: %w", svc.Namespace, svc.Name, err)
+	return r.Create(ctx, svc)
+}
+
+func (r *NodeObservabilityReconciler) updateService(ctx context.Context, current, desired *corev1.Service) (*corev1.Service, error) {
+	updatedService := current.DeepCopy()
+	var updated bool
+
+	if !cmp.Equal(current.ObjectMeta.OwnerReferences, desired.ObjectMeta.OwnerReferences) {
+		updatedService.ObjectMeta.OwnerReferences = desired.ObjectMeta.OwnerReferences
+		updated = true
 	}
-	r.Log.Info("created Service", "Service.Namespace", svc.Namespace, "Service.Name", svc.Name)
-	return nil
+
+	if !portsMatch(updatedService.Spec.Ports, desired.Spec.Ports) {
+		updatedService.Spec.Ports = desired.Spec.Ports
+		updated = true
+	}
+
+	if !equality.Semantic.DeepEqual(updatedService.Spec.Selector, desired.Spec.Selector) {
+		updatedService.Spec.Selector = desired.Spec.Selector
+		updated = true
+	}
+
+	if updatedService.Spec.Type != desired.Spec.Type {
+		updatedService.Spec.Type = desired.Spec.Type
+		updated = true
+	}
+
+	if updatedService.Annotations == nil && len(desired.Annotations) > 0 {
+		updatedService.Annotations = make(map[string]string)
+	}
+	for annotationKey, annotationValue := range desired.Annotations {
+		if currentAnnotationValue, ok := updatedService.Annotations[annotationKey]; !ok || currentAnnotationValue != annotationValue {
+			updatedService.Annotations[annotationKey] = annotationValue
+			updated = true
+		}
+	}
+
+	if updated {
+		return updatedService, r.Update(ctx, updatedService)
+	}
+	return updatedService, nil
 }
 
 // desiredService returns a service object
@@ -77,17 +122,10 @@ func (r *NodeObservabilityReconciler) desiredService(nodeObs *v1alpha1.NodeObser
 			Name:        serviceName,
 			Annotations: requestCerts,
 			Labels:      ls,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					Name:       nodeObs.Name,
-					Kind:       nodeObs.Kind,
-					UID:        nodeObs.UID,
-					APIVersion: nodeObs.APIVersion,
-				},
-			},
 		},
 		Spec: corev1.ServiceSpec{
 			ClusterIP: corev1.ClusterIPNone,
+			Type:      corev1.ServiceTypeClusterIP,
 			Selector:  ls,
 			Ports: []corev1.ServicePort{
 				{
@@ -99,4 +137,39 @@ func (r *NodeObservabilityReconciler) desiredService(nodeObs *v1alpha1.NodeObser
 		},
 	}
 	return svc
+}
+
+type SortableServicePort []corev1.ServicePort
+
+func (s SortableServicePort) Len() int {
+	return len(s)
+}
+
+func (s SortableServicePort) Less(i, j int) bool {
+	return strings.Compare(s[i].Name, s[j].Name) < 0
+}
+
+func (s SortableServicePort) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
+func portsMatch(current, desired SortableServicePort) bool {
+	if len(current) != len(desired) {
+		return false
+	}
+	currentCopy := make(SortableServicePort, len(current))
+	copy(currentCopy, current)
+	sort.Sort(currentCopy)
+	desiredCopy := make(SortableServicePort, len(desired))
+	copy(desiredCopy, desired)
+	sort.Sort(desiredCopy)
+
+	for i := 0; i < len(currentCopy); i++ {
+		c := currentCopy[i]
+		d := desiredCopy[i]
+		if c.Name != d.Name || c.Port != d.Port || c.TargetPort.IntVal != d.TargetPort.IntVal || c.Protocol != d.Protocol {
+			return false
+		}
+	}
+	return true
 }

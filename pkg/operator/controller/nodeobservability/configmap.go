@@ -9,6 +9,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
 	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 )
 
@@ -17,7 +19,7 @@ const (
 	srcKbltCAConfigMapNameSpace = "openshift-config-managed"
 )
 
-func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeObs *v1alpha1.NodeObservability, ns string) (bool, error) {
+func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeObs *v1alpha1.NodeObservability, ns string) error {
 	kbltCACM := &corev1.ConfigMap{}
 	kbltCACMName := types.NamespacedName{
 		Name:      srcKbltCAConfigMapName,
@@ -26,10 +28,7 @@ func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeO
 	// Use the clusterWide client in order to get the configmap from openshift-config-managed namespace
 	// As the default client will only look for configmaps inside the namespace
 	if err := r.ClusterWideClient.Get(ctx, kbltCACMName, kbltCACM); err != nil {
-		if errors.IsNotFound(err) {
-			return false, fmt.Errorf("unable to find source configMap %v: %w", kbltCACMName, err)
-		}
-		return false, fmt.Errorf("error getting source configMap %v, %w", kbltCACMName, err)
+		return fmt.Errorf("error getting source configmap %q, %w", kbltCACMName, err)
 	}
 
 	// Copy the configmap into the operator namespace
@@ -41,30 +40,27 @@ func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeO
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      configMapName.Name,
 			Namespace: configMapName.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					Name:       nodeObs.Name,
-					Kind:       nodeObs.Kind,
-					UID:        nodeObs.UID,
-					APIVersion: nodeObs.APIVersion,
-				},
-			},
 		},
 		Data: map[string]string{
 			kbltCAMountedFile: kbltCACM.Data[kbltCAMountedFile],
 		},
 	}
 
-	if err := r.Get(ctx, configMapName, &corev1.ConfigMap{}); err == nil {
-		return true, nil
-	} else if !errors.IsNotFound(err) {
-		return false, fmt.Errorf("error getting target configMap %s, %w", configMapName, err)
+	if err := controllerutil.SetControllerReference(nodeObs, configMap, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set the controller reference for target configmap %q: %w", configMapName, err)
 	}
 
-	if err := r.Create(ctx, configMap); err != nil {
-		return false, fmt.Errorf("failed to create target configMap %s: %w", configMapName, err)
+	if err := r.Get(ctx, configMapName, &corev1.ConfigMap{}); err != nil {
+		if !errors.IsNotFound(err) {
+			return fmt.Errorf("error getting target configmap %q, %w", configMapName, err)
+		} else {
+			// create configmap since it is not found
+			if err := r.Create(ctx, configMap); err != nil {
+				return fmt.Errorf("failed to create target configmap %q: %w", configMapName, err)
+			}
+			r.Log.Info("created kubelet CA configmap", "configmap.namespace", configMapName.Namespace, "configmap.name", configMapName.Name)
+		}
 	}
 
-	r.Log.Info("created ConfigMap", "ConfigMap.Namespace", configMapName.Namespace, "ConfigMap.Name", configMapName.Name)
-	return true, nil
+	return nil
 }

@@ -21,8 +21,10 @@ import (
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/google/go-cmp/cmp"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -47,28 +49,36 @@ func TestEnsureMCO(t *testing.T) {
 	}
 	nodeObs := &v1alpha1.NodeObservability{
 		ObjectMeta: metav1.ObjectMeta{Name: NodeObservabilityMachineConfigTest},
+		Spec: v1alpha1.NodeObservabilitySpec{
+			Type: v1alpha1.CrioKubeletNodeObservabilityType,
+		},
 	}
 
 	testCases := []struct {
 		name            string
 		existingObjects []runtime.Object
-		expectedExist   bool
 		expectedMCO     *v1alpha1.NodeObservabilityMachineConfig
-		errExpected     bool
 	}{
 		{
 			name:            "Does not exist",
 			existingObjects: []runtime.Object{},
-			expectedExist:   true,
-			expectedMCO:     &v1alpha1.NodeObservabilityMachineConfig{},
+			expectedMCO:     nomc,
 		},
 		{
-			name: "Exists",
+			name: "Exists but needs to be updated",
 			existingObjects: []runtime.Object{
-				nomc,
+				&v1alpha1.NodeObservabilityMachineConfig{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: NodeObservabilityMachineConfigTest,
+					},
+					Spec: v1alpha1.NodeObservabilityMachineConfigSpec{
+						Debug: v1alpha1.NodeObservabilityDebug{
+							EnableCrioProfiling: false,
+						},
+					},
+				},
 			},
-			expectedExist: true,
-			expectedMCO:   nomc,
+			expectedMCO: nomc,
 		},
 	}
 	for _, tc := range testCases {
@@ -80,21 +90,22 @@ func TestEnsureMCO(t *testing.T) {
 				Log:    zap.New(zap.UseDevMode(true)),
 			}
 
-			gotExist, obj, err := r.ensureNOMC(context.TODO(), nodeObs)
+			obj, err := r.ensureNOMC(context.TODO(), nodeObs)
 			if err != nil {
-				if !tc.errExpected {
-					t.Fatalf("unexpected error received: %v", err)
-				}
-				return
+				t.Fatalf("unexpected error received: %v", err)
 			}
 
-			if tc.errExpected {
-				t.Fatalf("Error expected but wasn't received")
+			nomc := &v1alpha1.NodeObservabilityMachineConfig{}
+			err = r.Client.Get(context.Background(), types.NamespacedName{Namespace: test.TestNamespace, Name: NodeObservabilityMachineConfigTest}, nomc)
+			if err != nil {
+				t.Fatalf("failed to get daemonset: %v", err)
 			}
-			if gotExist != tc.expectedExist {
-				t.Errorf("expected machineconfig exist to be %t, got %t", tc.expectedExist, gotExist)
+
+			if diff := cmp.Diff(nomc.Spec, tc.expectedMCO.Spec); diff != "" {
+				t.Errorf("resource mismatch:\n%s", diff)
 			}
-			if gotExist {
+
+			if obj != nil {
 				for _, ref := range obj.GetOwnerReferences() {
 					if ref.Name == NodeObservabilityMachineConfigTest {
 						return

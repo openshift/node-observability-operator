@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,6 +29,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
+
+	"github.com/google/go-cmp/cmp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -48,105 +49,6 @@ func TestReconcile(t *testing.T) {
 	}
 
 	eventWaitTimeout := time.Duration(1 * time.Second)
-
-	// used to simulate errors for all objects
-	ErrRuns := []ErrTestObject{
-		{
-			Enabled:  true,
-			Set:      nil,
-			NotFound: nil,
-		},
-		{
-			Enabled: true,
-			Set: map[string]bool{
-				sccObj: true,
-			},
-			NotFound: map[string]bool{
-				sccObj: false,
-			},
-		},
-		{
-			Enabled: true,
-			Set: map[string]bool{
-				saObj: true,
-			},
-			NotFound: map[string]bool{
-				saObj: false,
-			},
-		},
-		{
-			Enabled: true,
-			Set: map[string]bool{
-				crObj: true,
-			},
-			NotFound: map[string]bool{
-				crObj: false,
-			},
-		},
-		{
-			Enabled: true,
-			Set: map[string]bool{
-				crbObj: true,
-			},
-			NotFound: map[string]bool{
-				crbObj: false,
-			},
-		},
-		{
-			Enabled: true,
-			Set: map[string]bool{
-				dsObj: true,
-			},
-			NotFound: map[string]bool{
-				dsObj: false,
-			},
-		},
-		{
-			Enabled: true,
-			Set: map[string]bool{
-				sccObj: true,
-			},
-			NotFound: map[string]bool{
-				sccObj: true,
-			},
-		},
-		{
-			Enabled: true,
-			Set: map[string]bool{
-				saObj: true,
-			},
-			NotFound: map[string]bool{
-				saObj: true,
-			},
-		},
-		{
-			Enabled: true,
-			Set: map[string]bool{
-				crObj: true,
-			},
-			NotFound: map[string]bool{
-				crObj: true,
-			},
-		},
-		{
-			Enabled: true,
-			Set: map[string]bool{
-				crbObj: true,
-			},
-			NotFound: map[string]bool{
-				crbObj: true,
-			},
-		},
-		{
-			Enabled: true,
-			Set: map[string]bool{
-				dsObj: true,
-			},
-			NotFound: map[string]bool{
-				dsObj: true,
-			},
-		},
-	}
 
 	teAdd := test.Event{
 		EventType: watch.Added,
@@ -224,97 +126,86 @@ func TestReconcile(t *testing.T) {
 
 	// loop through test cases (bootstrap and delete)
 	for _, tc := range testCases {
-		// loop through error objects
-		for _, errTest := range ErrRuns {
-			// run the tests
-			t.Run(tc.name, func(t *testing.T) {
-				cl := fake.NewClientBuilder().WithScheme(test.Scheme).WithRuntimeObjects(tc.existingObjects...).Build()
-				// for each run we clear the expected Events
-				tc.expectedEvents = nil
+		// run the tests
+		t.Run(tc.name, func(t *testing.T) {
+			cl := fake.NewClientBuilder().WithScheme(test.Scheme).WithRuntimeObjects(tc.existingObjects...).Build()
+			// for each run we clear the expected Events
+			tc.expectedEvents = nil
 
-				r := &NodeObservabilityReconciler{
-					Client:            cl,
-					ClusterWideClient: cl,
-					Scheme:            test.Scheme,
-					Log:               zap.New(zap.UseDevMode(true)),
-					Err:               errTest,
-					AgentImage:        "test",
-				}
-				// only check for errors when the ErrorTestObject Set and NotFound maps are nill
-				tc.errExpected = (errTest.Set != nil || errTest.NotFound != nil) && tc.name == "Bootstrapping"
+			r := &NodeObservabilityReconciler{
+				Client:            cl,
+				ClusterWideClient: cl,
+				Scheme:            test.Scheme,
+				Log:               zap.New(zap.UseDevMode(true)),
+				AgentImage:        "test",
+			}
 
-				// the add and modify events should only be added when there are no 'simulated' errors
-				if (errTest.Set == nil && errTest.NotFound == nil) && tc.name == "Bootstrapping" {
-					//update finalizer
-					tc.expectedEvents = append(tc.expectedEvents, teMod)
-					//add daemonset
-					tc.expectedEvents = append(tc.expectedEvents, teAdd)
-					//update status
-					tc.expectedEvents = append(tc.expectedEvents, teMod)
-				}
-				if tc.name == "Deleting" {
-					//update finalizer
-					tc.expectedEvents = append(tc.expectedEvents, teDel)
-				}
-				if (errTest.Set != nil || errTest.NotFound != nil) && tc.name == "Bootstrapping" {
-					//update finalizer
-					tc.expectedEvents = append(tc.expectedEvents, teMod)
-				}
+			// the add and modify events should only be added when there are no 'simulated' errors
+			if tc.name == "Bootstrapping" {
+				//update finalizer
+				tc.expectedEvents = append(tc.expectedEvents, teMod)
+				//add daemonset
+				tc.expectedEvents = append(tc.expectedEvents, teAdd)
+				//update status
+				tc.expectedEvents = append(tc.expectedEvents, teMod)
+			}
+			if tc.name == "Deleting" {
+				//update finalizer
+				tc.expectedEvents = append(tc.expectedEvents, teDel)
+			}
+			if tc.name == "Bootstrapping" {
+				//update finalizer
+				tc.expectedEvents = append(tc.expectedEvents, teMod)
+			}
 
-				// special case for daemonset
-				if errTest.Set[dsObj] && tc.name == "Bootstrapping" {
-					tc.expectedEvents = append(tc.expectedEvents, teAdd)
-				}
+			c := test.NewEventCollector(t, cl, managedTypesList, len(tc.expectedEvents))
 
-				c := test.NewEventCollector(t, cl, managedTypesList, len(tc.expectedEvents))
+			ctx := context.TODO()
+			// get watch interfaces from all the types managed by the operator
+			c.Start(ctx)
+			defer c.Stop()
 
-				ctx := context.TODO()
-				// get watch interfaces from all the types managed by the operator
-				c.Start(ctx)
-				defer c.Stop()
+			// TEST FUNCTION
+			gotResult, err := r.Reconcile(ctx, tc.inputRequest)
 
-				// TEST FUNCTION
-				gotResult, err := r.Reconcile(ctx, tc.inputRequest)
-
-				res := &operatorv1alpha1.NodeObservability{}
-				if err := cl.Get(ctx, tc.inputRequest.NamespacedName, res); err != nil && !kerrors.IsNotFound(err) {
-					t.Fatalf("unexpected error while getting %v", tc.inputRequest.NamespacedName)
-				}
-				if err != nil { // nodeObs is found
-					cnd := res.Status.ConditionalStatus.GetCondition(operatorv1alpha1.DebugReady)
-					if cnd != nil {
-						isReady := cnd.Status
-						if tc.expectReadyCondition != isReady {
-							t.Fatalf("expecting condition Discarded %v but was %v", tc.expectReadyCondition, isReady)
-						}
+			res := &operatorv1alpha1.NodeObservability{}
+			if err := cl.Get(ctx, tc.inputRequest.NamespacedName, res); err != nil && !kerrors.IsNotFound(err) {
+				t.Fatalf("unexpected error while getting %v", tc.inputRequest.NamespacedName)
+			}
+			if err != nil { // nodeObs is found
+				cond := res.Status.ConditionalStatus.GetCondition(operatorv1alpha1.DebugReady)
+				if cond != nil {
+					isReady := cond.Status
+					if tc.expectReadyCondition != isReady {
+						t.Fatalf("expecting condition DebugRead=%v but was DebugReady=%v", tc.expectReadyCondition, isReady)
 					}
 				}
+			}
 
-				// error check
-				if err != nil {
-					if !tc.errExpected {
-						t.Fatalf("got unexpected error: %v", err)
-					}
-				} else if tc.errExpected {
-					t.Fatalf("error expected but not received")
+			// error check
+			if err != nil {
+				if !tc.errExpected {
+					t.Fatalf("got unexpected error: %v", err)
 				}
+			} else if tc.errExpected {
+				t.Fatalf("error expected but not received")
+			}
 
-				// result check
-				if !reflect.DeepEqual(gotResult, tc.expectedResult) {
-					t.Fatalf("expected result %v, got %v", tc.expectedResult, gotResult)
-				}
+			// result check
+			if !reflect.DeepEqual(gotResult, tc.expectedResult) {
+				t.Fatalf("expected result %v, got %v", tc.expectedResult, gotResult)
+			}
 
-				// collect the events received from Reconcile()
-				collectedEvents := c.Collect(len(tc.expectedEvents), eventWaitTimeout)
+			// collect the events received from Reconcile()
+			collectedEvents := c.Collect(len(tc.expectedEvents), eventWaitTimeout)
 
-				// compare collected and expected events
-				idxExpectedEvents := test.IndexEvents(tc.expectedEvents)
-				idxCollectedEvents := test.IndexEvents(collectedEvents)
-				if diff := cmp.Diff(idxExpectedEvents, idxCollectedEvents); diff != "" {
-					t.Fatalf("found diff between expected and collected events: %s", diff)
-				}
-			})
-		}
+			// compare collected and expected events
+			idxExpectedEvents := test.IndexEvents(tc.expectedEvents)
+			idxCollectedEvents := test.IndexEvents(collectedEvents)
+			if diff := cmp.Diff(idxExpectedEvents, idxCollectedEvents); diff != "" {
+				t.Fatalf("found diff between expected and collected events: %s", diff)
+			}
+		})
 	}
 }
 

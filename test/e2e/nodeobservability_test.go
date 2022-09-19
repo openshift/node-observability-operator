@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/types"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
@@ -74,7 +75,7 @@ var _ = Describe("Node Observability Operator end-to-end test suite", Ordered, f
 				Eventually(func() bool {
 					Expect(k8sClient.Get(ctx, runNamespacedName, run)).To(Succeed())
 					return run.Status.FinishedTimestamp.IsZero()
-				}, 600, time.Second).Should(BeFalse())
+				}, 900, time.Second).Should(BeFalse())
 				Expect(run.Status.FailedAgents).To(BeEmpty())
 			})
 		})

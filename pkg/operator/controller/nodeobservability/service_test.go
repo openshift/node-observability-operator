@@ -1,5 +1,5 @@
 /*
-Copyright 2021.
+Copyright 2022.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,10 +20,15 @@ import (
 	"context"
 	"testing"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
+
+	"github.com/google/go-cmp/cmp"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -31,37 +36,169 @@ import (
 	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
-func TestEnsureService(t *testing.T) {
-	nodeObs := &operatorv1alpha1.NodeObservability{}
-	makeService := func() *corev1.Service {
-		sa := corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      serviceName,
-				Namespace: nodeObs.Namespace,
+func testControllerService(name, namespace string, selector, annotations map[string]string) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   namespace,
+			Annotations: annotations,
+		},
+		Spec: corev1.ServiceSpec{
+			ClusterIP: corev1.ClusterIPNone,
+			Type:      corev1.ServiceTypeClusterIP,
+			Ports: []corev1.ServicePort{
+				{
+					Protocol:   corev1.ProtocolTCP,
+					Port:       port,
+					TargetPort: intstr.FromInt(targetPort),
+				},
 			},
-		}
-		return &sa
+			Selector: selector,
+		},
 	}
+}
+
+func TestEnsureService(t *testing.T) {
 	testCases := []struct {
 		name            string
 		existingObjects []runtime.Object
-		expectedExist   bool
-		expectedSA      *corev1.Service
-		errExpected     bool
+		deployment      *appsv1.Deployment
+		expectedService *corev1.Service
 	}{
 		{
-			name:            "Does not exist",
-			existingObjects: []runtime.Object{},
-			expectedExist:   true,
-			expectedSA:      makeService(),
+			name: "new service",
+			deployment: &appsv1.Deployment{
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"app": "nodeobservability", "nodeobs_cr": "test"},
+					},
+				},
+			},
+			expectedService: testControllerService(
+				podName,
+				test.TestNamespace,
+				map[string]string{"app": "nodeobservability", "nodeobs_cr": "test"},
+				map[string]string{injectCertsKey: podName},
+			),
 		},
 		{
-			name: "Exists",
+			name: "existing service, selector modified",
 			existingObjects: []runtime.Object{
-				makeService(),
+				testControllerService(
+					podName,
+					test.TestNamespace,
+					map[string]string{"app": "nodeobservability-old", "nodeobs_cr": "test"},
+					map[string]string{injectCertsKey: podName},
+				),
 			},
-			expectedExist: true,
-			expectedSA:    makeService(),
+			deployment: &appsv1.Deployment{
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"app": "nodeobservability", "nodeobs_cr": "test"},
+					},
+				},
+			},
+			expectedService: testControllerService(
+				podName,
+				test.TestNamespace,
+				map[string]string{"app": "nodeobservability", "nodeobs_cr": "test"},
+				map[string]string{injectCertsKey: podName},
+			),
+		},
+		{
+			name: "existing service, ports modified",
+			existingObjects: []runtime.Object{
+				&corev1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "node-observability-agent", Namespace: "test-namespace"},
+					Spec: corev1.ServiceSpec{
+						ClusterIP: corev1.ClusterIPNone,
+						Type:      corev1.ServiceTypeClusterIP,
+						Ports: []corev1.ServicePort{
+							{
+								Protocol:   corev1.ProtocolTCP,
+								Port:       9440,
+								TargetPort: intstr.FromInt(9440),
+							},
+						},
+						Selector: map[string]string{"app": "nodeobservability", "nodeobs_cr": "test"},
+					},
+				},
+			},
+			deployment: &appsv1.Deployment{
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"app": "nodeobservability", "nodeobs_cr": "test"},
+					},
+				},
+			},
+			expectedService: testControllerService(
+				podName,
+				test.TestNamespace,
+				map[string]string{"app": "nodeobservability", "nodeobs_cr": "test"},
+				map[string]string{injectCertsKey: podName},
+			),
+		},
+		{
+			name: "existing service, service type modified",
+			existingObjects: []runtime.Object{
+				&corev1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "node-observability-agent", Namespace: "test-namespace"},
+					Spec: corev1.ServiceSpec{
+						ClusterIP: corev1.ClusterIPNone,
+						Type:      corev1.ServiceTypeNodePort,
+						Ports: []corev1.ServicePort{
+							{
+								Protocol:   corev1.ProtocolTCP,
+								Port:       port,
+								TargetPort: intstr.FromInt(targetPort),
+							},
+						},
+						Selector: map[string]string{"app": "nodeobservability", "nodeobs_cr": "test"},
+					},
+				},
+			},
+			deployment: &appsv1.Deployment{
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"app": "controller"},
+					},
+				},
+			},
+			expectedService: testControllerService(
+				podName,
+				test.TestNamespace,
+				map[string]string{"app": "nodeobservability", "nodeobs_cr": "test"},
+				map[string]string{injectCertsKey: podName},
+			),
+		},
+		{
+			name: "existing service, extra annotations present are allowed during updates",
+			existingObjects: []runtime.Object{
+				testControllerService(
+					podName,
+					test.TestNamespace,
+					map[string]string{"app": "nodeobservability", "nodeobs_cr": "test"},
+					map[string]string{
+						"extra-annotation-key": "extra-annotation-value",
+					},
+				),
+			},
+			deployment: &appsv1.Deployment{
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"app": "controller"},
+					},
+				},
+			},
+			expectedService: testControllerService(
+				podName,
+				test.TestNamespace,
+				map[string]string{"app": "nodeobservability", "nodeobs_cr": "test"},
+				map[string]string{
+					injectCertsKey:         podName,
+					"extra-annotation-key": "extra-annotation-value",
+				},
+			),
 		},
 	}
 
@@ -69,24 +206,34 @@ func TestEnsureService(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cl := fake.NewClientBuilder().WithRuntimeObjects(tc.existingObjects...).Build()
 			r := &NodeObservabilityReconciler{
-				Client: cl,
-				Scheme: test.Scheme,
-				Log:    zap.New(zap.UseDevMode(true)),
+				Client:    cl,
+				Scheme:    test.Scheme,
+				Namespace: test.TestNamespace,
+				Log:       zap.New(zap.UseDevMode(true)),
 			}
-			nodeObs := &operatorv1alpha1.NodeObservability{}
+			nodeObs := &operatorv1alpha1.NodeObservability{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test",
+				},
+			}
 
-			gotExist, _, err := r.ensureService(context.TODO(), nodeObs, test.TestNamespace)
+			_, err := r.ensureService(context.TODO(), nodeObs, test.TestNamespace)
 			if err != nil {
-				if !tc.errExpected {
-					t.Fatalf("unexpected error received: %v", err)
-				}
+				t.Fatalf("unexpected error received: %v", err)
+			}
+			var s corev1.Service
+			err = r.Client.Get(context.Background(), types.NamespacedName{Name: tc.expectedService.Name, Namespace: tc.expectedService.Namespace}, &s)
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
 				return
 			}
-			if tc.errExpected {
-				t.Fatalf("Error expected but wasn't received")
+
+			if diff := cmp.Diff(tc.expectedService.Annotations, s.Annotations); diff != "" {
+				t.Errorf("unexpected annotations\n%s", diff)
 			}
-			if gotExist != tc.expectedExist {
-				t.Errorf("expected service's exist to be %t, got %t", tc.expectedExist, gotExist)
+
+			if !equality.Semantic.DeepEqual(s.Spec, tc.expectedService.Spec) {
+				t.Errorf("service has unexpected configuration:\n%s", cmp.Diff(s.Spec, tc.expectedService.Spec))
 			}
 		})
 	}
