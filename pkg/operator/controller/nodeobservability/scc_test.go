@@ -20,12 +20,15 @@ import (
 	"context"
 	"testing"
 
-	securityv1 "github.com/openshift/api/security/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	securityv1 "github.com/openshift/api/security/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -35,11 +38,10 @@ import (
 
 func makeScc() *securityv1.SecurityContextConstraints {
 	var priority int32 = 10
-	nodeObs := &operatorv1alpha2.NodeObservability{}
 	scc := securityv1.SecurityContextConstraints{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      sccName,
-			Namespace: nodeObs.Namespace,
+			Name:            sccName,
+			ResourceVersion: "1",
 		},
 		AllowPrivilegedContainer: true,
 		AllowHostIPC:             false,
@@ -66,12 +68,14 @@ func makeScc() *securityv1.SecurityContextConstraints {
 		SupplementalGroups: securityv1.SupplementalGroupsStrategyOptions{
 			Type: securityv1.SupplementalGroupsStrategyRunAsAny,
 		},
-		Volumes: []securityv1.FSType{securityv1.FSTypeHostPath, securityv1.FSTypeSecret},
+		Volumes: []securityv1.FSType{securityv1.FSTypeHostPath, securityv1.FSTypeSecret, securityv1.FSTypeConfigMap},
 	}
 	return &scc
 }
+
 func TestEnsureScc(t *testing.T) {
 
+	var priority int32 = 10
 	testCases := []struct {
 		name            string
 		existingObjects []runtime.Object
@@ -88,10 +92,28 @@ func TestEnsureScc(t *testing.T) {
 		{
 			name: "Exists",
 			existingObjects: []runtime.Object{
-				makeScc(),
+				&securityv1.SecurityContextConstraints{
+					ObjectMeta:               metav1.ObjectMeta{Name: sccName, ResourceVersion: "1"},
+					Priority:                 &priority,
+					AllowPrivilegedContainer: true,
+					DefaultAddCapabilities:   nil,
+					RequiredDropCapabilities: []corev1.Capability{"MKNOD"},
+					AllowedCapabilities:      nil,
+					AllowHostDirVolumePlugin: true,
+					Volumes:                  []securityv1.FSType{securityv1.FSTypeHostPath, securityv1.FSTypeSecret, securityv1.FSTypeConfigMap},
+					AllowHostNetwork:         true,
+					AllowHostPorts:           false,
+					AllowHostPID:             false,
+					AllowHostIPC:             true, // not expected
+					SELinuxContext:           securityv1.SELinuxContextStrategyOptions{Type: securityv1.SELinuxStrategyMustRunAs},
+					RunAsUser:                securityv1.RunAsUserStrategyOptions{Type: securityv1.RunAsUserStrategyRunAsAny},
+					SupplementalGroups:       securityv1.SupplementalGroupsStrategyOptions{Type: securityv1.SupplementalGroupsStrategyRunAsAny},
+					FSGroup:                  securityv1.FSGroupStrategyOptions{Type: securityv1.FSGroupStrategyRunAsAny},
+					ReadOnlyRootFilesystem:   false,
+					Groups:                   []string{"system:cluster-admins", "system:nodes"},
+				},
 			},
-			expectedExist: true,
-			expectedScc:   makeScc(),
+			expectedScc: makeScc(),
 		},
 	}
 
@@ -104,7 +126,7 @@ func TestEnsureScc(t *testing.T) {
 				Log:    zap.New(zap.UseDevMode(true)),
 			}
 			nodeObs := &operatorv1alpha2.NodeObservability{}
-			gotExist, _, err := r.ensureSecurityContextConstraints(context.TODO(), nodeObs)
+			scc, err := r.ensureSecurityContextConstraints(context.TODO(), nodeObs)
 			if err != nil {
 				if !tc.errExpected {
 					t.Fatalf("unexpected error received: %v", err)
@@ -114,8 +136,9 @@ func TestEnsureScc(t *testing.T) {
 			if tc.errExpected {
 				t.Fatalf("Error expected but wasn't received")
 			}
-			if gotExist != tc.expectedExist {
-				t.Errorf("expected service account's exist to be %t, got %t", tc.expectedExist, gotExist)
+
+			if diff := cmp.Diff(scc, tc.expectedScc, cmpopts.IgnoreFields(securityv1.SecurityContextConstraints{}, "TypeMeta", "ObjectMeta")); diff != "" {
+				t.Fatalf("unexpected diff \n%s", diff)
 			}
 		})
 	}

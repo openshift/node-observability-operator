@@ -3,163 +3,81 @@ package nodeobservabilitycontroller
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
 	v1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 )
 
 const (
-	apiGroup                     = "rbac.authorization.k8s.io"
-	clusterRoleName              = "node-observability-cr"
-	clusterRole                  = "ClusterRole"
-	clusterRoleBindingName       = "node-observability-crb"
-	serviceAccount               = "ServiceAccount"
-	get                          = "get"
-	create                       = "create"
-	list                         = "list"
-	nodes                        = "nodes"
-	nodesProxy                   = "nodes/proxy"
-	pods                         = "pods"
-	urlStatus                    = "/node-observability-status"
-	urlPprof                     = "/node-observability-pprof"
-	secGroup                     = "security.openshift.io"
-	authnGroup                   = "authentication.k8s.io"
-	authzGroup                   = "authorization.k8s.io"
-	secResource                  = "securitycontextconstraints"
-	secResourceName              = "node-observability-scc"
-	tokenreviewsResource         = "tokenreviews"
-	subjectaccessreviewsResource = "subjectaccessreviews"
-	use                          = "use"
+
+	// TODO: standardize resource names to keep them compatible
+	clusterRoleName        = "node-observability-operator-controller-role"
+	clusterRoleBindingName = "node-observability-operator-controller-role-binding"
 )
 
-// ensureClusterRole ensures that the clusterrole exists
-// Returns a Boolean value indicating whether it exists, a pointer to
-// cluster role and an error when relevant
-func (r *NodeObservabilityReconciler) ensureClusterRole(ctx context.Context, nodeObs *v1alpha2.NodeObservability) (bool, *rbacv1.ClusterRole, error) {
-	nameSpace := types.NamespacedName{Name: clusterRoleName}
-	desired := r.desiredClusterRole(nodeObs)
-	exist, current, err := r.currentClusterRole(ctx, nameSpace)
-	if err != nil {
-		return false, nil, fmt.Errorf("failed to get ClusterRole: %w", err)
-	}
-	if !exist {
-		if err := r.createClusterRole(ctx, desired); err != nil {
-			return false, nil, err
-		}
-		return r.currentClusterRole(ctx, nameSpace)
-	}
-	return true, current, err
-}
-
-// currentClusterRole checks that the clusterrole  exists
-func (r *NodeObservabilityReconciler) currentClusterRole(ctx context.Context, nameSpace types.NamespacedName) (bool, *rbacv1.ClusterRole, error) {
+func (r *NodeObservabilityReconciler) verifyClusterRole(ctx context.Context) (bool, error) {
 	cr := &rbacv1.ClusterRole{}
-	if err := r.Get(ctx, nameSpace, cr); err != nil || r.Err.Set[crObj] {
-		if errors.IsNotFound(err) || r.Err.NotFound[crObj] {
-			return false, nil, nil
+	if err := r.Get(ctx, types.NamespacedName{Name: clusterRoleName}, cr); err != nil {
+		if errors.IsNotFound(err) {
+			return false, nil
 		}
-		if r.Err.Set[crObj] {
-			err = fmt.Errorf("failed to get ClusterRole: simulated error")
-		}
-		return false, nil, err
+		return false, err
 	}
-	return true, cr, nil
-}
-
-// createClusterRole creates the clusterrole
-func (r *NodeObservabilityReconciler) createClusterRole(ctx context.Context, cr *rbacv1.ClusterRole) error {
-	if err := r.Create(ctx, cr); err != nil {
-		return fmt.Errorf("failed to create ClusterRole %s/%s: %w", cr.Namespace, cr.Name, err)
-	}
-	r.Log.Info("created ClusterRole", "ClusterRole.Namespace", cr.Namespace, "ClusterRole.Name", cr.Name)
-	return nil
-}
-
-// desiredClusterRole returns a clusterrole object
-func (r *NodeObservabilityReconciler) desiredClusterRole(nodeObs *v1alpha2.NodeObservability) *rbacv1.ClusterRole {
-
-	cr := &rbacv1.ClusterRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   clusterRoleName,
-			Labels: labelsForClusterRole(clusterRoleName),
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups:     []string{secGroup},
-				Resources:     []string{secResource},
-				ResourceNames: []string{secResourceName},
-				Verbs:         []string{use},
-			},
-			{
-				Verbs:     []string{get, list},
-				APIGroups: []string{""},
-				Resources: []string{nodes, nodesProxy, pods},
-			},
-			{
-				Verbs:           []string{get},
-				NonResourceURLs: []string{urlStatus, urlPprof},
-			},
-			{
-				APIGroups: []string{authnGroup},
-				Resources: []string{tokenreviewsResource},
-				Verbs:     []string{create},
-			},
-			{
-				APIGroups: []string{authzGroup},
-				Resources: []string{subjectaccessreviewsResource},
-				Verbs:     []string{create},
-			},
-		},
-	}
-	return cr
+	return true, nil
 }
 
 // ensureClusterRoleBinding ensures that the clusterrolebinding exists
 // Returns a Boolean value indicating whether it exists, a pointer to the
 // clusterrolebinding and an error when relevant
-func (r *NodeObservabilityReconciler) ensureClusterRoleBinding(ctx context.Context, nodeObs *v1alpha2.NodeObservability, saName, ns string) (bool, *rbacv1.ClusterRoleBinding, error) {
+func (r *NodeObservabilityReconciler) ensureClusterRoleBinding(ctx context.Context, nodeObs *v1alpha2.NodeObservability, saName, ns string) (*rbacv1.ClusterRoleBinding, error) {
 	nameSpace := types.NamespacedName{Namespace: ns, Name: clusterRoleBindingName}
 	desired := r.desiredClusterRoleBinding(nodeObs, saName, ns)
-	exist, current, err := r.currentClusterRoleBinding(ctx, nameSpace)
-	if err != nil {
-		return false, nil, fmt.Errorf("failed to get ClusterRoleBinding: %v", err)
+
+	if err := controllerutil.SetControllerReference(nodeObs, desired, r.Scheme); err != nil {
+		return nil, fmt.Errorf("failed to set the controller reference for clusterrolebindings %s : %w", desired.Name, err)
 	}
-	if !exist {
+
+	current, err := r.currentClusterRoleBinding(ctx)
+	if err != nil && !errors.IsNotFound(err) {
+		return nil, fmt.Errorf("failed to get clusterrolebinding %q due to: %w", nameSpace, err)
+	} else if err != nil && errors.IsNotFound(err) {
+
+		// create clusterrolebinding since it is not found
 		if err := r.createClusterRoleBinding(ctx, desired); err != nil {
-			return false, nil, err
+			return nil, fmt.Errorf("failed to create clusterrolebinding %q: %w", nameSpace, err)
 		}
-		return r.currentClusterRoleBinding(ctx, nameSpace)
+
+		r.Log.Info("created clusterrolebinding", "clusterrolebinding.Namespace", nameSpace.Namespace, "clusterrolebinding.Name", nameSpace.Name)
+		return r.currentClusterRoleBinding(ctx)
 	}
-	return true, current, err
+
+	var updated *rbacv1.ClusterRoleBinding
+	if updated, err = r.updateClusterRoleBinding(ctx, current, desired); err != nil {
+		return nil, fmt.Errorf("failed to update clusterrolebinding %s/%s due to: %w", nameSpace.Namespace, nameSpace.Name, err)
+	}
+
+	return updated, nil
 }
 
 // currentClusterRoleBinding checks if the clusterrolebinding exists
-func (r *NodeObservabilityReconciler) currentClusterRoleBinding(ctx context.Context, nameSpace types.NamespacedName) (bool, *rbacv1.ClusterRoleBinding, error) {
+func (r *NodeObservabilityReconciler) currentClusterRoleBinding(ctx context.Context) (*rbacv1.ClusterRoleBinding, error) {
 	crb := &rbacv1.ClusterRoleBinding{}
-
-	if err := r.Get(ctx, nameSpace, crb); err != nil || r.Err.Set[crbObj] {
-		if errors.IsNotFound(err) || r.Err.NotFound[crbObj] {
-			return false, nil, nil
-		}
-		if r.Err.Set[crbObj] {
-			err = fmt.Errorf("failed to get ClusterRoleiBinding: simulated error")
-		}
-		return false, nil, err
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: clusterRoleBindingName}, crb); err != nil {
+		return nil, err
 	}
-	return true, crb, nil
+	return crb, nil
 }
 
 // createClusterRoleBinding creates the clusterrolebinding
 func (r *NodeObservabilityReconciler) createClusterRoleBinding(ctx context.Context, crb *rbacv1.ClusterRoleBinding) error {
-	if err := r.Create(ctx, crb); err != nil {
-		return fmt.Errorf("failed to create ClusterRoleBinding %s/%s: %w", crb.Namespace, crb.Name, err)
-	}
-	r.Log.Info("created ClusterRoleBinding", "ClusterRoleBinding.Namespace", crb.Namespace, "ClusterRoleBinding.Name", crb.Name)
-	return nil
+	return r.Create(ctx, crb)
 }
 
 // desiredClusterRoleBinding returns a clusterrolebinding object
@@ -171,35 +89,37 @@ func (r *NodeObservabilityReconciler) desiredClusterRoleBinding(nodeObs *v1alpha
 		},
 		Subjects: []rbacv1.Subject{
 			{
-				Kind:      serviceAccount,
+				Kind:      "ServiceAccount",
 				Name:      saName,
 				Namespace: ns,
 			},
 		},
 		RoleRef: rbacv1.RoleRef{
-			Kind:     clusterRole,
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "ClusterRole",
 			Name:     clusterRoleName,
-			APIGroup: apiGroup,
 		},
 	}
 	return crb
 }
 
-// labelsForclusterRole returns the labels for selecting the resources
-func labelsForClusterRole(name string) map[string]string {
-	return map[string]string{"scc": "node-observability-scc-role", "role": name}
-}
+// updateClusterRoleBindings updates the current clusterrolebindings and returns a flag to denote if the update was done.
+func (r *NodeObservabilityReconciler) updateClusterRoleBinding(ctx context.Context, current *rbacv1.ClusterRoleBinding, desired *rbacv1.ClusterRoleBinding) (*rbacv1.ClusterRoleBinding, error) {
+	changed := hasClusterRoleBindingChanged(current, desired)
 
-func (r *NodeObservabilityReconciler) deleteClusterRole(nodeObs *v1alpha2.NodeObservability) error {
-	cr := &rbacv1.ClusterRole{}
-	cr.Name = clusterRoleName
-	if err := r.Client.Delete(context.TODO(), cr); err != nil {
-		if errors.IsNotFound(err) {
-			return nil
-		}
-		return err
+	if !changed {
+		return current, nil
 	}
-	return nil
+
+	updated := current.DeepCopy()
+	updated.Subjects = desired.Subjects
+	updated.RoleRef = desired.RoleRef
+
+	if err := r.Client.Update(ctx, updated); err != nil {
+		return nil, err
+	}
+
+	return updated, nil
 }
 
 func (r *NodeObservabilityReconciler) deleteClusterRoleBinding(nodeObs *v1alpha2.NodeObservability) error {
@@ -212,4 +132,12 @@ func (r *NodeObservabilityReconciler) deleteClusterRoleBinding(nodeObs *v1alpha2
 		return err
 	}
 	return nil
+}
+
+func hasClusterRoleBindingChanged(current *rbacv1.ClusterRoleBinding, desired *rbacv1.ClusterRoleBinding) bool {
+	if !(reflect.DeepEqual(current.Subjects, desired.Subjects)) || !(reflect.DeepEqual(current.RoleRef, desired.RoleRef)) {
+		return true
+	}
+
+	return false
 }

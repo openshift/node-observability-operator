@@ -21,16 +21,10 @@ import (
 )
 
 const (
-	Name              = "test"
-	OperandNamespace  = "node-observability-operator"
 	TestNamespace     = ""
-	OperandName       = "node-observability-operator"
 	OperatorNamespace = "node-observability-operator"
-	// #nosec G101 -- this is not the secret value actually used
-	SecretName = "node-observability-secret"
 )
 
 var (
-	TrueVar = true
-	Scheme  = runtime.NewScheme()
+	Scheme = runtime.NewScheme()
 )

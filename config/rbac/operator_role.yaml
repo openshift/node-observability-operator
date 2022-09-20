@@ -1,0 +1,58 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: controller-role
+  labels:
+    "scc": "node-observability-scc"
+rules:
+- apiGroups:
+  - "security.openshift.io"
+  resources:
+  - securitycontextconstraints
+  resourceNames:
+  - node-observability-scc
+  verbs:
+  - use
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ""
+  resources:
+  - nodes/proxy
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+- nonResourceURLs:
+  - /node-observability-status
+  verbs:
+  - get
+- nonResourceURLs:
+  - /node-observability-pprof
+  verbs:
+  - get
+- apiGroups:
+  - "authentication.k8s.io"
+  resources:
+  - "tokenreviews"
+  verbs:
+  - create
+- apiGroups:
+  - "authorization.k8s.io"
+  resources:
+  - "subjectaccessreviews"
+  verbs:
+  - create

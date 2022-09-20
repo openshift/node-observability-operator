@@ -53,12 +53,14 @@ func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeO
 	if err := r.Get(ctx, configMapName, &corev1.ConfigMap{}); err != nil {
 		if !errors.IsNotFound(err) {
 			return fmt.Errorf("error getting target configmap %q, %w", configMapName, err)
-		} else {
+		} else if errors.IsNotFound(err) {
 			// create configmap since it is not found
 			if err := r.Create(ctx, configMap); err != nil {
 				return fmt.Errorf("failed to create target configmap %q: %w", configMapName, err)
 			}
-			r.Log.Info("created kubelet CA configmap", "configmap.namespace", configMapName.Namespace, "configmap.name", configMapName.Name)
+			r.Log.V(1).Info("created kubelet CA configmap", "configmap.namespace", configMapName.Namespace, "configmap.name", configMapName.Name)
+		} else {
+			r.Log.V(1).Info("verified kubelet CA configmap exists", "configmap.namespace", configMapName.Namespace, "configmap.name", configMapName.Name)
 		}
 	}
 

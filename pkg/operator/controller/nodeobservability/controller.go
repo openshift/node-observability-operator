@@ -40,9 +40,7 @@ const (
 	nodeObsCRName = "cluster"
 )
 
-var (
-	clock utilclock.Clock = utilclock.RealClock{}
-)
+var clock utilclock.Clock = utilclock.RealClock{}
 
 // NodeObservabilityReconciler reconciles a NodeObservability object
 type NodeObservabilityReconciler struct {
@@ -52,8 +50,6 @@ type NodeObservabilityReconciler struct {
 	Scheme            *runtime.Scheme
 	Namespace         string
 	AgentImage        string
-	// Used to inject errors for testing
-	Err ErrTestObject
 }
 
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilities,verbs=get;list;watch;create;update;patch;delete
@@ -68,16 +64,13 @@ type NodeObservabilityReconciler struct {
 //+kubebuilder:rbac:urls=/node-observability-pprof,verbs=get;
 //+kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create;
 //+kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create;
-//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=list;get;create;watch;delete;
-//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,verbs=list;get;create;watch;delete;
-//+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=list;get;create;watch;use;delete;
-//+kubebuilder:rbac:groups=apps,namespace=node-observability-operator,resources=daemonsets,verbs=list;get;create;watch;update;patch;
-//+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=secrets,verbs=list;get;create;watch;delete;
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=get,resourceNames=node-observability-operator-controller-role
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,verbs=list;get;create;watch;delete;update;patch
+//+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=list;get;create;watch;use;delete;update;patch
+//+kubebuilder:rbac:groups=apps,namespace=node-observability-operator,resources=daemonsets,verbs=list;get;create;watch;update;patch
 //+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=services,verbs=list;get;create;watch;delete;update;patch;
 //+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=serviceaccounts,verbs=list;get;create;watch;delete;update;patch;
-//+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=configmaps,verbs=list;get;create;watch;delete;update;
-//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,namespace=node-observability-operator,resources=roles,verbs=list;get;create;watch;delete;
-//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,namespace=node-observability-operator,resources=rolebindings,verbs=list;get;create;watch;delete;
+//+kubebuilder:rbac:groups=core,namespace=node-observability-operator,resources=configmaps,verbs=list;get;create;watch;delete;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -152,11 +145,9 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	// - clusterrolebinding (bind the sa to the role)
 
 	// ensure scc
-	haveSCC, scc, err := r.ensureSecurityContextConstraints(ctx, nodeObs)
+	scc, err := r.ensureSecurityContextConstraints(ctx, nodeObs)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure securitycontectconstraints : %w", err)
-	} else if !haveSCC {
-		return ctrl.Result{}, fmt.Errorf("failed to get securitycontextconstraints")
 	}
 	r.Log.V(1).Info("securitycontextconstraint ensured", "scc.name", scc.Name)
 
@@ -174,21 +165,19 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	}
 	r.Log.V(1).Info("service ensured", "svc.namespace", svc.Namespace, "svc.name", svc.Name)
 
-	// check clusterrole
-	haveCR, cr, err := r.ensureClusterRole(ctx, nodeObs)
+	// verify if clusterrole exists
+	exists, err := r.verifyClusterRole(ctx)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to ensure clusterrole : %w", err)
-	} else if !haveCR {
-		return ctrl.Result{}, fmt.Errorf("failed to get clusterrole")
+		return ctrl.Result{}, fmt.Errorf("failed to verify clusterrole %s : %w", clusterRoleName, err)
+	} else if !exists {
+		return ctrl.Result{}, fmt.Errorf("clusterrole %q does not exist", clusterRoleName)
 	}
-	r.Log.V(1).Info("clusterrole ensured", "clusterrole.name", cr.Name)
+	r.Log.V(1).Info("clusterrole ensured", "clusterrole.name", clusterRoleName)
 
-	// check clusterolebinding with serviceaccount
-	haveCRB, crb, err := r.ensureClusterRoleBinding(ctx, nodeObs, sa.Name, r.Namespace)
+	// ensure clusterolebinding with serviceaccount
+	crb, err := r.ensureClusterRoleBinding(ctx, nodeObs, sa.Name, r.Namespace)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure clusterrolebinding : %w", err)
-	} else if !haveCRB {
-		return ctrl.Result{}, fmt.Errorf("failed to get clusterrolebinding")
 	}
 	r.Log.V(1).Info("clusterrolebinding ensured", "clusterrolebinding.name", crb.Name)
 
@@ -289,9 +278,6 @@ func (r *NodeObservabilityReconciler) withFinalizers(ctx context.Context, nodeOb
 func (r *NodeObservabilityReconciler) ensureNodeObservabilityDeleted(ctx context.Context, nodeObs *operatorv1alpha2.NodeObservability) error {
 	errs := []error{}
 
-	if err := r.deleteClusterRole(nodeObs); err != nil {
-		errs = append(errs, fmt.Errorf("failed to delete clusterrole : %w", err))
-	}
 	if err := r.deleteClusterRoleBinding(nodeObs); err != nil {
 		errs = append(errs, fmt.Errorf("failed to delete clusterrolebinding : %w", err))
 	}
