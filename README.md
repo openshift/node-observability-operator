@@ -33,6 +33,15 @@ You can install the NodeObservability Operator by building and pushing the Opera
     ```sh
     oc set env deployment/node-observability-operator --containers=manager RELATED_IMAGE_AGENT=${MY_IMAGE_AGENT} -n node-observability-operator
     ```
+3. The previous step deploys the conversion webhook, which requires the TLS verification on the webhook server's side. The
+   manifests deployed through the `make deploy` command do not contain a valid certificate and key. You must provision a valid certificate and key through other tools.     
+   If you run on OpenShift, you can use a convenience script, `hack/add-serving-cert.sh` to enable [the service serving certificate feature](https://docs.openshift.com/container-platform/4.11/security/certificates/service-serving-certificate.html).    
+   Run the `hack/add-serving-cert.sh` script with the following inputs:
+   ```sh
+   hack/add-serving-cert.sh --crd "nodeobservabilities.nodeobservability.olm.openshift.io nodeobservabilitymachineconfigs.nodeobservability.olm.openshift.io" \
+   --service node-observability-operator-webhook-service --secret webhook-server-cert --namespace node-observability-operator
+   ```
+   *Note*: you may need to wait for the retry of the volume mount in the operator's POD
 
 ### Installing the `NodeObservability` Operator using a custom index image on the OperatorHub
 **Note**: It is recommended to use `podman` as a container engine.
