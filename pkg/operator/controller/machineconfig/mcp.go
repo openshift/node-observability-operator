@@ -18,18 +18,26 @@ package machineconfigcontroller
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 
 	"github.com/openshift/node-observability-operator/api/v1alpha2"
+)
+
+const (
+	mcpChangeTimeout      = 2 * time.Minute
+	mcpChangePollInterval = 2 * time.Second
 )
 
 // createProfMCP creates MachineConfigPool CR to enable the CRI-O profiling on the targeted nodes.
@@ -52,7 +60,7 @@ func (r *MachineConfigReconciler) createProfMCP(ctx context.Context) error {
 func (r *MachineConfigReconciler) deleteProfMCP(ctx context.Context) error {
 	mcp := &mcv1.MachineConfigPool{}
 	if err := r.ClientGet(ctx, types.NamespacedName{Name: ProfilingMCPName}, mcp); err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			return nil
 		}
 		return err
@@ -112,7 +120,7 @@ func (r *MachineConfigReconciler) getCrioProfMachineConfigPool(name string) *mcv
 func (r *MachineConfigReconciler) checkNodeObservabilityMCPStatus(ctx context.Context) (ctrl.Result, error) {
 	mcp := &mcv1.MachineConfigPool{}
 	if err := r.ClientGet(ctx, types.NamespacedName{Name: ProfilingMCPName}, mcp); err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			r.Log.V(1).Info("Profiling MCP does not exist, skipping status check", "MCP", ProfilingMCPName)
 			return ctrl.Result{}, nil
 		}
@@ -167,8 +175,9 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 		return ctrl.Result{}, err
 	}
 
-	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdating) &&
-		mcp.Status.DegradedMachineCount == 0 {
+	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdating) && mcp.Status.DegradedMachineCount == 0 {
+		r.Log.V(1).Info("worker MCP is updating")
+
 		var msg string
 		if !r.CtrlConfig.Status.IsDebuggingEnabled() {
 			msg = "Machine config update to disable debugging in progress"
@@ -179,10 +188,11 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 			r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonInProgress, msg)
 		}
 		r.Log.V(1).Info(msg)
-		return ctrl.Result{}, nil
+		return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
 	}
 
-	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdated) {
+	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdated) && mcp.Status.DegradedMachineCount == 0 {
+		r.Log.V(1).Info("worker MCP is updated")
 
 		if err := r.disableCrioProf(ctx); err != nil {
 			return ctrl.Result{RequeueAfter: defaultRequeueTime}, err
@@ -221,14 +231,33 @@ func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctr
 			r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonInProgress, msg)
 		}
 
+		r.Log.V(1).Info(msg)
+
 		return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
 	}
 
 	if !r.CtrlConfig.Status.IsDebuggingEnabled() {
-		r.Log.V(1).Info("Waiting for disabling debugging to complete on all machines", "MCP", mcp.Name)
+		r.Log.V(1).Info("waiting for disabling debugging to complete on all machines", "MCP", mcp.Name)
 	}
 	if r.CtrlConfig.Status.IsDebuggingFailed() {
-		r.Log.V(1).Info("Waiting for reverting to complete on all machines", "MCP", mcp.Name)
+		r.Log.V(1).Info("waiting for reverting to complete on all machines", "MCP", mcp.Name)
+	}
+	return ctrl.Result{}, nil
+}
+
+// waitForWorkerMCPStatusUpdating waits for the worker MCP to become updating.
+func (r *MachineConfigReconciler) waitWorkerMCPStatusUpdating(ctx context.Context) (ctrl.Result, error) {
+	err := wait.PollImmediateWithContext(ctx, mcpChangePollInterval, mcpChangeTimeout, func(ctx context.Context) (bool, error) {
+		mcp := &mcv1.MachineConfigPool{}
+		if err := r.ClientGet(ctx, types.NamespacedName{Name: WorkerNodeMCPName}, mcp); err != nil {
+			return false, nil
+		}
+		return mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdating), nil
+	})
+	if errors.Is(err, wait.ErrWaitTimeout) {
+		r.Log.V(1).Info("timed out waiting for worker MCP to become updating")
+		// ask for a requeue after some time anyway
+		return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
 	}
 	return ctrl.Result{}, nil
 }

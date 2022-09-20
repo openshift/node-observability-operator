@@ -145,7 +145,8 @@ test-e2e:
 	-v \
 	-tags e2e \
 	-run "$(TEST)" \
-	./test/e2e
+	./test/e2e \
+	-args --ginkgo.vv
 	
 verify: lint
 	hack/verify-bundle.sh

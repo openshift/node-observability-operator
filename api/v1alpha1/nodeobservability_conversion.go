@@ -26,7 +26,7 @@ var nobWebhookLog = logf.Log.WithName("nob-conversion-webhook")
 
 // ConvertTo converts this NodeObservability to the Hub version (v1alpha2).
 func (src *NodeObservability) ConvertTo(dstRaw conversion.Hub) error {
-	nobWebhookLog.Info("Converting to v1alpha2", "name", src.Name)
+	nobWebhookLog.V(1).Info("converting to v1alpha2", "name", src.Name)
 
 	dst := dstRaw.(*v1alpha2.NodeObservability)
 
@@ -50,7 +50,7 @@ func (src *NodeObservability) ConvertTo(dstRaw conversion.Hub) error {
 func (dst *NodeObservability) ConvertFrom(srcRaw conversion.Hub) error {
 	src := srcRaw.(*v1alpha2.NodeObservability)
 
-	nobWebhookLog.Info("Converting to v1alpha1", "name", src.Name)
+	nobWebhookLog.V(1).Info("converting to v1alpha1", "name", src.Name)
 
 	dst.Spec.Labels = src.Spec.NodeSelector
 

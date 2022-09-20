@@ -26,7 +26,7 @@ var webhookNobmcLog = logf.Log.WithName("nobmc-conversion-webhook")
 
 // ConvertTo converts this NodeObservabilityMachineConfig to the Hub version (v1alpha2).
 func (src *NodeObservabilityMachineConfig) ConvertTo(dstRaw conversion.Hub) error {
-	webhookNobmcLog.Info("Converting to v1alpha2", "name", src.Name)
+	webhookNobmcLog.V(1).Info("converting to v1alpha2", "name", src.Name)
 
 	dst := dstRaw.(*v1alpha2.NodeObservabilityMachineConfig)
 
@@ -52,7 +52,7 @@ func (src *NodeObservabilityMachineConfig) ConvertTo(dstRaw conversion.Hub) erro
 func (dst *NodeObservabilityMachineConfig) ConvertFrom(srcRaw conversion.Hub) error {
 	src := srcRaw.(*v1alpha2.NodeObservabilityMachineConfig)
 
-	webhookNobmcLog.Info("Converting to v1alpha1", "name", src.Name)
+	webhookNobmcLog.V(1).Info("converting to v1alpha1", "name", src.Name)
 
 	// ObjectMeta
 	dst.ObjectMeta = src.ObjectMeta

@@ -12,7 +12,7 @@ metadata:
           },
           "spec": {
             "labels": {
-              "node-role.kubernetes.io/worker": ""
+              "kubernetes.io/hostname": "worker-a"
             },
             "type": "crio-kubelet"
           }
@@ -50,7 +50,7 @@ metadata:
           },
           "spec": {
             "nodeSelector": {
-              "node-role.kubernetes.io/worker": ""
+              "kubernetes.io/hostname": "worker-a"
             },
             "type": "crio-kubelet"
           }
@@ -66,7 +66,7 @@ metadata:
               "enableCrioProfiling": true
             },
             "nodeSelector": {
-              "node-role.kubernetes.io/worker": ""
+              "kubernetes.io/hostname": "worker-a"
             }
           }
         },
@@ -383,7 +383,7 @@ spec:
                 - --agent-image=$(RELATED_IMAGE_AGENT)
                 env:
                 - name: LOG_LEVEL
-                  value: info
+                  value: debug
                 - name: OPERATOR_NAMESPACE
                   valueFrom:
                     fieldRef:

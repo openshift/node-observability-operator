@@ -101,6 +101,8 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{RequeueAfter: defaultRequeueTime}, fmt.Errorf("failed to fetch nodeobservabilitymachineconfig: %w", err)
 	}
 
+	r.Log.V(1).Info("nodeobservabilitymachineconfig resource found", "nodeselector", r.CtrlConfig.Spec.NodeSelector)
+
 	if !r.CtrlConfig.DeletionTimestamp.IsZero() {
 		r.Log.V(1).Info("nodeobservabilitymachineconfig resource marked for deletion, cleaning up")
 		result, err = r.cleanUp(ctx, req)
@@ -170,17 +172,27 @@ func (r *MachineConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *MachineConfigReconciler) cleanUp(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	nodesTouched, err := r.ensureProfConfDisabled(ctx)
 	if err != nil {
+		// failed to remove the label from the observed nodes: retry
 		return ctrl.Result{RequeueAfter: defaultRequeueTime}, err
 	}
 	if nodesTouched {
 		// some nodes were updated (label removed),
-		// waiting for the reboot to take place on them: requeue
-		return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
+		// the reboot will to take place on them.
+		// MCO maybe a little slow to see the label changes,
+		// giving enough time before the next iteration.
+		r.Log.V(1).Info("node labels were removed, waiting for worker MCP to start updating")
+		return r.waitWorkerMCPStatusUpdating(ctx)
 	}
 
 	if r.CtrlConfig.Status.IsMachineConfigInProgress() {
 		if result, err := r.checkWorkerMCPStatus(ctx); err != nil {
 			return result, err
+		} else if result.Requeue || result.RequeueAfter != 0 {
+			// requeue was asked which means that
+			// we are waiting for the machine updates,
+			// recheck the status of MCP later
+			r.Log.V(1).Info("waiting for worker MCP to stabilize")
+			return result, nil
 		}
 	}
 
@@ -188,12 +200,12 @@ func (r *MachineConfigReconciler) cleanUp(ctx context.Context, req ctrl.Request)
 	if !r.CtrlConfig.Status.IsMachineConfigInProgress() {
 		if !r.CtrlConfig.Status.IsDebuggingEnabled() {
 			removeFinalizer = true
-			r.Log.V(1).Info("Disable debug successful for cleanup")
+			r.Log.V(1).Info("disable debug successful for cleanup")
 		}
 
 		if r.CtrlConfig.Status.IsDebuggingFailed() {
 			removeFinalizer = true
-			r.Log.V(1).Info("Failed to disable debug for cleanup")
+			r.Log.V(1).Info("failed to disable debug for cleanup")
 		}
 	}
 
@@ -201,10 +213,13 @@ func (r *MachineConfigReconciler) cleanUp(ctx context.Context, req ctrl.Request)
 		if _, err := r.removeFinalizer(ctx, req, finalizer); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to remove finalizer from nodeobservabilitymachineconfig %s: %w", r.CtrlConfig.Name, err)
 		}
-		r.Log.V(1).Info("Removed finalizer from nodeobservabilitymachineconfig resource, cleanup complete")
+		r.Log.V(1).Info("removed finalizer from nodeobservabilitymachineconfig resource, cleanup complete")
+		return ctrl.Result{}, nil
 	}
 
-	return ctrl.Result{}, nil
+	r.Log.V(1).Info("cleanup is not complete, retry")
+
+	return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
 }
 
 // addFinalizer adds finalizer to NodeObservabilityMachineConfig resource
@@ -423,12 +438,10 @@ func ignoreNOMCStatusUpdates() predicate.Predicate {
 // hasFinalizer checks if the required finalizer is present
 // in the NodeObservabilityMachineConfig resource
 func hasFinalizer(mc *v1alpha2.NodeObservabilityMachineConfig) bool {
-	hasFinalizer := false
 	for _, f := range mc.Finalizers {
 		if f == finalizer {
-			hasFinalizer = true
-			break
+			return true
 		}
 	}
-	return hasFinalizer
+	return false
 }

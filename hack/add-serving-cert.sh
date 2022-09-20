@@ -69,5 +69,5 @@ if [ -n "${webhook}" ]; then
 fi
 
 if [ -n "${crd}" ]; then
-    oc annotate crd "${crd}" "service.beta.openshift.io/inject-cabundle=true" --overwrite=true
+    oc annotate crd ${crd} "service.beta.openshift.io/inject-cabundle=true" --overwrite=true
 fi
