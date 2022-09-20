@@ -6,6 +6,16 @@ metadata:
   creationTimestamp: null
   name: nodeobservabilitymachineconfigs.nodeobservability.olm.openshift.io
 spec:
+  conversion:
+    strategy: Webhook
+    webhook:
+      clientConfig:
+        service:
+          name: node-observability-operator-webhook-service
+          namespace: node-observability-operator
+          path: /convert
+      conversionReviewVersions:
+      - v1
   group: nodeobservability.olm.openshift.io
   names:
     kind: NodeObservabilityMachineConfig

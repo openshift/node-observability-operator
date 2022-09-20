@@ -91,7 +91,7 @@ func main() {
 	flag.StringVar(&tokenFile, "token-file", defaultTokenFile, "The path of the service account token.")
 	flag.StringVar(&caCertFile, "ca-cert-file", defaultCACertFile, "The path of the CA cert of the Agents' signing key pair.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager. "+"Enabling this will ensure there is only one active controller manager.")
-	flag.BoolVar(&enableWebhook, "enable-webhook", false, "Enable the webhook server(s). Defaults to false.")
+	flag.BoolVar(&enableWebhook, "enable-webhook", true, "Enable the webhook server(s). Defaults to true.")
 	opts := zap.Options{
 		TimeEncoder: zapcore.TimeEncoder(func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 			enc.AppendString(t.UTC().Format("2006-01-02T15:04:05.000Z"))
