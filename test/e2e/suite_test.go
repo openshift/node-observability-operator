@@ -31,7 +31,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	nodeobservabilityv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	nodeobservabilityv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -48,7 +48,7 @@ func TestAPIs(t *testing.T) {
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
-	err := nodeobservabilityv1alpha1.AddToScheme(scheme.Scheme)
+	err := nodeobservabilityv1alpha2.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = clientgoscheme.AddToScheme(scheme.Scheme)

@@ -16,7 +16,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	v1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 )
 
 const (
@@ -34,7 +34,7 @@ var (
 // ensureService ensures that the service exists
 // Returns a Boolean value indicating whether it exists, a pointer to the
 // service and an error when relevant
-func (r *NodeObservabilityReconciler) ensureService(ctx context.Context, nodeObs *v1alpha1.NodeObservability, ns string) (*corev1.Service, error) {
+func (r *NodeObservabilityReconciler) ensureService(ctx context.Context, nodeObs *v1alpha2.NodeObservability, ns string) (*corev1.Service, error) {
 	nameSpace := types.NamespacedName{Namespace: ns, Name: serviceName}
 
 	desired := r.desiredService(nodeObs, ns)
@@ -114,7 +114,7 @@ func (r *NodeObservabilityReconciler) updateService(ctx context.Context, current
 }
 
 // desiredService returns a service object
-func (r *NodeObservabilityReconciler) desiredService(nodeObs *v1alpha1.NodeObservability, ns string) *corev1.Service {
+func (r *NodeObservabilityReconciler) desiredService(nodeObs *v1alpha2.NodeObservability, ns string) *corev1.Service {
 	ls := labelsForNodeObservability(nodeObs.Name)
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{

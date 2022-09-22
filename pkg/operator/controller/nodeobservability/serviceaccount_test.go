@@ -28,12 +28,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	operatorv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
 func TestEnsureServiceAccount(t *testing.T) {
-	nodeObs := &operatorv1alpha1.NodeObservability{}
+	nodeObs := &operatorv1alpha2.NodeObservability{}
 	makeServiceAccount := func() *corev1.ServiceAccount {
 		sa := corev1.ServiceAccount{
 			ObjectMeta: metav1.ObjectMeta{
@@ -70,7 +70,7 @@ func TestEnsureServiceAccount(t *testing.T) {
 				Scheme: test.Scheme,
 				Log:    zap.New(zap.UseDevMode(true)),
 			}
-			nodeObs := &operatorv1alpha1.NodeObservability{}
+			nodeObs := &operatorv1alpha2.NodeObservability{}
 
 			_, err := r.ensureServiceAccount(context.TODO(), nodeObs, test.TestNamespace)
 			if err != nil {

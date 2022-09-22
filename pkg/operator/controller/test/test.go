@@ -31,7 +31,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 
-	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	v1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 )
 
 // Event is a simplified representation of the watch event received from the controller runtime client.
@@ -45,7 +45,7 @@ func init() {
 	if err := clientgoscheme.AddToScheme(Scheme); err != nil {
 		panic(err)
 	}
-	if err := v1alpha1.AddToScheme(Scheme); err != nil {
+	if err := v1alpha2.AddToScheme(Scheme); err != nil {
 		panic(err)
 	}
 	if err := appsv1.AddToScheme(Scheme); err != nil {
@@ -90,7 +90,7 @@ func NewEvent(we watch.Event) Event {
 	case *corev1.Namespace:
 		te.ObjType = "namespace"
 		te.Name = obj.Name
-	case *v1alpha1.NodeObservability:
+	case *v1alpha2.NodeObservability:
 		te.ObjType = "nodeobservability"
 		te.Namespace = obj.Namespace
 		te.Name = obj.Name
@@ -110,7 +110,7 @@ func NewEvent(we watch.Event) Event {
 	case *mcv1.KubeletConfig:
 		te.ObjType = "kubeletconfig"
 		te.Name = obj.Name
-	case *v1alpha1.NodeObservabilityMachineConfig:
+	case *v1alpha2.NodeObservabilityMachineConfig:
 		te.ObjType = "nodeobservabilitymachineconfig"
 		te.Name = obj.Name
 	}

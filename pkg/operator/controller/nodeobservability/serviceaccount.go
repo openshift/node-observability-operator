@@ -12,7 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	v1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 )
 
 const (
@@ -22,7 +22,7 @@ const (
 // ensureServiceAccount ensures that the serviceaccount exists
 // Returns a Boolean value indicating whether it exists, a pointer to the
 // serviceaccount and an error when relevant
-func (r *NodeObservabilityReconciler) ensureServiceAccount(ctx context.Context, nodeObs *v1alpha1.NodeObservability, ns string) (*corev1.ServiceAccount, error) {
+func (r *NodeObservabilityReconciler) ensureServiceAccount(ctx context.Context, nodeObs *v1alpha2.NodeObservability, ns string) (*corev1.ServiceAccount, error) {
 	nameSpace := types.NamespacedName{Namespace: ns, Name: serviceAccountName}
 
 	desired := r.desiredServiceAccount(nodeObs, ns)
@@ -67,7 +67,7 @@ func (r *NodeObservabilityReconciler) createServiceAccount(ctx context.Context, 
 }
 
 // desiredServiceAccount returns a serviceaccount object
-func (r *NodeObservabilityReconciler) desiredServiceAccount(nodeObs *v1alpha1.NodeObservability, ns string) *corev1.ServiceAccount {
+func (r *NodeObservabilityReconciler) desiredServiceAccount(nodeObs *v1alpha2.NodeObservability, ns string) *corev1.ServiceAccount {
 	return &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: ns,

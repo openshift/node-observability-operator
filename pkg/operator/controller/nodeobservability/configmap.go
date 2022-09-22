@@ -11,7 +11,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	v1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 )
 
 const (
@@ -19,7 +19,7 @@ const (
 	srcKbltCAConfigMapNameSpace = "openshift-config-managed"
 )
 
-func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeObs *v1alpha1.NodeObservability, ns string) error {
+func (r *NodeObservabilityReconciler) createConfigMap(ctx context.Context, nodeObs *v1alpha2.NodeObservability, ns string) error {
 	kbltCACM := &corev1.ConfigMap{}
 	kbltCACMName := types.NamespacedName{
 		Name:      srcKbltCAConfigMapName,

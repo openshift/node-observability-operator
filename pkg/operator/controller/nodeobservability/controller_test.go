@@ -37,7 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	operatorv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
@@ -45,7 +45,7 @@ func TestReconcile(t *testing.T) {
 	managedTypesList := []client.ObjectList{
 		&corev1.NamespaceList{},
 		&appsv1.DaemonSetList{},
-		&operatorv1alpha1.NodeObservabilityList{},
+		&operatorv1alpha2.NodeObservabilityList{},
 	}
 
 	eventWaitTimeout := time.Duration(1 * time.Second)
@@ -168,12 +168,12 @@ func TestReconcile(t *testing.T) {
 			// TEST FUNCTION
 			gotResult, err := r.Reconcile(ctx, tc.inputRequest)
 
-			res := &operatorv1alpha1.NodeObservability{}
+			res := &operatorv1alpha2.NodeObservability{}
 			if err := cl.Get(ctx, tc.inputRequest.NamespacedName, res); err != nil && !kerrors.IsNotFound(err) {
 				t.Fatalf("unexpected error while getting %v", tc.inputRequest.NamespacedName)
 			}
 			if err != nil { // nodeObs is found
-				cond := res.Status.ConditionalStatus.GetCondition(operatorv1alpha1.DebugReady)
+				cond := res.Status.ConditionalStatus.GetCondition(operatorv1alpha2.DebugReady)
 				if cond != nil {
 					isReady := cond.Status
 					if tc.expectReadyCondition != isReady {
@@ -214,7 +214,7 @@ func TestIsClusterNodeObservability(t *testing.T) {
 	testCases := []struct {
 		name            string
 		existingObjects []runtime.Object
-		nodeObsToTest   *operatorv1alpha1.NodeObservability
+		nodeObsToTest   *operatorv1alpha2.NodeObservability
 		errExpected     bool
 	}{
 		{
@@ -266,8 +266,8 @@ func testRequest() ctrl.Request {
 }
 
 // testNodeObservability - minimal CR for the test
-func testNodeObservability() *operatorv1alpha1.NodeObservability {
-	return &operatorv1alpha1.NodeObservability{
+func testNodeObservability() *operatorv1alpha2.NodeObservability {
+	return &operatorv1alpha2.NodeObservability{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "",
 			Name:      "cluster",
@@ -276,7 +276,7 @@ func testNodeObservability() *operatorv1alpha1.NodeObservability {
 }
 
 // testNodeObservabilityDeleted - test for deletion
-func testNodeObservabilityToBeDeleted() *operatorv1alpha1.NodeObservability {
+func testNodeObservabilityToBeDeleted() *operatorv1alpha2.NodeObservability {
 	nobs := testNodeObservability()
 	nobs.Finalizers = append(nobs.Finalizers, finalizer)
 	nobs.DeletionTimestamp = &metav1.Time{
@@ -285,7 +285,7 @@ func testNodeObservabilityToBeDeleted() *operatorv1alpha1.NodeObservability {
 	return nobs
 }
 
-func testNodeObservabilityInvalidName() *operatorv1alpha1.NodeObservability {
+func testNodeObservabilityInvalidName() *operatorv1alpha2.NodeObservability {
 	o := testNodeObservability()
 	o.Name = "xxx"
 	return o

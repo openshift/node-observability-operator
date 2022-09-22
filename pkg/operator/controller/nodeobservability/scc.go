@@ -10,7 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	v1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 )
 
 const (
@@ -20,7 +20,7 @@ const (
 // ensureSecurityContextConstraints ensures that the securitycontextconstraints exists
 // Returns a Boolean value indicatiing whether it exists, a pointer to the
 // securitycontextconstraints and an error when relevant
-func (r *NodeObservabilityReconciler) ensureSecurityContextConstraints(ctx context.Context, nodeObs *v1alpha1.NodeObservability) (bool, *securityv1.SecurityContextConstraints, error) {
+func (r *NodeObservabilityReconciler) ensureSecurityContextConstraints(ctx context.Context, nodeObs *v1alpha2.NodeObservability) (bool, *securityv1.SecurityContextConstraints, error) {
 	desired := r.desiredSecurityContextConstraints(nodeObs)
 	exist, current, err := r.currentSecurityContextConstraints(ctx, nodeObs)
 	if err != nil {
@@ -36,7 +36,7 @@ func (r *NodeObservabilityReconciler) ensureSecurityContextConstraints(ctx conte
 }
 
 // currentSecurityContextConstraints checks that the securitycontextconstraints exists
-func (r *NodeObservabilityReconciler) currentSecurityContextConstraints(ctx context.Context, nodeObs *v1alpha1.NodeObservability) (bool, *securityv1.SecurityContextConstraints, error) {
+func (r *NodeObservabilityReconciler) currentSecurityContextConstraints(ctx context.Context, nodeObs *v1alpha2.NodeObservability) (bool, *securityv1.SecurityContextConstraints, error) {
 	nameSpace := types.NamespacedName{Name: sccName}
 	scc := &securityv1.SecurityContextConstraints{}
 	if err := r.Get(ctx, nameSpace, scc); err != nil || r.Err.Set[sccObj] {
@@ -61,7 +61,7 @@ func (r *NodeObservabilityReconciler) createSecurityContextConstraints(ctx conte
 }
 
 // desiredSecurityContextConstraints en the desired securitycontextconstraints
-func (r *NodeObservabilityReconciler) desiredSecurityContextConstraints(nodeObs *v1alpha1.NodeObservability) *securityv1.SecurityContextConstraints {
+func (r *NodeObservabilityReconciler) desiredSecurityContextConstraints(nodeObs *v1alpha2.NodeObservability) *securityv1.SecurityContextConstraints {
 
 	var priority int32 = 10
 
@@ -99,7 +99,7 @@ func (r *NodeObservabilityReconciler) desiredSecurityContextConstraints(nodeObs 
 	return scc
 }
 
-func (r *NodeObservabilityReconciler) deleteSecurityContextConstraints(nodeObs *v1alpha1.NodeObservability) error {
+func (r *NodeObservabilityReconciler) deleteSecurityContextConstraints(nodeObs *v1alpha2.NodeObservability) error {
 	scc := &securityv1.SecurityContextConstraints{}
 	scc.Name = sccName
 	if err := r.Client.Delete(context.TODO(), scc); err != nil {

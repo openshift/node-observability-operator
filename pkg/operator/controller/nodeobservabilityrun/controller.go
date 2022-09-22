@@ -39,7 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	nodeobservabilityv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	nodeobservabilityv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 )
 
 const (
@@ -79,7 +79,7 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 
 	r.Log.V(1).Info("reconciliation started")
 
-	instance := &nodeobservabilityv1alpha1.NodeObservabilityRun{}
+	instance := &nodeobservabilityv1alpha2.NodeObservabilityRun{}
 	err = r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -121,11 +121,11 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 			return
 		}
 		msg = fmt.Sprintf("Waiting for nodeobservability %s to become ready", instance.Spec.NodeObservabilityRef.Name)
-		instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugReady, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonInProgress, msg)
+		instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugReady, metav1.ConditionFalse, nodeobservabilityv1alpha2.ReasonInProgress, msg)
 		return ctrl.Result{RequeueAfter: pollingPeriod}, err
 	}
 	msg = "Ready to start profiling"
-	instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugReady, metav1.ConditionTrue, nodeobservabilityv1alpha1.ReasonReady, msg)
+	instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugReady, metav1.ConditionTrue, nodeobservabilityv1alpha2.ReasonReady, msg)
 
 	if inProgress(instance) {
 		r.Log.V(1).Info("Run is in progress")
@@ -133,25 +133,25 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 		requeue, err = r.handleInProgress(instance)
 		if requeue {
 			msg = "Profiling query in progress"
-			instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonInProgress, msg)
+			instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha2.ReasonInProgress, msg)
 			return ctrl.Result{RequeueAfter: pollingPeriod}, err
 		}
 		t := metav1.Now()
 		instance.Status.FinishedTimestamp = &t
 		msg = "Profiling query done"
-		instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugFinished, metav1.ConditionTrue, nodeobservabilityv1alpha1.ReasonFinished, msg)
+		instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugFinished, metav1.ConditionTrue, nodeobservabilityv1alpha2.ReasonFinished, msg)
 		return
 	}
 
 	err = r.startRun(ctx, instance)
 	if err != nil {
 		msg = fmt.Sprintf("Failed to initiate profiling query: %s", err.Error())
-		instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonFailed, msg)
+		instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha2.ReasonFailed, msg)
 		return ctrl.Result{}, err
 	}
 
 	msg = "Profiling query initiated"
-	instance.Status.SetCondition(nodeobservabilityv1alpha1.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha1.ReasonInProgress, msg)
+	instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha2.ReasonInProgress, msg)
 
 	// one cycle takes cca 30s
 	return ctrl.Result{RequeueAfter: time.Second * 30}, err
@@ -159,14 +159,14 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 
 // adoptResource sets OwnerReference to point to NodeObservability from .spec.ref.name
 // returns true if already adopted, false otherwise
-func (r *NodeObservabilityRunReconciler) adoptResource(ctx context.Context, instance *nodeobservabilityv1alpha1.NodeObservabilityRun) (bool, error) {
+func (r *NodeObservabilityRunReconciler) adoptResource(ctx context.Context, instance *nodeobservabilityv1alpha2.NodeObservabilityRun) (bool, error) {
 	for _, ref := range instance.OwnerReferences {
 		// FIXME: check kind as well?
 		if ref.Name == instance.Spec.NodeObservabilityRef.Name {
 			return true, nil
 		}
 	}
-	nodeObs := &nodeobservabilityv1alpha1.NodeObservability{}
+	nodeObs := &nodeobservabilityv1alpha2.NodeObservability{}
 	if err := r.Get(ctx, types.NamespacedName{Name: instance.Spec.NodeObservabilityRef.Name}, nodeObs); err != nil {
 		return false, err
 	}
@@ -180,7 +180,7 @@ func (r *NodeObservabilityRunReconciler) adoptResource(ctx context.Context, inst
 	return false, err
 }
 
-func (r *NodeObservabilityRunReconciler) handleInProgress(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) (bool, error) {
+func (r *NodeObservabilityRunReconciler) handleInProgress(instance *nodeobservabilityv1alpha2.NodeObservabilityRun) (bool, error) {
 	var errors []error
 	for _, agent := range instance.Status.Agents {
 		url := r.format(agent.IP, r.AgentName, r.Namespace, pprofStatus, agent.Port)
@@ -198,7 +198,7 @@ func (r *NodeObservabilityRunReconciler) handleInProgress(instance *nodeobservab
 	return false, utilerrors.NewAggregate(errors)
 }
 
-func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance *nodeobservabilityv1alpha1.NodeObservabilityRun) error {
+func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance *nodeobservabilityv1alpha2.NodeObservabilityRun) error {
 	endps, err := r.getAgentEndpoints(ctx)
 	if err != nil {
 		return err
@@ -206,10 +206,10 @@ func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance 
 	subset := endps.Subsets[0]
 	port := subset.Ports[0].Port
 
-	targets := []nodeobservabilityv1alpha1.AgentNode{}
-	failedTargets := []nodeobservabilityv1alpha1.AgentNode{}
+	targets := []nodeobservabilityv1alpha2.AgentNode{}
+	failedTargets := []nodeobservabilityv1alpha2.AgentNode{}
 	for _, a := range subset.NotReadyAddresses {
-		failedTargets = append(failedTargets, nodeobservabilityv1alpha1.AgentNode{Name: a.TargetRef.Name, IP: a.IP, Port: port})
+		failedTargets = append(failedTargets, nodeobservabilityv1alpha2.AgentNode{Name: a.TargetRef.Name, IP: a.IP, Port: port})
 	}
 
 	for _, a := range subset.Addresses {
@@ -218,10 +218,10 @@ func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance 
 		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityRunErrorRetriable, r.httpGetCall(url))
 		if err != nil {
 			r.Log.V(1).Info("Failed to start profiling, removing node from list", "Name", a.TargetRef.Name, "IP", a.IP, "Error", err)
-			failedTargets = append(failedTargets, nodeobservabilityv1alpha1.AgentNode{Name: a.TargetRef.Name, IP: a.IP, Port: port})
+			failedTargets = append(failedTargets, nodeobservabilityv1alpha2.AgentNode{Name: a.TargetRef.Name, IP: a.IP, Port: port})
 			continue
 		}
-		targets = append(targets, nodeobservabilityv1alpha1.AgentNode{Name: a.TargetRef.Name, IP: a.IP, Port: port})
+		targets = append(targets, nodeobservabilityv1alpha2.AgentNode{Name: a.TargetRef.Name, IP: a.IP, Port: port})
 	}
 
 	t := metav1.Now()
@@ -231,9 +231,9 @@ func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance 
 	return nil
 }
 
-func (r *NodeObservabilityRunReconciler) updateStatus(ctx context.Context, instance *nodeobservabilityv1alpha1.NodeObservabilityRun) error {
+func (r *NodeObservabilityRunReconciler) updateStatus(ctx context.Context, instance *nodeobservabilityv1alpha2.NodeObservabilityRun) error {
 	key := types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}
-	freshRun := &nodeobservabilityv1alpha1.NodeObservabilityRun{}
+	freshRun := &nodeobservabilityv1alpha2.NodeObservabilityRun{}
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		if err := r.Get(ctx, key, freshRun); err != nil {
 			return err
@@ -246,8 +246,8 @@ func (r *NodeObservabilityRunReconciler) updateStatus(ctx context.Context, insta
 	})
 }
 
-func (r *NodeObservabilityRunReconciler) preconditionsMet(ctx context.Context, instance *nodeobservabilityv1alpha1.NodeObservabilityRun) (bool, error) {
-	no := &nodeobservabilityv1alpha1.NodeObservability{}
+func (r *NodeObservabilityRunReconciler) preconditionsMet(ctx context.Context, instance *nodeobservabilityv1alpha2.NodeObservabilityRun) (bool, error) {
+	no := &nodeobservabilityv1alpha2.NodeObservability{}
 	key := types.NamespacedName{Name: instance.Spec.NodeObservabilityRef.Name}
 	if err := r.Get(ctx, key, no); err != nil {
 		return false, err
@@ -255,7 +255,7 @@ func (r *NodeObservabilityRunReconciler) preconditionsMet(ctx context.Context, i
 	return no.Status.IsReady(), nil
 }
 
-func finished(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) bool {
+func finished(instance *nodeobservabilityv1alpha2.NodeObservabilityRun) bool {
 	t := instance.Status.FinishedTimestamp
 	if t != nil && !t.IsZero() {
 		return true
@@ -263,7 +263,7 @@ func finished(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) bool {
 	return false
 }
 
-func inProgress(instance *nodeobservabilityv1alpha1.NodeObservabilityRun) bool {
+func inProgress(instance *nodeobservabilityv1alpha2.NodeObservabilityRun) bool {
 	t := instance.Status.StartTimestamp
 	if t != nil && !t.IsZero() {
 		return true
@@ -299,8 +299,8 @@ func (r *NodeObservabilityRunReconciler) httpGetCall(url string) func() error {
 	}
 }
 
-func handleFailingAgent(instance *nodeobservabilityv1alpha1.NodeObservabilityRun, old nodeobservabilityv1alpha1.AgentNode) {
-	var newAgents []nodeobservabilityv1alpha1.AgentNode
+func handleFailingAgent(instance *nodeobservabilityv1alpha2.NodeObservabilityRun, old nodeobservabilityv1alpha2.AgentNode) {
+	var newAgents []nodeobservabilityv1alpha2.AgentNode
 	for _, a := range instance.Status.Agents {
 		if a.Name == old.Name {
 			instance.Status.FailedAgents = append(instance.Status.FailedAgents, old)
@@ -337,6 +337,6 @@ func (r *NodeObservabilityRunReconciler) SetupWithManager(mgr ctrl.Manager) erro
 	transport = t
 	r.URL = &url{}
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&nodeobservabilityv1alpha1.NodeObservabilityRun{}).
+		For(&nodeobservabilityv1alpha2.NodeObservabilityRun{}).
 		Complete(r)
 }

@@ -29,9 +29,8 @@ const (
 
 // NodeObservabilitySpec defines the desired state of NodeObservability
 type NodeObservabilitySpec struct {
-	// +kubebuilder:validation:Required
-	// NodeSelector is map of key:value pairs that are used to match against node labels to be observed
-	NodeSelector map[string]string `json:"nodeSelector"`
+	// Labels is map of key:value pairs that are used to match against node labels
+	Labels map[string]string `json:"labels,omitempty"`
 	// +kubebuilder:validation:Required
 	// Type defines the type of profiling queries, which will be enabled
 	// The following types are supported:

@@ -13,7 +13,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	v1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	v1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 )
 
 const (
@@ -33,7 +33,7 @@ const (
 // ensureDaemonSet ensures that the daemonset exists
 // Returns a Boolean value indicating whether it exists, a pointer to the
 // daemonset and an error when relevant
-func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeObs *v1alpha1.NodeObservability, sa *corev1.ServiceAccount, ns string) (*appsv1.DaemonSet, error) {
+func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeObs *v1alpha2.NodeObservability, sa *corev1.ServiceAccount, ns string) (*appsv1.DaemonSet, error) {
 	nameSpace := types.NamespacedName{Namespace: ns, Name: daemonSetName}
 	desired := r.desiredDaemonSet(nodeObs, sa, ns)
 	if err := controllerutil.SetControllerReference(nodeObs, desired, r.Scheme); err != nil {
@@ -128,7 +128,7 @@ func (r *NodeObservabilityReconciler) updateDaemonset(ctx context.Context, curre
 }
 
 // desiredDaemonSet returns a DaemonSet object
-func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha1.NodeObservability, sa *corev1.ServiceAccount, ns string) *appsv1.DaemonSet {
+func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObservability, sa *corev1.ServiceAccount, ns string) *appsv1.DaemonSet {
 	ls := labelsForNodeObservability(nodeObs.Name)
 	tgp := int64(30)
 	vst := corev1.HostPathSocket

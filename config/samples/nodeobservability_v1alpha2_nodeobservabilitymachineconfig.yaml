@@ -1,0 +1,9 @@
+apiVersion: nodeobservability.olm.openshift.io/v1alpha2
+kind: NodeObservabilityMachineConfig
+metadata:
+  name: sample
+spec:
+  nodeSelector:
+    node-role.kubernetes.io/worker: ""
+  debug:
+    enableCrioProfiling: true

@@ -27,10 +27,10 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	"github.com/openshift/node-observability-operator/api/v1alpha1"
+	"github.com/openshift/node-observability-operator/api/v1alpha2"
 )
 
-func (r *NodeObservabilityReconciler) ensureNOMC(ctx context.Context, instance *v1alpha1.NodeObservability) (*v1alpha1.NodeObservabilityMachineConfig, error) {
+func (r *NodeObservabilityReconciler) ensureNOMC(ctx context.Context, instance *v1alpha2.NodeObservability) (*v1alpha2.NodeObservabilityMachineConfig, error) {
 	nameSpace := types.NamespacedName{Name: instance.Name}
 
 	desired := r.desiredNOMC(instance, nameSpace)
@@ -55,8 +55,8 @@ func (r *NodeObservabilityReconciler) ensureNOMC(ctx context.Context, instance *
 }
 
 // currentNOMC checks if the NodeObservabilityMachineConfig exists
-func (r *NodeObservabilityReconciler) currentNOMC(ctx context.Context, nameSpace types.NamespacedName) (*v1alpha1.NodeObservabilityMachineConfig, error) {
-	mc := &v1alpha1.NodeObservabilityMachineConfig{}
+func (r *NodeObservabilityReconciler) currentNOMC(ctx context.Context, nameSpace types.NamespacedName) (*v1alpha2.NodeObservabilityMachineConfig, error) {
+	mc := &v1alpha2.NodeObservabilityMachineConfig{}
 	if err := r.Get(ctx, nameSpace, mc); err != nil {
 		return nil, err
 	}
@@ -64,8 +64,8 @@ func (r *NodeObservabilityReconciler) currentNOMC(ctx context.Context, nameSpace
 }
 
 // desiredNOMC returns a NodeObservabilityMachineConfig object
-func (r *NodeObservabilityReconciler) desiredNOMC(instance *v1alpha1.NodeObservability, nameSpace types.NamespacedName) *v1alpha1.NodeObservabilityMachineConfig {
-	return &v1alpha1.NodeObservabilityMachineConfig{
+func (r *NodeObservabilityReconciler) desiredNOMC(instance *v1alpha2.NodeObservability, nameSpace types.NamespacedName) *v1alpha2.NodeObservabilityMachineConfig {
+	return &v1alpha2.NodeObservabilityMachineConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: nameSpace.Name,
 		},
@@ -74,14 +74,14 @@ func (r *NodeObservabilityReconciler) desiredNOMC(instance *v1alpha1.NodeObserva
 }
 
 // createNOMC creates the NodeObservabilityMachineConfig
-func (r *NodeObservabilityReconciler) createNOMC(ctx context.Context, instance *v1alpha1.NodeObservabilityMachineConfig) error {
+func (r *NodeObservabilityReconciler) createNOMC(ctx context.Context, instance *v1alpha2.NodeObservabilityMachineConfig) error {
 	return r.Create(ctx, instance)
 }
 
 // desiredNOMCSpec returns a NodeObservabilityMachineConfigSpec object
-func (r *NodeObservabilityReconciler) desiredNOMCSpec(instance *v1alpha1.NodeObservability) v1alpha1.NodeObservabilityMachineConfigSpec {
-	s := v1alpha1.NodeObservabilityMachineConfigSpec{}
-	if instance.Spec.Type == v1alpha1.CrioKubeletNodeObservabilityType {
+func (r *NodeObservabilityReconciler) desiredNOMCSpec(instance *v1alpha2.NodeObservability) v1alpha2.NodeObservabilityMachineConfigSpec {
+	s := v1alpha2.NodeObservabilityMachineConfigSpec{}
+	if instance.Spec.Type == v1alpha2.CrioKubeletNodeObservabilityType {
 		s.Debug.EnableCrioProfiling = true
 	}
 	if len(instance.Spec.NodeSelector) != 0 {
@@ -91,7 +91,7 @@ func (r *NodeObservabilityReconciler) desiredNOMCSpec(instance *v1alpha1.NodeObs
 	return s
 }
 
-func (r *NodeObservabilityReconciler) updateNOMC(ctx context.Context, current, desired *v1alpha1.NodeObservabilityMachineConfig) (*v1alpha1.NodeObservabilityMachineConfig, error) {
+func (r *NodeObservabilityReconciler) updateNOMC(ctx context.Context, current, desired *v1alpha2.NodeObservabilityMachineConfig) (*v1alpha2.NodeObservabilityMachineConfig, error) {
 	updatedNOMC := current.DeepCopy()
 	updated := false
 
@@ -112,8 +112,8 @@ func (r *NodeObservabilityReconciler) updateNOMC(ctx context.Context, current, d
 	return updatedNOMC, nil
 }
 
-func (r *NodeObservabilityReconciler) deleteNOMC(ctx context.Context, nodeObs *v1alpha1.NodeObservability) error {
-	mc := &v1alpha1.NodeObservabilityMachineConfig{}
+func (r *NodeObservabilityReconciler) deleteNOMC(ctx context.Context, nodeObs *v1alpha2.NodeObservability) error {
+	mc := &v1alpha2.NodeObservabilityMachineConfig{}
 	mc.Name = nodeObs.Name
 	if err := r.Delete(ctx, mc); err != nil {
 		if errors.IsNotFound(err) {

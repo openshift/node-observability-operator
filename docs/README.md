@@ -100,7 +100,7 @@ all the nodes with label `app: example` by running a `node-observability-agent`
 pod on each of those nodes.
 
 ```yaml
-apiVersion: nodeobservability.olm.openshift.io/v1alpha1
+apiVersion: nodeobservability.olm.openshift.io/v1alpha2
 kind: NodeObservability
 metadata:
   name: cluster
@@ -123,7 +123,7 @@ resources created with a different name.
 `NodeObservability` resources created with a different name will be ignored
 by the operator with `Ready` condition set to false in its `Status`:
 ```yaml
-apiVersion: nodeobservability.olm.openshift.io/v1alpha1
+apiVersion: nodeobservability.olm.openshift.io/v1alpha2
 kind: NodeObservability
 metadata:
   name: anything-but-cluster
@@ -151,7 +151,7 @@ You can request a Profiling query by creating a `NodeObservabilityRun` resource.
 For example:
 
 ```yaml
-apiVersion: nodeobservability.olm.openshift.io/v1alpha1
+apiVersion: nodeobservability.olm.openshift.io/v1alpha2
 kind: NodeObservabilityRun
 metadata:
   name: nodeobservabilityrun-sample
@@ -169,7 +169,7 @@ finished, the `FinishedTimestamp` is recorded. Any failed nodes are tracked in
 
 ```yaml
 $ oc get NodeObservabilityRun -o yaml --watch
-apiVersion: nodeobservability.olm.openshift.io/v1alpha1
+apiVersion: nodeobservability.olm.openshift.io/v1alpha2
 kind: NodeObservabilityRun
 metadata:
   name: nodeobservabilityrun-sample
@@ -177,7 +177,7 @@ spec:
   nodeObservabilityRef:
     name: cluster
 ...
-apiVersion: nodeobservability.olm.openshift.io/v1alpha1
+apiVersion: nodeobservability.olm.openshift.io/v1alpha2
 kind: NodeObservabilityRun
 metadata:
   name: nodeobservabilityrun-sample
@@ -194,7 +194,7 @@ status:
     ip: 172.31.83.22
     port: 8443
 ...
-apiVersion: nodeobservability.olm.openshift.io/v1alpha1
+apiVersion: nodeobservability.olm.openshift.io/v1alpha2
 kind: NodeObservabilityRun
 metadata:
   name: nodeobservabilityrun-sample

@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	operatorv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
@@ -211,7 +211,7 @@ func TestEnsureService(t *testing.T) {
 				Namespace: test.TestNamespace,
 				Log:       zap.New(zap.UseDevMode(true)),
 			}
-			nodeObs := &operatorv1alpha1.NodeObservability{
+			nodeObs := &operatorv1alpha2.NodeObservability{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test",
 				},

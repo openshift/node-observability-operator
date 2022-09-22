@@ -6,7 +6,7 @@ FROM docker.io/golang:1.17 as builder
 WORKDIR /workspace
 
 # Copy the go source
-COPY cmd cmd
+COPY main.go main.go
 COPY api/ api/
 COPY pkg/ pkg/
 COPY vendor/ vendor/

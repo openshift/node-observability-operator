@@ -11,7 +11,7 @@ metadata:
             "name": "cluster"
           },
           "spec": {
-            "nodeSelector": {
+            "labels": {
               "node-role.kubernetes.io/worker": ""
             },
             "type": "crio-kubelet"
@@ -26,6 +26,44 @@ metadata:
           "spec": {
             "debug": {
               "enableCrioProfiling": true
+            }
+          }
+        },
+        {
+          "apiVersion": "nodeobservability.olm.openshift.io/v1alpha1",
+          "kind": "NodeObservabilityRun",
+          "metadata": {
+            "name": "nodeobservabilityrun-sample",
+            "namespace": "node-observability-operator"
+          },
+          "spec": {
+            "nodeObservabilityRef": {
+              "name": "cluster"
+            }
+          }
+        },
+        {
+          "apiVersion": "nodeobservability.olm.openshift.io/v1alpha2",
+          "kind": "NodeObservability",
+          "metadata": {
+            "name": "cluster"
+          },
+          "spec": {
+            "nodeSelector": {
+              "node-role.kubernetes.io/worker": ""
+            },
+            "type": "crio-kubelet"
+          }
+        },
+        {
+          "apiVersion": "nodeobservability.olm.openshift.io/v1alpha2",
+          "kind": "NodeObservabilityMachineConfig",
+          "metadata": {
+            "name": "sample"
+          },
+          "spec": {
+            "debug": {
+              "enableCrioProfiling": true
             },
             "nodeSelector": {
               "node-role.kubernetes.io/worker": ""
@@ -33,7 +71,7 @@ metadata:
           }
         },
         {
-          "apiVersion": "nodeobservability.olm.openshift.io/v1alpha1",
+          "apiVersion": "nodeobservability.olm.openshift.io/v1alpha2",
           "kind": "NodeObservabilityRun",
           "metadata": {
             "name": "nodeobservabilityrun-sample",
@@ -63,18 +101,36 @@ spec:
       kind: NodeObservability
       name: nodeobservabilities.nodeobservability.olm.openshift.io
       version: v1alpha1
+    - description: NodeObservability prepares a subset of worker nodes (identified
+        by a label) for running node observability queries, such as profiling
+      displayName: Node Observability
+      kind: NodeObservability
+      name: nodeobservabilities.nodeobservability.olm.openshift.io
+      version: v1alpha2
     - description: NodeObservabilityMachineConfig is the Schema for the nodeobservabilitymachineconfigs
         API
       displayName: Node Observability Machine Config
       kind: NodeObservabilityMachineConfig
       name: nodeobservabilitymachineconfigs.nodeobservability.olm.openshift.io
       version: v1alpha1
+    - description: NodeObservabilityMachineConfig is the Schema for the nodeobservabilitymachineconfigs
+        API
+      displayName: Node Observability Machine Config
+      kind: NodeObservabilityMachineConfig
+      name: nodeobservabilitymachineconfigs.nodeobservability.olm.openshift.io
+      version: v1alpha2
     - description: NodeObservabilityRun is a request to run observability actions
         on the nodes previously selected in NodeObservability resource
       displayName: Node Observability Run
       kind: NodeObservabilityRun
       name: nodeobservabilityruns.nodeobservability.olm.openshift.io
       version: v1alpha1
+    - description: NodeObservabilityRun is a request to run observability actions
+        on the nodes previously selected in NodeObservability resource
+      displayName: Node Observability Run
+      kind: NodeObservabilityRun
+      name: nodeobservabilityruns.nodeobservability.olm.openshift.io
+      version: v1alpha2
   description: |-
     An Operator that will be able to gather debugging/profiling data over
     a custom period of time which would be helpful to troubleshoot and resolve issues
@@ -520,7 +576,7 @@ spec:
     type: SingleNamespace
   - supported: false
     type: MultiNamespace
-  - supported: false
+  - supported: true
     type: AllNamespaces
   keywords:
   - node-observability-operator

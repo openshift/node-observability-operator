@@ -30,12 +30,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
+	operatorv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
 )
 
 func makeClusterRole() *rbacv1.ClusterRole {
-	nodeObs := &operatorv1alpha1.NodeObservability{}
+	nodeObs := &operatorv1alpha2.NodeObservability{}
 	clusterRole := rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterRoleName,
@@ -255,7 +255,7 @@ func TestEnsureClusterRole(t *testing.T) {
 				Scheme: test.Scheme,
 				Log:    zap.New(zap.UseDevMode(true)),
 			}
-			nodeObs := &operatorv1alpha1.NodeObservability{}
+			nodeObs := &operatorv1alpha2.NodeObservability{}
 			gotExist, _, err := r.ensureClusterRole(context.TODO(), nodeObs)
 			if err != nil {
 				if !tc.errExpected {
@@ -279,7 +279,7 @@ func TestEnsureClusterRole(t *testing.T) {
 				Scheme: test.Scheme,
 				Log:    zap.New(zap.UseDevMode(true)),
 			}
-			nodeObs := &operatorv1alpha1.NodeObservability{}
+			nodeObs := &operatorv1alpha2.NodeObservability{}
 			serviceAccount, err := r.ensureServiceAccount(context.TODO(), nodeObs, test.TestNamespace)
 			if err != nil {
 				if !tc.errExpected {
