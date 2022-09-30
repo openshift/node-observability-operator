@@ -159,8 +159,7 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 								"--storage=/run/node-observability",
 								fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
 							},
-							Resources:                corev1.ResourceRequirements{},
-							TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+							Resources: corev1.ResourceRequirements{},
 							SecurityContext: &corev1.SecurityContext{
 								Privileged: &privileged,
 							},
