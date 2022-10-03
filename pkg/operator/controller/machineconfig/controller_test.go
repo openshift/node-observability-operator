@@ -418,15 +418,19 @@ func TestReconcile(t *testing.T) {
 		},
 		{
 			name:    "controller resource marked for deletion",
-			reqObjs: append([]runtime.Object{mcp, criomc, workerMCP}, labeledNodes...),
+			reqObjs: append([]runtime.Object{mcp, criomc}, labeledNodes...),
 			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
 				r.CtrlConfig.Finalizers = append(r.CtrlConfig.Finalizers, finalizer)
 				now := metav1.Now()
 				r.CtrlConfig.DeletionTimestamp = &now
+				workerMCPUpdating := testWorkerMCP()
+				testUpdateMCPCondition(&workerMCPUpdating.Status.Conditions,
+					mcv1.MachineConfigPoolUpdating, corev1.ConditionTrue)
+				*o = append(*o, workerMCPUpdating)
 			},
 			wantErr: false,
 			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
+				if result.RequeueAfter != 0 ||
 					status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
@@ -600,7 +604,7 @@ func TestMonitorProgress(t *testing.T) {
 				*o = append(*o, workerMCP)
 			},
 			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 0 ||
+				if result.RequeueAfter != defaultRequeueTime ||
 					status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
@@ -649,7 +653,7 @@ func TestMonitorProgress(t *testing.T) {
 				*o = append(*o, workerMCP)
 			},
 			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 0 ||
+				if result.RequeueAfter != defaultRequeueTime ||
 					status.IsDebuggingEnabled() ||
 					!status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
@@ -671,9 +675,9 @@ func TestMonitorProgress(t *testing.T) {
 				*o = append(*o, workerMCP)
 			},
 			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 0 ||
+				if result.RequeueAfter != defaultRequeueTime ||
 					status.IsDebuggingEnabled() ||
-					status.IsMachineConfigInProgress() ||
+					!status.IsMachineConfigInProgress() ||
 					status.IsDebuggingFailed() {
 					return false
 				}

@@ -12,7 +12,7 @@ metadata:
           },
           "spec": {
             "labels": {
-              "node-role.kubernetes.io/worker": ""
+              "kubernetes.io/hostname": "worker-a"
             },
             "type": "crio-kubelet"
           }
@@ -50,7 +50,7 @@ metadata:
           },
           "spec": {
             "nodeSelector": {
-              "node-role.kubernetes.io/worker": ""
+              "kubernetes.io/hostname": "worker-a"
             },
             "type": "crio-kubelet"
           }
@@ -66,7 +66,7 @@ metadata:
               "enableCrioProfiling": true
             },
             "nodeSelector": {
-              "node-role.kubernetes.io/worker": ""
+              "kubernetes.io/hostname": "worker-a"
             }
           }
         },
@@ -375,6 +375,61 @@ spec:
             spec:
               containers:
               - args:
+                - --health-probe-bind-address=:8081
+                - --metrics-bind-address=127.0.0.1:8080
+                - --leader-elect
+                - --zap-log-level=$(LOG_LEVEL)
+                - --operator-namespace=$(OPERATOR_NAMESPACE)
+                - --agent-image=$(RELATED_IMAGE_AGENT)
+                env:
+                - name: LOG_LEVEL
+                  value: debug
+                - name: OPERATOR_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+                - name: RELATED_IMAGE_AGENT
+                  value: quay.io/node-observability-operator/node-observability-agent@sha256:8400109653c7383a66f253114191bf1c57a0966a49944dd18ab02272ae02387e
+                image: quay.io/openshift/node-observability-operator:v0.0.1
+                imagePullPolicy: Always
+                livenessProbe:
+                  httpGet:
+                    path: /healthz
+                    port: 8081
+                  initialDelaySeconds: 15
+                  periodSeconds: 20
+                name: manager
+                ports:
+                - containerPort: 9443
+                  name: webhook-server
+                  protocol: TCP
+                readinessProbe:
+                  httpGet:
+                    path: /readyz
+                    port: 8081
+                  initialDelaySeconds: 5
+                  periodSeconds: 10
+                resources:
+                  limits:
+                    cpu: 500m
+                    memory: 128Mi
+                  requests:
+                    cpu: 10m
+                    memory: 64Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop:
+                    - ALL
+                  seccompProfile:
+                    type: RuntimeDefault
+                volumeMounts:
+                - mountPath: /tmp/k8s-webhook-server/serving-certs
+                  name: cert
+                  readOnly: true
+                - mountPath: /var/run/secrets/openshift.io/certs
+                  name: ca-bundle
+              - args:
                 - --secure-listen-address=0.0.0.0:8443
                 - --upstream=http://127.0.0.1:8080/
                 - --logtostderr=true
@@ -399,59 +454,15 @@ spec:
                     - ALL
                   seccompProfile:
                     type: RuntimeDefault
-              - args:
-                - --health-probe-bind-address=:8081
-                - --metrics-bind-address=127.0.0.1:8080
-                - --leader-elect
-                - --zap-log-level=$(LOG_LEVEL)
-                - --operator-namespace=$(OPERATOR_NAMESPACE)
-                - --agent-image=$(RELATED_IMAGE_AGENT)
-                env:
-                - name: LOG_LEVEL
-                  value: info
-                - name: OPERATOR_NAMESPACE
-                  valueFrom:
-                    fieldRef:
-                      fieldPath: metadata.namespace
-                - name: RELATED_IMAGE_AGENT
-                  value: quay.io/node-observability-operator/node-observability-agent@sha256:8400109653c7383a66f253114191bf1c57a0966a49944dd18ab02272ae02387e
-                image: quay.io/openshift/node-observability-operator:v0.0.1
-                imagePullPolicy: Always
-                livenessProbe:
-                  httpGet:
-                    path: /healthz
-                    port: 8081
-                  initialDelaySeconds: 15
-                  periodSeconds: 20
-                name: manager
-                readinessProbe:
-                  httpGet:
-                    path: /readyz
-                    port: 8081
-                  initialDelaySeconds: 5
-                  periodSeconds: 10
-                resources:
-                  limits:
-                    cpu: 500m
-                    memory: 128Mi
-                  requests:
-                    cpu: 10m
-                    memory: 64Mi
-                securityContext:
-                  allowPrivilegeEscalation: false
-                  capabilities:
-                    drop:
-                    - ALL
-                  seccompProfile:
-                    type: RuntimeDefault
-                volumeMounts:
-                - mountPath: /var/run/secrets/openshift.io/certs
-                  name: ca-bundle
               securityContext:
                 runAsNonRoot: true
               serviceAccountName: node-observability-operator-controller-manager
               terminationGracePeriodSeconds: 10
               volumes:
+              - name: cert
+                secret:
+                  defaultMode: 420
+                  secretName: webhook-server-cert
               - configMap:
                   items:
                   - key: service-ca.crt
@@ -570,7 +581,7 @@ spec:
         serviceAccountName: node-observability-operator-controller-manager
     strategy: deployment
   installModes:
-  - supported: true
+  - supported: false
     type: OwnNamespace
   - supported: false
     type: SingleNamespace
@@ -591,3 +602,16 @@ spec:
   - image: quay.io/node-observability-operator/node-observability-agent@sha256:8400109653c7383a66f253114191bf1c57a0966a49944dd18ab02272ae02387e
     name: agent
   version: 0.0.1
+  webhookdefinitions:
+  - admissionReviewVersions:
+    - v1
+    containerPort: 443
+    conversionCRDs:
+    - nodeobservabilities.nodeobservability.olm.openshift.io
+    - nodeobservabilitymachineconfigs.nodeobservability.olm.openshift.io
+    deploymentName: node-observability-operator-controller-manager
+    generateName: cnodeobservabilitiesnodeobservabilitymachineconfigs.kb.io
+    sideEffects: None
+    targetPort: 9443
+    type: ConversionWebhook
+    webhookPath: /convert

@@ -4,6 +4,6 @@ metadata:
   name: sample
 spec:
   nodeSelector:
-    node-role.kubernetes.io/worker: ""
+    kubernetes.io/hostname: worker-a
   debug:
     enableCrioProfiling: true

@@ -36,7 +36,7 @@ spec:
         - "--agent-image=$(RELATED_IMAGE_AGENT)"
         env:
         - name: LOG_LEVEL
-          value: info
+          value: debug
         - name: OPERATOR_NAMESPACE
           valueFrom:
             fieldRef:
