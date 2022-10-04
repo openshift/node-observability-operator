@@ -36,9 +36,8 @@ func (r *NodeObservabilityReconciler) verifyClusterRole(ctx context.Context) (bo
 // ensureClusterRoleBinding ensures that the clusterrolebinding exists
 // Returns a Boolean value indicating whether it exists, a pointer to the
 // clusterrolebinding and an error when relevant
-func (r *NodeObservabilityReconciler) ensureClusterRoleBinding(ctx context.Context, nodeObs *v1alpha2.NodeObservability, saName, ns string) (*rbacv1.ClusterRoleBinding, error) {
-	nameSpace := types.NamespacedName{Namespace: ns, Name: clusterRoleBindingName}
-	desired := r.desiredClusterRoleBinding(nodeObs, saName, ns)
+func (r *NodeObservabilityReconciler) ensureClusterRoleBinding(ctx context.Context, nodeObs *v1alpha2.NodeObservability, saName, saNamespace string) (*rbacv1.ClusterRoleBinding, error) {
+	desired := r.desiredClusterRoleBinding(nodeObs, saName, saNamespace)
 
 	if err := controllerutil.SetControllerReference(nodeObs, desired, r.Scheme); err != nil {
 		return nil, fmt.Errorf("failed to set the controller reference for clusterrolebindings %s : %w", desired.Name, err)
@@ -46,24 +45,23 @@ func (r *NodeObservabilityReconciler) ensureClusterRoleBinding(ctx context.Conte
 
 	current, err := r.currentClusterRoleBinding(ctx)
 	if err != nil && !errors.IsNotFound(err) {
-		return nil, fmt.Errorf("failed to get clusterrolebinding %q due to: %w", nameSpace, err)
+		return nil, fmt.Errorf("failed to get clusterrolebinding %q due to: %w", clusterRoleBindingName, err)
 	} else if err != nil && errors.IsNotFound(err) {
 
 		// create clusterrolebinding since it is not found
 		if err := r.createClusterRoleBinding(ctx, desired); err != nil {
-			return nil, fmt.Errorf("failed to create clusterrolebinding %q: %w", nameSpace, err)
+			return nil, fmt.Errorf("failed to create clusterrolebinding %q: %w", clusterRoleBindingName, err)
 		}
 
-		r.Log.Info("created clusterrolebinding", "clusterrolebinding.Namespace", nameSpace.Namespace, "clusterrolebinding.Name", nameSpace.Name)
+		r.Log.Info("created clusterrolebinding", "clusterrolebinding.Name", clusterRoleBindingName)
 		return r.currentClusterRoleBinding(ctx)
 	}
 
-	var updated *rbacv1.ClusterRoleBinding
-	if updated, err = r.updateClusterRoleBinding(ctx, current, desired); err != nil {
-		return nil, fmt.Errorf("failed to update clusterrolebinding %s/%s due to: %w", nameSpace.Namespace, nameSpace.Name, err)
+	if _, err = r.updateClusterRoleBinding(ctx, current, desired); err != nil {
+		return nil, fmt.Errorf("failed to update clusterrolebinding %s due to: %w", clusterRoleBindingName, err)
 	}
 
-	return updated, nil
+	return r.currentClusterRoleBinding(ctx)
 }
 
 // currentClusterRoleBinding checks if the clusterrolebinding exists
@@ -115,11 +113,7 @@ func (r *NodeObservabilityReconciler) updateClusterRoleBinding(ctx context.Conte
 	updated.Subjects = desired.Subjects
 	updated.RoleRef = desired.RoleRef
 
-	if err := r.Client.Update(ctx, updated); err != nil {
-		return nil, err
-	}
-
-	return updated, nil
+	return updated, r.Client.Update(ctx, updated)
 }
 
 func (r *NodeObservabilityReconciler) deleteClusterRoleBinding(nodeObs *v1alpha2.NodeObservability) error {
@@ -135,9 +129,5 @@ func (r *NodeObservabilityReconciler) deleteClusterRoleBinding(nodeObs *v1alpha2
 }
 
 func hasClusterRoleBindingChanged(current *rbacv1.ClusterRoleBinding, desired *rbacv1.ClusterRoleBinding) bool {
-	if !(reflect.DeepEqual(current.Subjects, desired.Subjects)) || !(reflect.DeepEqual(current.RoleRef, desired.RoleRef)) {
-		return true
-	}
-
-	return false
+	return !(reflect.DeepEqual(current.Subjects, desired.Subjects)) || !(reflect.DeepEqual(current.RoleRef, desired.RoleRef))
 }

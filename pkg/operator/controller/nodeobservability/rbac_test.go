@@ -61,11 +61,9 @@ func TestDeleteClusterRole(t *testing.T) {
 		},
 		{
 			name:            "Exists",
-			existingObjects: []runtime.Object{
-				// makeClusterRoleBinding(),
-			},
-			expectedExist: false,
-			errExpected:   false,
+			existingObjects: []runtime.Object{},
+			expectedExist:   false,
+			errExpected:     false,
 		},
 	}
 
@@ -176,7 +174,7 @@ func TestEnsureClusterRole(t *testing.T) {
 
 			opts := cmpopts.EquateEmpty()
 			if diff := cmp.Diff(tc.expectedCRB.Subjects, crb.Subjects, opts); diff != "" {
-				t.Fatalf("clusterrolebinding subjects mismatch: \n%s", diff)
+				t.Fatalf("clusterrolebinding mismatch: \n%s", diff)
 			}
 
 			if diff := cmp.Diff(tc.expectedCRB.RoleRef, crb.RoleRef, opts); diff != "" {

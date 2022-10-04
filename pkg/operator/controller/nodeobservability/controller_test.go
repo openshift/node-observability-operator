@@ -139,9 +139,10 @@ func TestReconcile(t *testing.T) {
 				Scheme:            test.Scheme,
 				Log:               zap.New(zap.UseDevMode(true)),
 				AgentImage:        "test",
+				Namespace:         tc.inputRequest.Namespace,
 			}
 
-			// the add and modify events should only be added when there are no 'simulated' errors
+			// the add and modify events should only be added when there are no errors
 			if tc.name == "Bootstrapping" {
 				// update finalizer
 				tc.expectedEvents = append(tc.expectedEvents, teMod)

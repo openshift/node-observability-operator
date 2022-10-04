@@ -45,7 +45,7 @@ func makeScc() *securityv1.SecurityContextConstraints {
 		},
 		AllowPrivilegedContainer: true,
 		AllowHostIPC:             false,
-		AllowHostNetwork:         true,
+		AllowHostNetwork:         false,
 		AllowHostPID:             false,
 		AllowHostPorts:           false,
 		// This allows us to mount the hosts /var/run/crio/crio.sock into the container
@@ -101,7 +101,7 @@ func TestEnsureScc(t *testing.T) {
 					AllowedCapabilities:      nil,
 					AllowHostDirVolumePlugin: true,
 					Volumes:                  []securityv1.FSType{securityv1.FSTypeHostPath, securityv1.FSTypeSecret, securityv1.FSTypeConfigMap},
-					AllowHostNetwork:         true,
+					AllowHostNetwork:         false,
 					AllowHostPorts:           false,
 					AllowHostPID:             false,
 					AllowHostIPC:             true, // not expected

@@ -20,4 +20,4 @@ resources:
 # The following clusterrole is required by
 # the operand and is verified by the operator
 # during reconciliation
-- operator_role.yaml
+- operand_role.yaml

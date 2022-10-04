@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	securityv1 "github.com/openshift/api/security/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -79,7 +78,7 @@ func (r *NodeObservabilityReconciler) desiredSecurityContextConstraints(nodeObs 
 		AllowedCapabilities:      nil,
 		AllowHostDirVolumePlugin: true,
 		Volumes:                  []securityv1.FSType{securityv1.FSTypeHostPath, securityv1.FSTypeSecret, securityv1.FSTypeConfigMap},
-		AllowHostNetwork:         true,
+		AllowHostNetwork:         false,
 		AllowHostPorts:           false,
 		AllowHostPID:             false,
 		AllowHostIPC:             false,
@@ -88,23 +87,104 @@ func (r *NodeObservabilityReconciler) desiredSecurityContextConstraints(nodeObs 
 		SupplementalGroups:       securityv1.SupplementalGroupsStrategyOptions{Type: securityv1.SupplementalGroupsStrategyRunAsAny},
 		FSGroup:                  securityv1.FSGroupStrategyOptions{Type: securityv1.FSGroupStrategyRunAsAny},
 		ReadOnlyRootFilesystem:   false,
+		AllowedUnsafeSysctls:     nil,
+		ForbiddenSysctls:         nil,
+		SeccompProfiles:          nil,
 		Groups:                   []string{"system:cluster-admins", "system:nodes"},
 	}
 	return scc
 }
 
 func (r *NodeObservabilityReconciler) updateSecurityContextConstraintes(ctx context.Context, current, desired *securityv1.SecurityContextConstraints) (bool, error) {
-	opts := cmpopts.IgnoreFields(securityv1.SecurityContextConstraints{}, "TypeMeta", "Users", "SeccompProfiles", "AllowedUnsafeSysctls", "ForbiddenSysctls")
-	if !cmp.Equal(current, desired, opts) {
-		// copy over current object metadata to updated
-		updated := desired.DeepCopy()
-		updated.ObjectMeta = current.ObjectMeta
-		if err := r.Client.Update(ctx, updated); err != nil {
+	updatedScc := current.DeepCopy()
+	updated := false
+
+	if desired.Priority != current.Priority {
+		updatedScc.Priority = desired.Priority
+		updated = true
+	}
+
+	if desired.AllowPrivilegedContainer != current.AllowPrivilegedContainer {
+		updatedScc.AllowPrivilegedContainer = desired.AllowPrivilegedContainer
+		updated = true
+	}
+
+	if !cmp.Equal(desired.DefaultAddCapabilities, current.DefaultAddCapabilities) {
+		updatedScc.DefaultAddCapabilities = desired.DefaultAddCapabilities
+		updated = true
+	}
+
+	if !cmp.Equal(desired.RequiredDropCapabilities, current.RequiredDropCapabilities) {
+		updatedScc.RequiredDropCapabilities = desired.RequiredDropCapabilities
+		updated = true
+	}
+
+	if !cmp.Equal(desired.AllowedCapabilities, current.AllowedCapabilities) {
+		updatedScc.AllowedCapabilities = desired.AllowedCapabilities
+		updated = true
+	}
+
+	if desired.AllowHostDirVolumePlugin != current.AllowHostDirVolumePlugin {
+		updatedScc.AllowHostDirVolumePlugin = desired.AllowHostDirVolumePlugin
+		updated = true
+	}
+
+	if !cmp.Equal(desired.Volumes, current.Volumes) {
+		updatedScc.Volumes = desired.Volumes
+		updated = true
+	}
+
+	if desired.AllowHostNetwork != current.AllowHostNetwork {
+		updatedScc.AllowHostNetwork = desired.AllowHostNetwork
+		updated = true
+	}
+
+	if desired.AllowHostPorts != current.AllowHostPorts {
+		updatedScc.AllowHostPorts = desired.AllowHostPorts
+		updated = true
+	}
+
+	if desired.AllowHostPID != current.AllowHostPID {
+		updatedScc.AllowHostPorts = desired.AllowHostPorts
+		updated = true
+	}
+
+	if desired.AllowHostIPC != current.AllowHostIPC {
+		updatedScc.AllowHostIPC = desired.AllowHostIPC
+		updated = true
+	}
+
+	if !cmp.Equal(desired.SELinuxContext, current.SELinuxContext) {
+		updatedScc.SELinuxContext = desired.SELinuxContext
+		updated = true
+	}
+
+	if !cmp.Equal(desired.RunAsUser, current.RunAsUser) {
+		updatedScc.RunAsUser = desired.RunAsUser
+		updated = true
+	}
+
+	if !cmp.Equal(desired.SupplementalGroups, current.SupplementalGroups) {
+		updatedScc.SupplementalGroups = desired.SupplementalGroups
+		updated = true
+	}
+
+	if !cmp.Equal(desired.FSGroup, current.FSGroup) {
+		updatedScc.FSGroup = desired.FSGroup
+		updated = true
+	}
+	if desired.ReadOnlyRootFilesystem != current.ReadOnlyRootFilesystem {
+		updatedScc.ReadOnlyRootFilesystem = desired.ReadOnlyRootFilesystem
+		updated = true
+	}
+
+	if updated {
+		if err := r.Client.Update(ctx, updatedScc); err != nil {
 			return false, err
 		}
-		return true, nil
 	}
-	return false, nil
+
+	return updated, nil
 }
 
 func (r *NodeObservabilityReconciler) deleteSecurityContextConstraints(nodeObs *v1alpha2.NodeObservability) error {
