@@ -30,7 +30,7 @@ const (
 	authnGroup                   = "authentication.k8s.io"
 	authzGroup                   = "authorization.k8s.io"
 	secResource                  = "securitycontextconstraints"
-	secResourceName              = "hostnetwork"
+	secResourceName              = "hostnetwork-v2"
 	tokenreviewsResource         = "tokenreviews"
 	subjectaccessreviewsResource = "subjectaccessreviews"
 	use                          = "use"

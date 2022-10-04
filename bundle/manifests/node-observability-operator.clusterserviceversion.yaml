@@ -334,15 +334,12 @@ spec:
           - watch
         - apiGroups:
           - security.openshift.io
+          resourceNames:
+          - hostnetwork-v2
           resources:
           - securitycontextconstraints
           verbs:
-          - create
-          - delete
-          - get
-          - list
           - use
-          - watch
         - apiGroups:
           - authentication.k8s.io
           resources:
