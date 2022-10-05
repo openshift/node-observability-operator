@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	sccName = "node-observability-scc"
+	sccName = "node-observability-agent"
 )
 
 // ensureSecurityContextConstraints ensures that the securitycontextconstraints exists

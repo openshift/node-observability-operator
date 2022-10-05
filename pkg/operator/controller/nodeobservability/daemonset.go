@@ -25,7 +25,7 @@ const (
 	kbltCAMountedFile = "ca-bundle.crt"
 	kbltCAName        = "kubelet-ca"
 	defaultScheduler  = "default-scheduler"
-	daemonSetName     = "node-observability-ds"
+	daemonSetName     = "node-observability-agent"
 	certsName         = "certs"
 	certsMountPath    = "/var/run/secrets/openshift.io/certs"
 )

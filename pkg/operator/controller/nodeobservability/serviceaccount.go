@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	serviceAccountName = "node-observability-sa"
+	serviceAccountName = "node-observability-agent"
 )
 
 // ensureServiceAccount ensures that the serviceaccount exists

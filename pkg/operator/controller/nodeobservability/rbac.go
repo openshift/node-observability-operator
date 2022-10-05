@@ -16,10 +16,9 @@ import (
 )
 
 const (
-
-	// TODO: standardize resource names to keep them compatible
-	clusterRoleName        = "node-observability-operator-controller-role"
-	clusterRoleBindingName = "node-observability-operator-controller-role-binding"
+	// cluster role is created via operator bundle, refer to config/rbac/operand_role.yaml
+	clusterRoleName        = "node-observability-operator-agent"
+	clusterRoleBindingName = "node-observability-agent"
 )
 
 func (r *NodeObservabilityReconciler) verifyClusterRole(ctx context.Context) (bool, error) {
