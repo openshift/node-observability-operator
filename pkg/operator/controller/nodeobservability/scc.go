@@ -32,7 +32,7 @@ func (r *NodeObservabilityReconciler) ensureSecurityContextConstraints(ctx conte
 		if err := r.createSecurityContextConstraints(ctx, desired); err != nil {
 			return nil, fmt.Errorf("failed to create securitycontextconstraints %q: %w", sccName, err)
 		}
-		r.Log.Info("created securitycontextconstraints", "scc.Name", sccName)
+		r.Log.Info("created securitycontextconstraints", "scc.name", sccName)
 		return r.currentSecurityContextConstraints(ctx)
 	}
 
@@ -42,7 +42,7 @@ func (r *NodeObservabilityReconciler) ensureSecurityContextConstraints(ctx conte
 	}
 
 	if updated {
-		r.Log.V(1).Info("updated securitycontextconstraints", "scc.Name", sccName)
+		r.Log.V(1).Info("updated securitycontextconstraints", "scc.name", sccName)
 		return r.currentSecurityContextConstraints(ctx)
 	}
 
@@ -66,12 +66,9 @@ func (r *NodeObservabilityReconciler) createSecurityContextConstraints(ctx conte
 
 // desiredSecurityContextConstraints en the desired securitycontextconstraints
 func (r *NodeObservabilityReconciler) desiredSecurityContextConstraints(nodeObs *v1alpha2.NodeObservability) *securityv1.SecurityContextConstraints {
-
-	var priority int32 = 10
-
 	scc := &securityv1.SecurityContextConstraints{
 		ObjectMeta:               metav1.ObjectMeta{Name: sccName},
-		Priority:                 &priority,
+		Priority:                 nil,
 		AllowPrivilegedContainer: true,
 		DefaultAddCapabilities:   nil,
 		RequiredDropCapabilities: []corev1.Capability{"MKNOD"},
@@ -175,6 +172,21 @@ func (r *NodeObservabilityReconciler) updateSecurityContextConstraintes(ctx cont
 	}
 	if desired.ReadOnlyRootFilesystem != current.ReadOnlyRootFilesystem {
 		updatedScc.ReadOnlyRootFilesystem = desired.ReadOnlyRootFilesystem
+		updated = true
+	}
+
+	if !cmp.Equal(desired.AllowedUnsafeSysctls, current.AllowedUnsafeSysctls) {
+		updatedScc.AllowedUnsafeSysctls = desired.AllowedUnsafeSysctls
+		updated = true
+	}
+
+	if !cmp.Equal(desired.SeccompProfiles, current.SeccompProfiles) {
+		updatedScc.SeccompProfiles = desired.SeccompProfiles
+		updated = true
+	}
+
+	if !cmp.Equal(desired.ForbiddenSysctls, current.ForbiddenSysctls) {
+		updatedScc.ForbiddenSysctls = desired.ForbiddenSysctls
 		updated = true
 	}
 

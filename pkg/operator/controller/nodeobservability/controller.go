@@ -64,7 +64,7 @@ type NodeObservabilityReconciler struct {
 //+kubebuilder:rbac:urls=/node-observability-pprof,verbs=get;
 //+kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create;
 //+kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create;
-//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=get,resourceNames=node-observability-operator-controller-role
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=get,resourceNames=node-observability-operator-agent
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,verbs=list;get;create;watch;delete;update;patch
 //+kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=list;get;create;watch;use;delete;update;patch
 //+kubebuilder:rbac:groups=apps,namespace=node-observability-operator,resources=daemonsets,verbs=list;get;create;watch;update;patch

@@ -52,15 +52,24 @@ func (r *NodeObservabilityReconciler) ensureClusterRoleBinding(ctx context.Conte
 			return nil, fmt.Errorf("failed to create clusterrolebinding %q: %w", clusterRoleBindingName, err)
 		}
 
-		r.Log.Info("created clusterrolebinding", "clusterrolebinding.Name", clusterRoleBindingName)
+		r.Log.Info("created clusterrolebinding", "clusterrolebinding.name", clusterRoleBindingName)
 		return r.currentClusterRoleBinding(ctx)
 	}
 
-	if _, err = r.updateClusterRoleBinding(ctx, current, desired); err != nil {
+	updated, err := r.updateClusterRoleBinding(ctx, current, desired)
+	if err != nil {
 		return nil, fmt.Errorf("failed to update clusterrolebinding %s due to: %w", clusterRoleBindingName, err)
 	}
 
-	return r.currentClusterRoleBinding(ctx)
+	if updated {
+		current, err = r.currentClusterRoleBinding(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get clusterrolebinding %q due to: %w", clusterRoleBindingName, err)
+		}
+		r.Log.V(1).Info("successfully updated clusterrolebinding", "clusterrolebinding.name", clusterRoleBindingName)
+	}
+
+	return current, nil
 }
 
 // currentClusterRoleBinding checks if the clusterrolebinding exists
@@ -101,18 +110,18 @@ func (r *NodeObservabilityReconciler) desiredClusterRoleBinding(nodeObs *v1alpha
 }
 
 // updateClusterRoleBindings updates the current clusterrolebindings and returns a flag to denote if the update was done.
-func (r *NodeObservabilityReconciler) updateClusterRoleBinding(ctx context.Context, current *rbacv1.ClusterRoleBinding, desired *rbacv1.ClusterRoleBinding) (*rbacv1.ClusterRoleBinding, error) {
+func (r *NodeObservabilityReconciler) updateClusterRoleBinding(ctx context.Context, current *rbacv1.ClusterRoleBinding, desired *rbacv1.ClusterRoleBinding) (bool, error) {
 	changed := hasClusterRoleBindingChanged(current, desired)
 
 	if !changed {
-		return current, nil
+		return changed, nil
 	}
 
 	updated := current.DeepCopy()
 	updated.Subjects = desired.Subjects
 	updated.RoleRef = desired.RoleRef
 
-	return updated, r.Client.Update(ctx, updated)
+	return changed, r.Client.Update(ctx, updated)
 }
 
 func (r *NodeObservabilityReconciler) deleteClusterRoleBinding(nodeObs *v1alpha2.NodeObservability) error {

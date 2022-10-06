@@ -10,23 +10,15 @@ rules:
   resources:
   - securitycontextconstraints
   resourceNames:
-  - node-observability-scc
+  - node-observability-agent
   verbs:
   - use
-- apiGroups:
-  - ""
-  resources:
-  - nodes
-  verbs:
-  - get
-  - list
 - apiGroups:
   - ""
   resources:
   - nodes/proxy
   verbs:
   - get
-  - list
 - nonResourceURLs:
   - /node-observability-status
   verbs:

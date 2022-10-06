@@ -189,7 +189,7 @@ rules:
 - apiGroups:
   - rbac.authorization.k8s.io
   resourceNames:
-  - node-observability-operator-controller-role
+  - node-observability-operator-agent
   resources:
   - clusterroles
   verbs:

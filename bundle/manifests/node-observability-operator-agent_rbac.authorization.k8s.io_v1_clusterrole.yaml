@@ -7,7 +7,7 @@ rules:
 - apiGroups:
   - security.openshift.io
   resourceNames:
-  - node-observability-scc
+  - node-observability-agent
   resources:
   - securitycontextconstraints
   verbs:
@@ -15,17 +15,9 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - nodes
-  verbs:
-  - get
-  - list
-- apiGroups:
-  - ""
-  resources:
   - nodes/proxy
   verbs:
   - get
-  - list
 - nonResourceURLs:
   - /node-observability-status
   verbs:
