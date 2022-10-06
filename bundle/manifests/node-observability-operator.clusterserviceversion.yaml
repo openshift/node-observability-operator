@@ -510,6 +510,7 @@ spec:
           - daemonsets
           verbs:
           - create
+          - delete
           - get
           - list
           - patch
