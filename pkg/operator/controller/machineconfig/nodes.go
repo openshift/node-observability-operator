@@ -23,114 +23,132 @@ import (
 	"path"
 	"strings"
 
+	"github.com/openshift/node-observability-operator/api/v1alpha2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// ensureReqNodeLabelExists is for checking the if the required labels exist on the nodes.
-// Returns true if all the targeted nodes have the required labels.
-// Return false if not all the nodes have the labels or none were selected.
-func (r *MachineConfigReconciler) ensureReqNodeLabelExists(ctx context.Context) (bool, error) {
+const (
+    patchAdd = "add"
+    patchRemove = "remove"
+)
 
-	// the number of the nodes which already had the required labels
-	// and the number of the nodes updated with the labels
-	existingNodeCount, updNodeCount := 0, 0
-	nodeList := &corev1.NodeList{}
-	if err := r.listNodes(ctx, nodeList, r.CtrlConfig.Spec.NodeSelector); err != nil {
-		return false, err
+// ensureProfConfEnabled makes sure all the configuration needed to enable the
+// CRI-O profiling is applied.
+func (r *MachineConfigReconciler) ensureProfConfEnabled(ctx context.Context, nomc *v1alpha2.NodeObservabilityMachineConfig) error {
+
+	nodeList, err := r.listNodes(ctx, nomc.Spec.NodeSelector)
+	if err != nil {
+		return err
 	}
 
 	if len(nodeList.Items) == 0 {
-		r.Log.V(1).Info("No nodes matching the given selector were found", "NodeSelector", r.CtrlConfig.Spec.NodeSelector)
-		return false, nil
+		r.Log.V(1).Info("No nodes matching the given selector were found", "NodeSelector", nomc.Spec.NodeSelector)
+		return nil
 	}
 
+	err = r.ensureReqNodeLabelExists(ctx, nodeList)
+	if err != nil {
+		return fmt.Errorf("failed to ensure nodes are labelled: %w", err)
+	}
+
+	if err := r.enableCrioProf(ctx, nomc); err != nil {
+		return fmt.Errorf("failed to enable CRIO mc due to: %w", err)
+	}
+
+	if err := r.createProfMCP(ctx, nomc); err != nil {
+		return fmt.Errorf("failed to create profiling mcp due to: %w", err)
+	}
+
+	return nil
+}
+
+// ensureProfConfDisabled disables the profiling on the requested nodes by removing the nodeobservability label.
+func (r *MachineConfigReconciler) ensureProfConfDisabled(ctx context.Context, nomc *v1alpha2.NodeObservabilityMachineConfig) error {
+
+	nodeList, err := r.listNodes(ctx, map[string]string{NodeObservabilityNodeRoleLabelName: empty})
+	if err != nil {
+		return fmt.Errorf("failed to get the list of nodes labelled nodeobservability: %w", err)
+	}
+
+	err = r.ensureReqNodeLabelNotExists(ctx, nodeList)
+	if err != nil {
+		return fmt.Errorf("failed to ensure nodes are not labelled: %w", err)
+	}
+
+	return nil
+}
+
+// ensureReqNodeLabelExists updates the given nodes with the required labels.
+func (r *MachineConfigReconciler) ensureReqNodeLabelExists(ctx context.Context, nodeList *corev1.NodeList) error {
+
+	nodeCount := 0
+	requiredNodeCount := len(nodeList.Items)
 	for i, node := range nodeList.Items {
 		if _, exist := node.Labels[NodeObservabilityNodeRoleLabelName]; exist {
-			existingNodeCount++
+			nodeCount++
 			continue
 		}
 
-		patch, _ := newPatch(add,
-			ResourceLabelsPath,
-			map[string]interface{}{
-				NodeObservabilityNodeRoleLabelName: Empty,
-			})
-		if err := r.ClientPatch(ctx, &nodeList.Items[i], client.RawPatch(types.JSONPatchType, patch)); err != nil {
-			return false, err
+		err := r.patchNodeLabels(ctx, &nodeList.Items[i], patchAdd, ResourceLabelsPath, map[string]interface{}{NodeObservabilityNodeRoleLabelName: empty})
+		if err != nil {
+			return fmt.Errorf("failed to patch node due to %w", err)
 		}
-		r.Log.V(1).Info("Successfully added label", "Node", node.Name, "Label", NodeObservabilityNodeRoleLabelName)
-
-		updNodeCount++
+		r.Log.V(1).Info("successfully performed add operation for labels", "Node", node.Name, "Label", NodeObservabilityNodeRoleLabelName)
+		nodeCount++
 	}
 
-	if (existingNodeCount == len(nodeList.Items)) || (updNodeCount == len(nodeList.Items)) {
-		r.Log.V(1).Info("Nodeobservability role is present on all the nodes with worker role", "ExistingNodeCount", existingNodeCount, "UpdatedNodeCount", updNodeCount)
-		return true, nil
+	if nodeCount == requiredNodeCount {
+		r.Log.V(1).Info("nodeobservability role is present on all the nodes with worker role", "UpdatedNodeCount", nodeCount)
+		return nil
 	}
 
-	return false, nil
+	r.Log.V(1).Info("nodeobservability role is not present on all the nodes with worker role", "Nodes", requiredNodeCount, "UpdatedNodeCount", nodeCount)
+	return fmt.Errorf("failed to ensure required label, expected updates on %d nodes but got %d", requiredNodeCount, nodeCount)
 }
 
-// ensureReqNodeLabelNotExists removes the nodeobservability label from the nodes.
-// Returns the number of updated nodes.
-func (r *MachineConfigReconciler) ensureReqNodeLabelNotExists(ctx context.Context) (int, error) {
+// ensureReqNodeLabelNotExists updates the given nodes to ensure all the
+// required labels are removed.
+func (r *MachineConfigReconciler) ensureReqNodeLabelNotExists(ctx context.Context, nodeList *corev1.NodeList) error {
 
-	updNodeCount := 0
-	nodeList := &corev1.NodeList{}
-	if err := r.listNoObsLabeledNodes(ctx, nodeList); err != nil {
-		return updNodeCount, err
-	}
-
+	nodeCount := 0
+	requiredNodeCount := len(nodeList.Items)
 	for i, node := range nodeList.Items {
 		if _, exist := node.Labels[NodeObservabilityNodeRoleLabelName]; !exist {
 			continue
 		}
 
-		patch, _ := newPatch(remove,
-			ResourceLabelsPath,
-			map[string]interface{}{
-				NodeObservabilityNodeRoleLabelName: Empty,
-			})
-		if err := r.ClientPatch(ctx, &nodeList.Items[i], client.RawPatch(types.JSONPatchType, patch)); err != nil {
-			return updNodeCount, err
+		err := r.patchNodeLabels(ctx, &nodeList.Items[i], patchRemove, ResourceLabelsPath, map[string]interface{}{NodeObservabilityNodeRoleLabelName: empty})
+		if err != nil {
+			return fmt.Errorf("failed to patch node due to %w", err)
 		}
-		r.Log.V(1).Info("Successfully removed label", "Node", node.Name, "Label", NodeObservabilityNodeRoleLabelName)
-
-		updNodeCount++
+		r.Log.V(1).Info("successfully performed remove operation for labels", "Node", node.Name, "Label", NodeObservabilityNodeRoleLabelName)
+		nodeCount++
 	}
 
-	if updNodeCount == len(nodeList.Items) {
-		r.Log.V(1).Info("Successfully removed nodeobservability role from nodes with worker role", "NodeCount", updNodeCount)
-	}
-	return updNodeCount, nil
-}
-
-// listNoObsLabeledNodes returns the list of nodes having NodeObservability role label
-func (r *MachineConfigReconciler) listNoObsLabeledNodes(ctx context.Context, nodeList *corev1.NodeList) error {
-	nodeLabel := map[string]string{
-		NodeObservabilityNodeRoleLabelName: Empty,
+	if nodeCount == requiredNodeCount {
+		r.Log.V(1).Info("nodeobservability role is removed on all the nodes with worker role", "UpdatedNodeCount", nodeCount)
+		return nil
 	}
 
-	if err := r.listNodes(ctx, nodeList, nodeLabel); err != nil {
-		return fmt.Errorf("failed to get the list of nodes labeled nodeobservability: %w", err)
-	}
-
-	return nil
+	r.Log.V(1).Info("nodeobservability role is not removed on all the nodes with worker role", "Nodes", requiredNodeCount, "UpdatedNodeCount", nodeCount)
+	return fmt.Errorf("failed to ensure removal of labels, expected updates on %d nodes but got %d", requiredNodeCount, nodeCount)
 }
 
 // listNodes returns the list of nodes matching the labels
-func (r *MachineConfigReconciler) listNodes(ctx context.Context, nodeList *corev1.NodeList, matchLabels map[string]string) error {
+func (r *MachineConfigReconciler) listNodes(ctx context.Context, matchLabels map[string]string) (*corev1.NodeList, error) {
 	listOpts := []client.ListOption{
 		client.MatchingLabels(matchLabels),
 	}
 
+	nodeList := &corev1.NodeList{}
 	if err := r.ClientList(ctx, nodeList, listOpts...); err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return nodeList, nil
 }
 
 // escape replaces characters which would cause parsing issues with their escaped equivalent
@@ -139,50 +157,30 @@ func escape(key string) string {
 	return strings.Replace(key, "/", "~1", -1)
 }
 
-// newPatch returns the patch data in the format required by the client
-func newPatch(op patchOp, pathPrefix string, patch map[string]interface{}) ([]byte, error) {
-	if patch == nil {
-		return nil, fmt.Errorf("patch data cannot be empty")
+// patchNodeLabels creates and patches the given node with the provided labels
+func (r *MachineConfigReconciler) patchNodeLabels(ctx context.Context, node *corev1.Node, op string, pathPrefix string, labels map[string]interface{}) error {
+	if labels == nil {
+		return fmt.Errorf("patch data cannot be empty")
 	}
 
-	switch op {
-	case add:
-		return newAddPatch(pathPrefix, patch), nil
-	case remove:
-		return newRemovePatch(pathPrefix, patch), nil
-	}
-	return nil, fmt.Errorf("patch operation type[%v] not supported", op)
-}
-
-// newAddPatch returns the patch data to add in the format required by the client
-func newAddPatch(pathPrefix string, patch map[string]interface{}) []byte {
-	values := make([]ResourcePatchValue, 0, len(patch))
-	for k, v := range patch {
-		ppath := path.Join(pathPrefix, escape(k))
-		values = append(values, getPatchValue("add", ppath, v))
+	values := make([]ResourcePatchValue, 0, len(labels))
+	for k, v := range labels {
+		resourcePath := path.Join(pathPrefix, escape(k))
+		values = append(values, ResourcePatchValue{
+			Op:    op,
+			Path:  resourcePath,
+			Value: v,
+		})
 	}
 
-	data, _ := json.Marshal(values)
-	return data
-}
-
-// newRemovePatch returns the patch data to remove in the format required by the client
-func newRemovePatch(pathPrefix string, patch map[string]interface{}) []byte {
-	values := make([]ResourcePatchValue, 0, len(patch))
-	for k, v := range patch {
-		ppath := path.Join(pathPrefix, escape(k))
-		values = append(values, getPatchValue("remove", ppath, v))
+	data, err := json.Marshal(values)
+	if err != nil {
+		return err
 	}
 
-	data, _ := json.Marshal(values)
-	return data
-}
-
-// getPatchValue returns the patch data in the required format
-func getPatchValue(op, path string, value interface{}) ResourcePatchValue {
-	return ResourcePatchValue{
-		Op:    op,
-		Path:  path,
-		Value: value,
+	if err := r.ClientPatch(ctx, node, client.RawPatch(types.JSONPatchType, data)); err != nil {
+		return err
 	}
+
+	return nil
 }

@@ -28,31 +28,14 @@ const (
 	// defaultRequeueTime is the default reconcile requeue time
 	defaultRequeueTime = time.Minute
 
-	// Empty is defined for empty string
-	Empty = ""
-
-	// CrioProfilingConfigName is the name CRI-O MachineConfig CR
-	CrioProfilingConfigName = "10-crio-nodeobservability"
-
-	// CrioServiceFile is the name of the CRI-O systemd service unit
-	CrioServiceFile = "crio.service"
-
-	// CrioUnixSocketEnvString refers to the environment variable info
-	// string that helps in finding if the profiling is enabled by default
-	CrioUnixSocketEnvString = "ENABLE_PROFILE_UNIX_SOCKET=true"
-
-	// CrioUnixSocketConfFile is the name of the CRI-O config file
-	CrioUnixSocketConfFile = "10-mco-profile-unix-socket.conf"
+	// empty is defined for empty string
+	empty = ""
 
 	// MCAPIVersion is the machine config API version
 	MCAPIVersion = "machineconfiguration.openshift.io/v1"
 
 	// MCKind is the machine config resource kind
 	MCKind = "MachineConfig"
-
-	// MCNodeObservabilityLabelName is the machine config nodeobservability
-	// role label name
-	MCNodeObservabilityLabelName = "machineconfiguration.openshift.io/nodeobservability"
 
 	// MCPoolKind is the machine config pool resource king
 	MCPoolKind = "MachineConfigPool"
@@ -87,14 +70,6 @@ const (
 	WorkerNodeRoleName = "worker"
 )
 
-const (
-	// add is the patch operation for adding new info in resource
-	add patchOp = iota + 1
-
-	// remove is the patch operation for removing info from the resource
-	remove
-)
-
 var (
 	// CrioUnixSocketConfData contains the configuration required
 	// for enabling CRI-O profiling
@@ -104,7 +79,7 @@ Environment="%s"`, CrioUnixSocketEnvString)
 	// NodeSelectorLabels is for storing the labels to
 	// match the nodes to include in MCP
 	NodeSelectorLabels = map[string]string{
-		NodeObservabilityNodeRoleLabelName: Empty,
+		NodeObservabilityNodeRoleLabelName: empty,
 	}
 
 	// MachineConfigLabels is for storing the labels to
