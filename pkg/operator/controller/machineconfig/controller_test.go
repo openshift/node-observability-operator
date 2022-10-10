@@ -20,18 +20,14 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	ctrl "sigs.k8s.io/controller-runtime"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
@@ -50,20 +46,10 @@ var (
 )
 
 func testReconciler() *MachineConfigReconciler {
-	// nomc := testNodeObsMC()
 	return &MachineConfigReconciler{
 		Scheme:        test.Scheme,
 		Log:           zap.New(zap.UseDevMode(true)),
 		EventRecorder: record.NewFakeRecorder(100),
-		// CtrlConfig:    nomc,
-	}
-}
-
-func testReconcileRequest() ctrl.Request {
-	return ctrl.Request{
-		NamespacedName: types.NamespacedName{
-			Name: TestControllerResourceName,
-		},
 	}
 }
 
@@ -77,6 +63,9 @@ func testNodeObsMC() *v1alpha2.NodeObservabilityMachineConfig {
 			Name: TestControllerResourceName,
 		},
 		Spec: v1alpha2.NodeObservabilityMachineConfigSpec{
+			NodeSelector: map[string]string{
+				"node-role.kubernetes.io/worker": "",
+			},
 			Debug: v1alpha2.NodeObservabilityDebug{
 				EnableCrioProfiling: true,
 			},
@@ -96,7 +85,7 @@ func testWorkerNodes() []runtime.Object {
 			"machineconfiguration.openshift.io/controlPlaneTopology": "HighlyAvailable",
 			"machineconfiguration.openshift.io/currentConfig":        "rendered-worker-56630020df0d626345d7fd13172dfd02",
 			"machineconfiguration.openshift.io/desiredConfig":        "rendered-worker-56630020df0d626345d7fd13172dfd02",
-			"machineconfiguration.openshift.io/reason":               Empty,
+			"machineconfiguration.openshift.io/reason":               empty,
 			"machineconfiguration.openshift.io/state":                "Done",
 			"volumes.kubernetes.io/controller-managed-attach-detach": "true",
 		},
@@ -105,7 +94,7 @@ func testWorkerNodes() []runtime.Object {
 			"beta.kubernetes.io/os":   "linux",
 			"kubernetes.io/arch":      "amd64",
 			"kubernetes.io/os":        "linux",
-			WorkerNodeRoleLabelName:   Empty,
+			WorkerNodeRoleLabelName:   empty,
 		},
 	}
 
@@ -124,1524 +113,297 @@ func testWorkerNodes() []runtime.Object {
 	return nodes
 }
 
-func testNodeObsNodes() []runtime.Object {
-	nodes := testWorkerNodes()
-
-	for _, node := range nodes {
-		node.(*corev1.Node).ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = Empty
-	}
-
-	return nodes
-}
-
-func testNodeObsMCP(r *MachineConfigReconciler) *mcv1.MachineConfigPool {
-	mcp := r.getCrioProfMachineConfigPool(ProfilingMCPName)
-
-	mcp.Spec.Configuration.ObjectReference = corev1.ObjectReference{
-		Name: "rendered-nodeobservability-9d2d6f47a54e5828cf2917d760b54a99",
-	}
-	mcp.Status = mcv1.MachineConfigPoolStatus{
-		Configuration: mcv1.MachineConfigPoolStatusConfiguration{
-			ObjectReference: mcp.Spec.Configuration.ObjectReference,
-			Source:          mcp.Spec.Configuration.Source,
-		},
-		MachineCount:            0,
-		UpdatedMachineCount:     0,
-		ReadyMachineCount:       0,
-		UnavailableMachineCount: 0,
-		DegradedMachineCount:    0,
-		Conditions: []mcv1.MachineConfigPoolCondition{
-			{
-				Type:               mcv1.MachineConfigPoolUpdating,
-				Status:             corev1.ConditionFalse,
-				LastTransitionTime: metav1.Now(),
-			},
-			{
-				Type:               mcv1.MachineConfigPoolUpdated,
-				Status:             corev1.ConditionFalse,
-				LastTransitionTime: metav1.Now(),
-			},
-			{
-				Type:               mcv1.MachineConfigPoolDegraded,
-				Status:             corev1.ConditionFalse,
-				LastTransitionTime: metav1.Now(),
-			},
-			{
-				Type:               mcv1.MachineConfigPoolNodeDegraded,
-				Status:             corev1.ConditionFalse,
-				LastTransitionTime: metav1.Now(),
-			},
-			{
-				Type:               mcv1.MachineConfigPoolRenderDegraded,
-				Status:             corev1.ConditionFalse,
-				LastTransitionTime: metav1.Now(),
-			},
-		},
-	}
-	return mcp
-}
-
-func testWorkerMCP() *mcv1.MachineConfigPool {
-
+func testMachineConfigPoolWithConditions(name string, mcCount, updatedCount, readyCount, unavailableCount, degradedCount int32, cond []mcv1.MachineConfigPoolCondition) *mcv1.MachineConfigPool {
 	return &mcv1.MachineConfigPool{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       MCPoolKind,
-			APIVersion: MCAPIVersion,
-		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: WorkerNodeMCPName,
-			Labels: map[string]string{
-				"machineconfiguration.openshift.io/mco-built-in":          Empty,
-				"pools.operator.machineconfiguration.openshift.io/worker": Empty,
-			},
+			Name: name,
 		},
 		Spec: mcv1.MachineConfigPoolSpec{
-			Configuration: mcv1.MachineConfigPoolStatusConfiguration{
-				ObjectReference: corev1.ObjectReference{
-					Name: "rendered-worker-56630020df0d626345d7fd13172dfd02",
-				},
-				Source: []corev1.ObjectReference{
-					{
-						Kind:       MCKind,
-						Name:       "00-worker",
-						APIVersion: MCAPIVersion,
-					},
-				},
-			},
-			MachineConfigSelector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					MCRoleLabelName: WorkerNodeRoleName,
-				},
-			},
 			NodeSelector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					WorkerNodeRoleLabelName: Empty,
+					"node-role.kubernetes.io/worker": "",
 				},
 			},
 		},
 		Status: mcv1.MachineConfigPoolStatus{
-			Configuration: mcv1.MachineConfigPoolStatusConfiguration{
-				ObjectReference: corev1.ObjectReference{
-					Name: "rendered-worker-56630020df0d626345d7fd13172dfd02",
-				},
-				Source: []corev1.ObjectReference{
-					{
-						Kind:       MCKind,
-						Name:       "00-worker",
-						APIVersion: MCAPIVersion,
-					},
-				},
-			},
-			MachineCount:            3,
-			UpdatedMachineCount:     3,
-			ReadyMachineCount:       3,
-			UnavailableMachineCount: 0,
-			DegradedMachineCount:    0,
-			Conditions: []mcv1.MachineConfigPoolCondition{
-				{
-					Type:               mcv1.MachineConfigPoolUpdating,
-					Status:             corev1.ConditionFalse,
-					LastTransitionTime: metav1.Now(),
-				},
-				{
-					Type:               mcv1.MachineConfigPoolUpdated,
-					Status:             corev1.ConditionTrue,
-					LastTransitionTime: metav1.Now(),
-					Message:            "All nodes are updated with rendered-worker-56630020df0d626345d7fd13172dfd02",
-				},
-				{
-					Type:               mcv1.MachineConfigPoolDegraded,
-					Status:             corev1.ConditionFalse,
-					LastTransitionTime: metav1.Now(),
-				},
-				{
-					Type:               mcv1.MachineConfigPoolNodeDegraded,
-					Status:             corev1.ConditionFalse,
-					LastTransitionTime: metav1.Now(),
-				},
-				{
-					Type:               mcv1.MachineConfigPoolRenderDegraded,
-					Status:             corev1.ConditionFalse,
-					LastTransitionTime: metav1.Now(),
-				},
-			},
+			MachineCount:            mcCount,
+			UpdatedMachineCount:     updatedCount,
+			ReadyMachineCount:       readyCount,
+			UnavailableMachineCount: unavailableCount,
+			DegradedMachineCount:    degradedCount,
+			Conditions:              cond,
 		},
 	}
 }
 
-func testUpdateMCPCondition(conditions *[]mcv1.MachineConfigPoolCondition,
-	condType mcv1.MachineConfigPoolConditionType, status corev1.ConditionStatus) {
-	for i := range *conditions {
-		if (*conditions)[i].Type == condType {
-			(*conditions)[i].Status = status
-			return
-		}
-	}
-}
-
-func TestReconcile(t *testing.T) {
-
-	ctx := log.IntoContext(context.TODO(), zap.New(zap.UseDevMode(true)))
-	r := testReconciler()
-	request := testReconcileRequest()
-	nodes := testWorkerNodes()
-	labeledNodes := testNodeObsNodes()
-	mcp := testNodeObsMCP(r)
-	workerMCP := testWorkerMCP()
-	criomc, _ := r.getCrioProfMachineConfig()
-
-	tests := []struct {
-		name       string
-		reqObjs    []runtime.Object
-		preReq     func(*MachineConfigReconciler, *[]runtime.Object)
-		asExpected func(v1alpha2.NodeObservabilityMachineConfigStatus, ctrl.Result) bool
-		newNOMC    bool
-		wantErr    bool
-	}{
-		{
-			name:    "controller resource exists and debug enabled",
-			reqObjs: append([]runtime.Object{workerMCP}, nodes...),
-			wantErr: false,
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
-					!status.IsDebuggingEnabled() ||
-					!status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-		},
-		{
-			name:    "controller resource reconcile request too soon, high boundary value",
-			reqObjs: append([]runtime.Object{mcp, criomc, workerMCP}, labeledNodes...),
-			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				// r.CtrlConfig.Status.LastReconcile = metav1.Now()
-			},
-			wantErr: false,
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter > defaultRequeueTime ||
-					!status.IsDebuggingEnabled() ||
-					!status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-		},
-		{
-			name:    "controller resource reconcile request too soon, mid boundary value",
-			reqObjs: append([]runtime.Object{mcp, criomc, workerMCP}, labeledNodes...),
-			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				// r.CtrlConfig.Status.LastReconcile = metav1.Time{Time: metav1.Now().Time.Add(-30 * time.Second)}
-			},
-			wantErr: false,
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter > 30*time.Second ||
-					!status.IsDebuggingEnabled() ||
-					!status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-		},
-		{
-			name:    "controller resource reconcile request too soon, low boundary value",
-			reqObjs: append([]runtime.Object{mcp, criomc, workerMCP}, labeledNodes...),
-			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				// r.CtrlConfig.Status.LastReconcile = metav1.Time{Time: metav1.Now().Time.Add(-defaultRequeueTime)}
-			},
-			wantErr: false,
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 0 ||
-					!status.IsDebuggingEnabled() ||
-					!status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-		},
-		{
-			name:    "controller resource exists and debug already enabled",
-			reqObjs: append([]runtime.Object{criomc, workerMCP}, labeledNodes...),
-			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				mcp.Status.MachineCount = 3
-				mcp.Status.UpdatedMachineCount = 3
-				mcp.Status.ReadyMachineCount = 3
-				testUpdateMCPCondition(&mcp.Status.Conditions,
-					mcv1.MachineConfigPoolUpdated, corev1.ConditionTrue)
-				*o = append(*o, mcp)
-			},
-			wantErr: false,
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 0 ||
-					!status.IsDebuggingEnabled() ||
-					status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-		},
-		{
-			name:    "controller resource exists and debug disabled",
-			reqObjs: append([]runtime.Object{mcp, criomc, workerMCP}, labeledNodes...),
-			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				// r.CtrlConfig.Spec.Debug.EnableCrioProfiling = false
-			},
-			wantErr: false,
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
-					status.IsDebuggingEnabled() ||
-					!status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-		},
-		{
-			name:    "controller resource exists and debug already disabled",
-			reqObjs: append([]runtime.Object{mcp, criomc, workerMCP}, nodes...),
-			wantErr: false,
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 0 ||
-					status.IsDebuggingEnabled() ||
-					status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-		},
-		{
-			name:    "controller resource marked for deletion",
-			reqObjs: append([]runtime.Object{mcp, criomc}, labeledNodes...),
-			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				// r.CtrlConfig.Finalizers = append(r.CtrlConfig.Finalizers, finalizer)
-				// now := metav1.Now()
-				// r.CtrlConfig.DeletionTimestamp = &now
-			},
-			wantErr: false,
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 0 ||
-					status.IsDebuggingEnabled() ||
-					!status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-		},
-		{
-			name:    "controller resource deletion completed",
-			reqObjs: append([]runtime.Object{mcp, criomc, workerMCP}, nodes...),
-			wantErr: false,
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 0 ||
-					status.IsDebuggingEnabled() ||
-					status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-		},
-		{
-			name:    "controller resource does not exist",
-			reqObjs: []runtime.Object{},
-			newNOMC: true,
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// r.CtrlConfig.Status.LastReconcile = metav1.Time{}
-			if tt.preReq != nil {
-				tt.preReq(r, &tt.reqObjs)
-			}
-			if !tt.newNOMC {
-				// tt.reqObjs = append(tt.reqObjs, r.CtrlConfig)
-			}
-
-			c := fake.NewClientBuilder().
-				WithScheme(test.Scheme).
-				WithRuntimeObjects(tt.reqObjs...).
-				Build()
-			r.impl = &defaultImpl{Client: c}
-
-			_, err := r.Reconcile(ctx, request)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Reconcile() err: %v, wantErr: %v", err, tt.wantErr)
-			}
-
-			if tt.asExpected != nil {
-				// if !tt.asExpected(r.CtrlConfig.Status, result) {
-				// 	t.Errorf("Reconcile() result: %+v", result)
-				// 	t.Errorf("Reconcile() status: %+v", r.CtrlConfig.Status)
-				// }
-			}
-		})
-	}
-}
-
-func TestMonitorProgress(t *testing.T) {
-
-	r := testReconciler()
-	mcp := testNodeObsMCP(r)
-	workerMCP := testWorkerMCP()
-
-	tests := []struct {
-		name       string
-		reqObjs    []runtime.Object
-		preReq     func(*MachineConfigReconciler, *[]runtime.Object)
-		asExpected func(v1alpha2.NodeObservabilityMachineConfigStatus, ctrl.Result) bool
-		wantErr    bool
-	}{
-		{
-			name: "nodeobservability MCP does not exist",
-			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				// r.CtrlConfig.Status.SetCondition(v1alpha2.DebugEnabled,
-				// 	metav1.ConditionTrue, v1alpha2.ReasonEnabled, Empty)
-				// r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady,
-				// 	metav1.ConditionFalse, v1alpha2.ReasonInProgress, Empty)
-			},
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 0 ||
-					!status.IsDebuggingEnabled() ||
-					!status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: false,
-		},
-		{
-			name: "nodeObservability MCP update progressing",
-			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				mcp.Status.MachineCount = 3
-				mcp.Status.UpdatedMachineCount = 2
-				mcp.Status.ReadyMachineCount = 1
-				testUpdateMCPCondition(&mcp.Status.Conditions,
-					mcv1.MachineConfigPoolUpdating, corev1.ConditionTrue)
-				*o = append(*o, mcp)
-			},
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 0 ||
-					!status.IsDebuggingEnabled() ||
-					!status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: false,
-		},
-		{
-			name:    "nodeObservability MCP in degraded state",
-			reqObjs: []runtime.Object{workerMCP},
-			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				mcp.Status.MachineCount = 3
-				mcp.Status.UpdatedMachineCount = 2
-				mcp.Status.ReadyMachineCount = 1
-				mcp.Status.DegradedMachineCount = 1
-				testUpdateMCPCondition(&mcp.Status.Conditions,
-					mcv1.MachineConfigPoolDegraded, corev1.ConditionTrue)
-				*o = append(*o, mcp)
-			},
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 0 ||
-					!status.IsDebuggingEnabled() ||
-					status.IsMachineConfigInProgress() ||
-					!status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: false,
-		},
-		{
-			name: "worker MCP does not exist",
-			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				// r.CtrlConfig.Status = v1alpha2.NodeObservabilityMachineConfigStatus{}
-				// r.CtrlConfig.Status.SetCondition(v1alpha2.DebugEnabled,
-				// 	metav1.ConditionFalse, v1alpha2.ReasonDisabled, Empty)
-				// r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady,
-				// 	metav1.ConditionFalse, v1alpha2.ReasonInProgress, Empty)
-			},
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 0 ||
-					status.IsDebuggingEnabled() ||
-					!status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: true,
-		},
-		{
-			name: "worker MCP update progressing",
-			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				// r.CtrlConfig.Status.SetCondition(v1alpha2.DebugEnabled,
-				// 	metav1.ConditionFalse, v1alpha2.ReasonDisabled, Empty)
-				workerMCP.Status.MachineCount = 3
-				workerMCP.Status.UpdatedMachineCount = 2
-				workerMCP.Status.ReadyMachineCount = 1
-				testUpdateMCPCondition(&workerMCP.Status.Conditions,
-					mcv1.MachineConfigPoolUpdated, corev1.ConditionFalse)
-				testUpdateMCPCondition(&workerMCP.Status.Conditions,
-					mcv1.MachineConfigPoolUpdating, corev1.ConditionTrue)
-				*o = append(*o, workerMCP)
-			},
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
-					status.IsDebuggingEnabled() ||
-					!status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: false,
-		},
-		{
-			name: "worker MCP in degraded state",
-			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				workerMCP.Status.MachineCount = 3
-				workerMCP.Status.UpdatedMachineCount = 2
-				workerMCP.Status.ReadyMachineCount = 1
-				workerMCP.Status.DegradedMachineCount = 1
-				testUpdateMCPCondition(&workerMCP.Status.Conditions,
-					mcv1.MachineConfigPoolDegraded, corev1.ConditionTrue)
-				*o = append(*o, workerMCP)
-			},
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
-					status.IsDebuggingEnabled() ||
-					!status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: false,
-		},
-		{
-			name: "worker MCP update progressing due to a failure",
-			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				// r.CtrlConfig.Status = v1alpha2.NodeObservabilityMachineConfigStatus{}
-				// r.CtrlConfig.Status.SetCondition(v1alpha2.DebugEnabled,
-				// 	metav1.ConditionFalse, v1alpha2.ReasonFailed, Empty)
-				// r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady,
-				// 	metav1.ConditionFalse, v1alpha2.ReasonFailed, Empty)
-				workerMCP = testWorkerMCP()
-				workerMCP.Status.MachineCount = 3
-				workerMCP.Status.UpdatedMachineCount = 2
-				workerMCP.Status.ReadyMachineCount = 1
-				testUpdateMCPCondition(&workerMCP.Status.Conditions,
-					mcv1.MachineConfigPoolUpdating, corev1.ConditionTrue)
-				*o = append(*o, workerMCP)
-			},
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
-					status.IsDebuggingEnabled() ||
-					!status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: false,
-		},
-		{
-			name: "worker MCP in degraded state while reverting due to a failure",
-			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				workerMCP.Status.MachineCount = 3
-				workerMCP.Status.UpdatedMachineCount = 2
-				workerMCP.Status.ReadyMachineCount = 1
-				workerMCP.Status.DegradedMachineCount = 1
-				testUpdateMCPCondition(&workerMCP.Status.Conditions,
-					mcv1.MachineConfigPoolDegraded, corev1.ConditionTrue)
-				*o = append(*o, workerMCP)
-			},
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
-					status.IsDebuggingEnabled() ||
-					!status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: false,
-		},
-		{
-			name: "worker MCP initializing disabled condition",
-			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				// r.CtrlConfig.Status = v1alpha2.NodeObservabilityMachineConfigStatus{}
-				// r.CtrlConfig.Status.SetCondition(v1alpha2.DebugEnabled,
-				// 	metav1.ConditionFalse, v1alpha2.ReasonDisabled, Empty)
-				// r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady,
-				// 	metav1.ConditionFalse, v1alpha2.ReasonDisabled, Empty)
-				wmcp := testWorkerMCP()
-				wmcp.Status.MachineCount = 0
-				wmcp.Status.UpdatedMachineCount = 0
-				wmcp.Status.ReadyMachineCount = 0
-				testUpdateMCPCondition(&wmcp.Status.Conditions,
-					mcv1.MachineConfigPoolUpdated, corev1.ConditionFalse)
-				*o = append(*o, wmcp)
-			},
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 0 ||
-					status.IsDebuggingEnabled() ||
-					status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: false,
-		},
-		{
-			name: "worker MCP initializing failed condition",
-			preReq: func(r *MachineConfigReconciler, o *[]runtime.Object) {
-				// r.CtrlConfig.Status = v1alpha2.NodeObservabilityMachineConfigStatus{}
-				// r.CtrlConfig.Status.SetCondition(v1alpha2.DebugEnabled,
-				// 	metav1.ConditionFalse, v1alpha2.ReasonFailed, Empty)
-				// r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady,
-				// 	metav1.ConditionFalse, v1alpha2.ReasonFailed, Empty)
-				wmcp := testWorkerMCP()
-				wmcp.Status.MachineCount = 0
-				wmcp.Status.UpdatedMachineCount = 0
-				wmcp.Status.ReadyMachineCount = 0
-				testUpdateMCPCondition(&wmcp.Status.Conditions,
-					mcv1.MachineConfigPoolUpdated, corev1.ConditionFalse)
-				*o = append(*o, wmcp)
-			},
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 0 ||
-					status.IsDebuggingEnabled() ||
-					status.IsMachineConfigInProgress() ||
-					!status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.preReq != nil {
-				tt.preReq(r, &tt.reqObjs)
-			}
-
-			c := fake.NewClientBuilder().
-				WithScheme(test.Scheme).
-				WithRuntimeObjects(tt.reqObjs...).
-				Build()
-			r.impl = &defaultImpl{Client: c}
-
-			// _, err := r.monitorProgress(ctx, &v1alpha2.NodeObservabilityMachineConfig{})
-			// if (err != nil) != tt.wantErr {
-			// 	t.Errorf("monitorProgress() err: %v, wantErr: %v", err, tt.wantErr)
-			// }
-			// if tt.asExpected != nil {
-			// 	if !tt.asExpected(r.CtrlConfig.Status, result) {
-			// 		t.Errorf("monitorProgress() result: %+v", result)
-			// 		t.Errorf("monitorProgress() status: %+v", r.CtrlConfig.Status)
-			// 	}
-			// }
-		})
-	}
-}
-
-func TestReconcileClientFakes(t *testing.T) {
-
-	ctx := log.IntoContext(context.TODO(), zap.New(zap.UseDevMode(true)))
-	request := testReconcileRequest()
-
-	tests := []struct {
-		name       string
-		arg1       context.Context
-		arg2       ctrl.Request
-		preReq     func(*MachineConfigReconciler, *machineconfigfakes.FakeImpl)
-		asExpected func(v1alpha2.NodeObservabilityMachineConfigStatus, ctrl.Result) bool
-		wantErr    bool
-	}{
-		{
-			name: "logger init failure",
-			arg1: context.Background(),
-			arg2: request,
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 0 ||
-					status.IsDebuggingEnabled() ||
-					status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: false,
-		},
-		{
-			name: "NOMC fetch failure",
-			arg1: ctx,
-			arg2: request,
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				m.ClientGetReturns(testError)
-			},
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
-					status.IsDebuggingEnabled() ||
-					status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: true,
-		},
-		{
-			name: "status update failure when marked for deletion",
-			arg1: ctx,
-			arg2: request,
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
-					switch o := obj.(type) {
-					case *mcv1.MachineConfigPool:
-						var mcp *mcv1.MachineConfigPool
-						if ns.Name == WorkerNodeMCPName {
-							mcp = testWorkerMCP()
-						}
-						if ns.Name == ProfilingMCPName {
-							mcp = testNodeObsMCP(r)
-						}
-						mcp.DeepCopyInto(o)
-					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioProfMachineConfig()
-						mc.DeepCopyInto(o)
-					case *v1alpha2.NodeObservabilityMachineConfig:
-						nomc := testNodeObsMC()
-						now := metav1.Now()
-						nomc.DeletionTimestamp = &now
-						nomc.Status.SetCondition(v1alpha2.DebugEnabled,
-							metav1.ConditionTrue, v1alpha2.ReasonEnabled, Empty)
-						nomc.Status.SetCondition(v1alpha2.DebugReady,
-							metav1.ConditionFalse, v1alpha2.ReasonInProgress, Empty)
-						nomc.DeepCopyInto(o)
-					}
-					return nil
-				})
-				m.ClientStatusUpdateReturns(testError)
-			},
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
-					!status.IsDebuggingEnabled() ||
-					!status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: true,
-		},
-		{
-			name: "update finalizer failure",
-			arg1: ctx,
-			arg2: request,
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
-					switch o := obj.(type) {
-					case *mcv1.MachineConfigPool:
-						var mcp *mcv1.MachineConfigPool
-						if ns.Name == WorkerNodeMCPName {
-							mcp = testWorkerMCP()
-						}
-						if ns.Name == ProfilingMCPName {
-							mcp = testNodeObsMCP(r)
-						}
-						mcp.DeepCopyInto(o)
-					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioProfMachineConfig()
-						mc.DeepCopyInto(o)
-					case *v1alpha2.NodeObservabilityMachineConfig:
-						nomc := testNodeObsMC()
-						nomc.DeepCopyInto(o)
-					}
-					return nil
-				})
-				m.ClientUpdateReturns(testError)
-			},
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != 0 ||
-					status.IsDebuggingEnabled() ||
-					status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: true,
-		},
-		{
-			name: "status update failure",
-			arg1: ctx,
-			arg2: request,
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				m.ClientListCalls(func(
-					ctx context.Context,
-					list client.ObjectList,
-					opts ...client.ListOption) error {
-					switch o := list.(type) {
-					case *corev1.NodeList:
-						n := &corev1.NodeList{}
-						nodes := testWorkerNodes()
-						for i := range nodes {
-							node := nodes[i].(*corev1.Node)
-							node.ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = Empty
-							n.Items = append(n.Items, *node)
-						}
-						n.DeepCopyInto(o)
-					}
-					return nil
-				})
-				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
-					switch o := obj.(type) {
-					case *mcv1.MachineConfigPool:
-						var mcp *mcv1.MachineConfigPool
-						if ns.Name == WorkerNodeMCPName {
-							mcp = testWorkerMCP()
-						}
-						if ns.Name == ProfilingMCPName {
-							mcp = testNodeObsMCP(r)
-						}
-						mcp.DeepCopyInto(o)
-					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioProfMachineConfig()
-						mc.DeepCopyInto(o)
-					case *v1alpha2.NodeObservabilityMachineConfig:
-						nomc := testNodeObsMC()
-						nomc.DeepCopyInto(o)
-					}
-					return nil
-				})
-				m.ClientStatusUpdateReturns(testError)
-			},
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
-					!status.IsDebuggingEnabled() ||
-					!status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: true,
-		},
-		{
-			name: "inspectProfilingMCReq - node patch failure",
-			arg1: ctx,
-			arg2: request,
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				m.ClientGetCalls(func(
-					ctx context.Context,
-					ns types.NamespacedName,
-					obj client.Object) error {
-					switch o := obj.(type) {
-					case *mcv1.MachineConfigPool:
-						var mcp *mcv1.MachineConfigPool
-						if ns.Name == WorkerNodeMCPName {
-							mcp = testWorkerMCP()
-						}
-						if ns.Name == ProfilingMCPName {
-							mcp = testNodeObsMCP(r)
-						}
-						mcp.DeepCopyInto(o)
-					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioProfMachineConfig()
-						mc.DeepCopyInto(o)
-					case *v1alpha2.NodeObservabilityMachineConfig:
-						nomc := testNodeObsMC()
-						nomc.DeepCopyInto(o)
-					case *corev1.Node:
-						nodes := testWorkerNodes()
-						for _, node := range nodes {
-							if ns.Name == "test-worker-2" {
-								return kerrors.NewNotFound(corev1.Resource(Empty), ns.Name)
-							}
-							if ns.Name == node.(*corev1.Node).GetName() {
-								node.(*corev1.Node).DeepCopyInto(o)
-							}
-						}
-					}
-					return nil
-				})
-				m.ClientListCalls(func(
-					ctx context.Context,
-					list client.ObjectList,
-					opts ...client.ListOption) error {
-					switch o := list.(type) {
-					case *corev1.NodeList:
-						n := &corev1.NodeList{}
-						nodes := testWorkerNodes()
-						for i := range nodes {
-							node := nodes[i].(*corev1.Node)
-							if node.GetName() == "test-worker-1" {
-								node.ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = Empty
-							}
-							n.Items = append(n.Items, *node)
-						}
-						n.DeepCopyInto(o)
-					}
-					return nil
-				})
-				m.ClientPatchCalls(func(
-					ctx context.Context,
-					obj client.Object,
-					patch client.Patch,
-					opts ...client.PatchOption) error {
-					switch obj.(type) {
-					case *corev1.Node:
-						if obj.GetName() == "test-worker-3" {
-							return testError
-						}
-					}
-					return nil
-				})
-			},
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
-					status.IsDebuggingEnabled() ||
-					status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: true,
-		},
-		{
-			name: "inspectProfilingMCReq - mcp create failure",
-			arg1: ctx,
-			arg2: request,
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				m.ClientListCalls(func(
-					ctx context.Context,
-					list client.ObjectList,
-					opts ...client.ListOption) error {
-					switch o := list.(type) {
-					case *corev1.NodeList:
-						n := &corev1.NodeList{}
-						nodes := testWorkerNodes()
-						for i := range nodes {
-							node := nodes[i].(*corev1.Node)
-							node.ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = Empty
-							n.Items = append(n.Items, *node)
-						}
-						n.DeepCopyInto(o)
-					}
-					return nil
-				})
-				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
-					switch o := obj.(type) {
-					case *mcv1.MachineConfigPool:
-						return testError
-					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioProfMachineConfig()
-						mc.DeepCopyInto(o)
-					case *v1alpha2.NodeObservabilityMachineConfig:
-						nomc := testNodeObsMC()
-						nomc.DeepCopyInto(o)
-					case *corev1.Node:
-						nodes := testWorkerNodes()
-						for _, node := range nodes {
-							if ns.Name == node.(*corev1.Node).GetName() {
-								node.(*corev1.Node).DeepCopyInto(o)
-							}
-						}
-					}
-					return nil
-				})
-				m.ClientCreateReturns(testError)
-			},
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
-					status.IsDebuggingEnabled() ||
-					status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: true,
-		},
-		{
-			name: "inspectProfilingMCReq - mc create failure",
-			arg1: ctx,
-			arg2: request,
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				m.ClientListCalls(func(
-					ctx context.Context,
-					list client.ObjectList,
-					opts ...client.ListOption) error {
-					switch o := list.(type) {
-					case *corev1.NodeList:
-						n := &corev1.NodeList{}
-						nodes := testWorkerNodes()
-						for i := range nodes {
-							node := nodes[i].(*corev1.Node)
-							node.ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = Empty
-							n.Items = append(n.Items, *node)
-						}
-						n.DeepCopyInto(o)
-					}
-					return nil
-				})
-				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
-					switch o := obj.(type) {
-					case *mcv1.MachineConfigPool:
-						var mcp *mcv1.MachineConfigPool
-						if ns.Name == WorkerNodeMCPName {
-							mcp = testWorkerMCP()
-						}
-						if ns.Name == ProfilingMCPName {
-							mcp = testNodeObsMCP(r)
-						}
-						mcp.DeepCopyInto(o)
-					case *mcv1.MachineConfig:
-						return testError
-					case *v1alpha2.NodeObservabilityMachineConfig:
-						nomc := testNodeObsMC()
-						nomc.DeepCopyInto(o)
-					case *corev1.Node:
-						nodes := testWorkerNodes()
-						for _, node := range nodes {
-							if ns.Name == node.(*corev1.Node).GetName() {
-								node.(*corev1.Node).DeepCopyInto(o)
-							}
-						}
-					}
-					return nil
-				})
-				m.ClientCreateCalls(func(
-					ctx context.Context,
-					obj client.Object,
-					opts ...client.CreateOption) error {
-					switch obj.(type) {
-					case *mcv1.MachineConfig:
-						return testError
-					}
-					return nil
-				})
-			},
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
-					status.IsDebuggingEnabled() ||
-					status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: true,
-		},
-		{
-			name: "inspectProfilingMCReq(disable) - node patch failure",
-			arg1: ctx,
-			arg2: request,
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
-					switch o := obj.(type) {
-					case *mcv1.MachineConfigPool:
-						var mcp *mcv1.MachineConfigPool
-						if ns.Name == WorkerNodeMCPName {
-							mcp = testWorkerMCP()
-						}
-						if ns.Name == ProfilingMCPName {
-							mcp = testNodeObsMCP(r)
-						}
-						mcp.DeepCopyInto(o)
-					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioProfMachineConfig()
-						mc.DeepCopyInto(o)
-					case *v1alpha2.NodeObservabilityMachineConfig:
-						nomc := testNodeObsMC()
-						nomc.Spec.Debug.EnableCrioProfiling = false
-						nomc.DeepCopyInto(o)
-					case *corev1.Node:
-						nodes := testNodeObsNodes()
-						for _, node := range nodes {
-							if ns.Name == "test-worker-2" {
-								return kerrors.NewNotFound(corev1.Resource(Empty), ns.Name)
-							}
-							if ns.Name == node.(*corev1.Node).GetName() {
-								node.(*corev1.Node).DeepCopyInto(o)
-							}
-						}
-					}
-					return nil
-				})
-				m.ClientListCalls(func(
-					ctx context.Context,
-					list client.ObjectList,
-					opts ...client.ListOption) error {
-					switch o := list.(type) {
-					case *corev1.NodeList:
-						n := &corev1.NodeList{}
-						nodes := testNodeObsNodes()
-						for i := range nodes {
-							node := nodes[i].(*corev1.Node)
-							if node.GetName() == "test-worker-1" {
-								delete(node.ObjectMeta.Labels, NodeObservabilityNodeRoleLabelName)
-							}
-							n.Items = append(n.Items, *node)
-						}
-						n.DeepCopyInto(o)
-					}
-					return nil
-				})
-				m.ClientPatchCalls(func(
-					ctx context.Context,
-					obj client.Object,
-					patch client.Patch,
-					opts ...client.PatchOption) error {
-					switch obj.(type) {
-					case *corev1.Node:
-						if obj.GetName() == "test-worker-3" {
-							return testError
-						}
-					}
-					return nil
-				})
-			},
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
-					status.IsDebuggingEnabled() ||
-					status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: true,
-		},
-		{
-			name: "inspectProfilingMCReq - mcp delete failure",
-			arg1: ctx,
-			arg2: request,
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
-					switch o := obj.(type) {
-					case *mcv1.MachineConfigPool:
-						mcp := testWorkerMCP()
-						mcp.Status.MachineCount = 3
-						mcp.Status.UpdatedMachineCount = 3
-						mcp.Status.ReadyMachineCount = 3
-						testUpdateMCPCondition(&mcp.Status.Conditions,
-							mcv1.MachineConfigPoolUpdated, corev1.ConditionTrue)
-						mcp.DeepCopyInto(o)
-					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioProfMachineConfig()
-						mc.DeepCopyInto(o)
-					case *v1alpha2.NodeObservabilityMachineConfig:
-						nomc := testNodeObsMC()
-						nomc.Spec.Debug.EnableCrioProfiling = false
-						nomc.Status.SetCondition(v1alpha2.DebugReady,
-							metav1.ConditionFalse, v1alpha2.ReasonInProgress, Empty)
-						nomc.DeepCopyInto(o)
-					case *corev1.Node:
-						nodes := testNodeObsNodes()
-						for _, node := range nodes {
-							if ns.Name == node.(*corev1.Node).GetName() {
-								node.(*corev1.Node).DeepCopyInto(o)
-							}
-						}
-					}
-					return nil
-				})
-				m.ClientListCalls(func(
-					ctx context.Context,
-					list client.ObjectList,
-					opts ...client.ListOption) error {
-					switch o := list.(type) {
-					case *corev1.NodeList:
-						n := &corev1.NodeList{}
-						nodes := testNodeObsNodes()
-						for i := range nodes {
-							node := nodes[i].(*corev1.Node)
-							n.Items = append(n.Items, *node)
-						}
-						n.DeepCopyInto(o)
-					}
-					return nil
-				})
-				m.ClientDeleteCalls(func(
-					ctx context.Context,
-					obj client.Object,
-					opts ...client.DeleteOption) error {
-					switch obj.(type) {
-					case *mcv1.MachineConfigPool:
-						return testError
-					}
-					return nil
-				})
-			},
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
-					status.IsDebuggingEnabled() ||
-					!status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: true,
-		},
-		{
-			name: "inspectProfilingMCReq - mc delete failure",
-			arg1: ctx,
-			arg2: request,
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				m.ClientGetCalls(func(ctx context.Context, ns types.NamespacedName, obj client.Object) error {
-					switch o := obj.(type) {
-					case *mcv1.MachineConfigPool:
-						mcp := testWorkerMCP()
-						mcp.Status.MachineCount = 3
-						mcp.Status.UpdatedMachineCount = 3
-						mcp.Status.ReadyMachineCount = 3
-						testUpdateMCPCondition(&mcp.Status.Conditions,
-							mcv1.MachineConfigPoolUpdated, corev1.ConditionTrue)
-						mcp.DeepCopyInto(o)
-					case *mcv1.MachineConfig:
-						mc, _ := r.getCrioProfMachineConfig()
-						mc.DeepCopyInto(o)
-					case *v1alpha2.NodeObservabilityMachineConfig:
-						nomc := testNodeObsMC()
-						nomc.Spec.Debug.EnableCrioProfiling = false
-						nomc.Status.SetCondition(v1alpha2.DebugReady,
-							metav1.ConditionFalse, v1alpha2.ReasonInProgress, Empty)
-						nomc.DeepCopyInto(o)
-					case *corev1.Node:
-						nodes := testNodeObsNodes()
-						for _, node := range nodes {
-							if ns.Name == node.(*corev1.Node).GetName() {
-								node.(*corev1.Node).DeepCopyInto(o)
-							}
-						}
-					}
-					return nil
-				})
-				m.ClientListCalls(func(
-					ctx context.Context,
-					list client.ObjectList,
-					opts ...client.ListOption) error {
-					switch o := list.(type) {
-					case *corev1.NodeList:
-						n := &corev1.NodeList{}
-						nodes := testNodeObsNodes()
-						for i := range nodes {
-							node := nodes[i].(*corev1.Node)
-							n.Items = append(n.Items, *node)
-						}
-						n.DeepCopyInto(o)
-					}
-					return nil
-				})
-				m.ClientDeleteCalls(func(
-					ctx context.Context,
-					obj client.Object,
-					opts ...client.DeleteOption) error {
-					switch obj.(type) {
-					case *mcv1.MachineConfig:
-						return testError
-					}
-					return nil
-				})
-			},
-			asExpected: func(status v1alpha2.NodeObservabilityMachineConfigStatus, result ctrl.Result) bool {
-				if result.RequeueAfter != defaultRequeueTime ||
-					status.IsDebuggingEnabled() ||
-					!status.IsMachineConfigInProgress() ||
-					status.IsDebuggingFailed() {
-					return false
-				}
-				return true
-			},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mock := &machineconfigfakes.FakeImpl{}
-			r := testReconciler()
-			if tt.preReq != nil {
-				tt.preReq(r, mock)
-			}
-			r.impl = mock
-
-			// result, err := r.Reconcile(tt.arg1, tt.arg2)
-			// if (err != nil) != tt.wantErr {
-			// 	t.Errorf("Reconcile() err: %v, wantErr: %v", err, tt.wantErr)
-			// }
-			// if tt.asExpected != nil {
-			// 	if !tt.asExpected(r.CtrlConfig.Status, result) {
-			// 		t.Errorf("Reconcile() result: %+v", result)
-			// 		t.Errorf("Reconcile() status: %+v", r.CtrlConfig.Status)
-			// 	}
-			// }
-		})
-	}
-}
+// TODO: add tests for syncNodeObservabilityMCP
 
 func TestCleanUp(t *testing.T) {
 
-	// request := testReconcileRequest()
-
 	tests := []struct {
-		name    string
-		preReq  func(*MachineConfigReconciler, *machineconfigfakes.FakeImpl)
-		wantErr bool
+		name               string
+		preReq             func(*MachineConfigReconciler, *machineconfigfakes.FakeImpl)
+		wantErr            bool
+		requeue            bool
+		expectedConditions []metav1.Condition
 	}{
 		{
 			name: "ensureProfConfDisabled node listing failure",
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientListReturns(testError)
+			},
+			wantErr: true,
+			requeue: false,
+			expectedConditions: []metav1.Condition{
+				{
+					Type:   v1alpha2.DebugEnabled,
+					Status: metav1.ConditionFalse,
+					Reason: v1alpha2.ReasonInProgress,
+				},
+			},
+		},
+		{
+			name: "worker mcp fetch fails",
+			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientGetReturns(testError)
+			},
+			wantErr: true,
+			expectedConditions: []metav1.Condition{
+				{
+					Type:   v1alpha2.DebugEnabled,
+					Status: metav1.ConditionFalse,
+					Reason: v1alpha2.ReasonDisabled,
+				},
+				{
+					Type:   v1alpha2.DebugReady,
+					Status: metav1.ConditionFalse,
+					Reason: v1alpha2.ReasonInProgress,
+				},
+			},
+		},
+		{
+			name: "debug disabled but waiting for debug ready condition due to mcp update in progress",
+			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
 				m.ClientGetCalls(func(
 					ctx context.Context,
 					ns types.NamespacedName,
 					obj client.Object) error {
 					switch o := obj.(type) {
-					case *corev1.Node:
-						nodes := testNodeObsNodes()
-						for _, node := range nodes {
-							if ns.Name == "test-worker-2" {
-								return kerrors.NewNotFound(corev1.Resource(Empty), ns.Name)
-							}
-							if ns.Name == node.(*corev1.Node).GetName() {
-								node.(*corev1.Node).DeepCopyInto(o)
+					case *mcv1.MachineConfigPool:
+						mcp := testMachineConfigPoolWithConditions("worker", 3, 2, 2, 0, 0, []mcv1.MachineConfigPoolCondition{
+							{
+								Type:   mcv1.MachineConfigPoolUpdating,
+								Status: corev1.ConditionStatus(metav1.ConditionTrue),
+							},
+						})
+						mcp.DeepCopyInto(o)
+					}
+					return nil
+				})
+			},
+			wantErr: false,
+			requeue: true,
+			expectedConditions: []metav1.Condition{
+				{
+					Type:   v1alpha2.DebugEnabled,
+					Status: metav1.ConditionFalse,
+					Reason: v1alpha2.ReasonDisabled,
+				},
+				{
+					Type:   v1alpha2.DebugReady,
+					Status: metav1.ConditionFalse,
+					Reason: v1alpha2.ReasonInProgress,
+				},
+			},
+		},
+		{
+			name: "debug disabled but waiting for debug ready condition due to degraded machine count",
+			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientGetCalls(func(
+					ctx context.Context,
+					ns types.NamespacedName,
+					obj client.Object) error {
+					switch o := obj.(type) {
+					case *mcv1.MachineConfigPool:
+						mcp := testMachineConfigPoolWithConditions("worker", 3, 2, 2, 1, 1, []mcv1.MachineConfigPoolCondition{
+							{
+								Type:   mcv1.MachineConfigPoolDegraded,
+								Status: corev1.ConditionStatus(metav1.ConditionTrue),
+							},
+						})
+						mcp.DeepCopyInto(o)
+					}
+					return nil
+				})
+			},
+			wantErr: false,
+			requeue: true,
+			expectedConditions: []metav1.Condition{
+				{
+					Type:   v1alpha2.DebugEnabled,
+					Status: metav1.ConditionFalse,
+					Reason: v1alpha2.ReasonDisabled,
+				},
+				{
+					Type:   v1alpha2.DebugReady,
+					Status: metav1.ConditionFalse,
+					Reason: v1alpha2.ReasonInProgress,
+				},
+			},
+		},
+		{
+			name: "debug disabled but waiting for debug ready condition due to unknown condition",
+			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientGetCalls(func(
+					ctx context.Context,
+					ns types.NamespacedName,
+					obj client.Object) error {
+					switch o := obj.(type) {
+					case *mcv1.MachineConfigPool:
+						mcp := testMachineConfigPoolWithConditions("worker", 3, 2, 2, 1, 1, []mcv1.MachineConfigPoolCondition{
+							{
+								Type:   "random-condition",
+								Status: corev1.ConditionStatus(metav1.ConditionTrue),
+							},
+						})
+						mcp.DeepCopyInto(o)
+					}
+					return nil
+				})
+			},
+			wantErr: false,
+			requeue: true,
+			expectedConditions: []metav1.Condition{
+				{
+					Type:   v1alpha2.DebugEnabled,
+					Status: metav1.ConditionFalse,
+					Reason: v1alpha2.ReasonDisabled,
+				},
+				{
+					Type:   v1alpha2.DebugReady,
+					Status: metav1.ConditionFalse,
+					Reason: v1alpha2.ReasonInProgress,
+				},
+			},
+		},
+		{
+			name: "debug disabled and waiting for debug ready to be disabled because mcp doesn't have required machines",
+			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientGetCalls(func(
+					ctx context.Context,
+					ns types.NamespacedName,
+					obj client.Object) error {
+					switch o := obj.(type) {
+					case *mcv1.MachineConfigPool:
+						mcp := testMachineConfigPoolWithConditions("worker", 3, 2, 2, 0, 0, []mcv1.MachineConfigPoolCondition{
+							{
+								Type:   mcv1.MachineConfigPoolUpdated,
+								Status: corev1.ConditionStatus(metav1.ConditionTrue),
+							},
+						})
+						mcp.DeepCopyInto(o)
+					}
+					return nil
+				})
+			},
+			wantErr: false,
+			requeue: true,
+			expectedConditions: []metav1.Condition{
+				{
+					Type:   v1alpha2.DebugEnabled,
+					Status: metav1.ConditionFalse,
+					Reason: v1alpha2.ReasonDisabled,
+				},
+				{
+					Type:   v1alpha2.DebugReady,
+					Status: metav1.ConditionFalse,
+					Reason: v1alpha2.ReasonInProgress,
+				},
+			},
+		},
+		{
+			name: "debug disabled and debug ready disabled",
+			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientListCalls(func(
+					ctx context.Context,
+					list client.ObjectList,
+					opts ...client.ListOption) error {
+					switch o := list.(type) {
+					case *corev1.NodeList:
+						n := &corev1.NodeList{}
+						nodes := testWorkerNodes()
+						for i := range nodes {
+							node := nodes[i].(*corev1.Node)
+							node.ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = empty
+							n.Items = append(n.Items, *node)
+						}
+						n.DeepCopyInto(o)
+					}
+					return nil
+				})
+				m.ClientGetCalls(func(
+					ctx context.Context,
+					ns types.NamespacedName,
+					obj client.Object) error {
+					switch o := obj.(type) {
+					case *mcv1.MachineConfigPool:
+						mcp := testMachineConfigPoolWithConditions("worker", 3, 3, 3, 0, 0, []mcv1.MachineConfigPoolCondition{
+							{
+								Type:   mcv1.MachineConfigPoolUpdated,
+								Status: corev1.ConditionStatus(metav1.ConditionTrue),
+							},
+						})
+						mcp.DeepCopyInto(o)
+					}
+					return nil
+				})
+			},
+			wantErr: false,
+			requeue: false,
+			expectedConditions: []metav1.Condition{
+				{
+					Type:   v1alpha2.DebugEnabled,
+					Status: metav1.ConditionFalse,
+					Reason: v1alpha2.ReasonDisabled,
+				},
+				{
+					Type:   v1alpha2.DebugReady,
+					Status: metav1.ConditionFalse,
+					Reason: v1alpha2.ReasonDisabled,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := testReconciler()
+			mock := &machineconfigfakes.FakeImpl{}
+			if tt.preReq != nil {
+				tt.preReq(r, mock)
+			}
+			r.impl = mock
+
+			nomc := testNodeObsMC()
+			requeue, err := r.cleanUp(context.TODO(), nomc)
+			if err != nil {
+				if !tt.wantErr {
+					t.Errorf("cleanUp() err: %v, wantErr: %v", err, tt.wantErr)
+				} else {
+					for _, c1 := range nomc.Status.Conditions {
+						for _, c2 := range tt.expectedConditions {
+							if c1.Type == c2.Type {
+								if c1.Status != c2.Status || c1.Reason != c2.Reason {
+									t.Errorf("failed expected %+v but got %+v condition on nomc", c2, c1)
+								}
 							}
 						}
 					}
-					return nil
-				})
-				m.ClientListReturns(testError)
-				m.ClientPatchReturns(testError)
-			},
-			wantErr: true,
-		},
-		{
-			name: "worker mcp fetch fails",
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				// r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady,
-				// 	metav1.ConditionFalse, v1alpha2.ReasonInProgress, Empty)
-				m.ClientGetReturns(testError)
-			},
-			wantErr: true,
-		},
-		{
-			name: "debug disabled condition set",
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				// r.CtrlConfig.Status.SetCondition(v1alpha2.DebugEnabled,
-				// 	metav1.ConditionFalse, v1alpha2.ReasonDisabled, Empty)
-				// r.CtrlConfig.Finalizers = append(r.CtrlConfig.Finalizers, finalizer)
-				m.ClientGetCalls(func(
-					ctx context.Context,
-					ns types.NamespacedName,
-					obj client.Object) error {
-					switch obj.(type) {
-					case *mcv1.MachineConfigPool:
-						return testError
-					case *v1alpha2.NodeObservabilityMachineConfig:
-						return testError
-					}
-					return nil
-				})
-			},
-			wantErr: true,
-		},
-		{
-			name: "debug failed condition set",
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				// r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady,
-				// 	metav1.ConditionFalse, v1alpha2.ReasonFailed, Empty)
-				// r.CtrlConfig.Finalizers = append(r.CtrlConfig.Finalizers, finalizer)
-				m.ClientGetReturns(testError)
-			},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := testReconciler()
-			mock := &machineconfigfakes.FakeImpl{}
-			if tt.preReq != nil {
-				tt.preReq(r, mock)
-			}
-			r.impl = mock
-
-			_, err := r.cleanUp(context.TODO(), &v1alpha2.NodeObservabilityMachineConfig{})
-			if (err != nil) != tt.wantErr {
-				t.Errorf("cleanUp() err: %v, wantErr: %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestAddFinalizer(t *testing.T) {
-
-	tests := []struct {
-		name       string
-		preReq     func(*MachineConfigReconciler, *machineconfigfakes.FakeImpl)
-		asExpected func(*v1alpha2.NodeObservabilityMachineConfig, error) bool
-	}{
-		{
-			name: "nomc fetch fails",
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				// r.CtrlConfig.Finalizers = append(r.CtrlConfig.Finalizers, finalizer)
-				m.ClientGetReturns(testError)
-			},
-			asExpected: func(nomc *v1alpha2.NodeObservabilityMachineConfig, err error) bool {
-				return err != nil
-			},
-		},
-		{
-			name: "finalizer already present",
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				// r.CtrlConfig.Finalizers = append(r.CtrlConfig.Finalizers, finalizer)
-				m.ClientGetCalls(func(
-					ctx context.Context,
-					ns types.NamespacedName,
-					obj client.Object) error {
-					// switch o := obj.(type) {
-					// case *v1alpha2.NodeObservabilityMachineConfig:
-					// 	r.CtrlConfig.DeepCopyInto(o)
-					// }
-					return nil
-				})
-			},
-			asExpected: func(nomc *v1alpha2.NodeObservabilityMachineConfig, err error) bool {
-				if err != nil || !hasFinalizer(nomc) {
-					return false
-				}
-				return true
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := testReconciler()
-			mock := &machineconfigfakes.FakeImpl{}
-			if tt.preReq != nil {
-				tt.preReq(r, mock)
-			}
-			r.impl = mock
-
-			nomc, err := r.addFinalizer(context.TODO(), &v1alpha2.NodeObservabilityMachineConfig{})
-			if tt.asExpected != nil {
-				if !tt.asExpected(nomc, err) {
-					t.Errorf("addFinalizer() nomc: %+v", nomc)
-					t.Errorf("addFinalizer() error: %+v", err)
 				}
 			}
-		})
-	}
-}
 
-func TestRemoveFinalizer(t *testing.T) {
-
-	request := testReconcileRequest()
-
-	tests := []struct {
-		name       string
-		preReq     func(*MachineConfigReconciler, *machineconfigfakes.FakeImpl)
-		asExpected func(*v1alpha2.NodeObservabilityMachineConfig, error) bool
-	}{
-		{
-			name: "finalizer not present",
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				m.ClientGetCalls(func(
-					ctx context.Context,
-					ns types.NamespacedName,
-					obj client.Object) error {
-					// switch o := obj.(type) {
-					// case *v1alpha2.NodeObservabilityMachineConfig:
-					// 	r.CtrlConfig.DeepCopyInto(o)
-					// }
-					return nil
-				})
-			},
-			asExpected: func(nomc *v1alpha2.NodeObservabilityMachineConfig, err error) bool {
-				return err == nil
-			},
-		},
-		{
-			name: "remove finalizer success",
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				// r.CtrlConfig.Finalizers = append(r.CtrlConfig.Finalizers, finalizer, "test")
-				m.ClientGetCalls(func(
-					ctx context.Context,
-					ns types.NamespacedName,
-					obj client.Object) error {
-					// switch o := obj.(type) {
-					// case *v1alpha2.NodeObservabilityMachineConfig:
-					// 	r.CtrlConfig.DeepCopyInto(o)
-					// }
-					return nil
-				})
-			},
-			asExpected: func(nomc *v1alpha2.NodeObservabilityMachineConfig, err error) bool {
-				if err != nil || hasFinalizer(nomc) {
-					return false
-				}
-				return true
-			},
-		},
-		{
-			name: "remove finalizer fails",
-			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				// r.CtrlConfig.Finalizers = append(r.CtrlConfig.Finalizers, finalizer)
-				m.ClientGetCalls(func(
-					ctx context.Context,
-					ns types.NamespacedName,
-					obj client.Object) error {
-					// switch o := obj.(type) {
-					// case *v1alpha2.NodeObservabilityMachineConfig:
-					// 	r.CtrlConfig.DeepCopyInto(o)
-					// }
-					return nil
-				})
-				m.ClientUpdateReturns(testError)
-			},
-			asExpected: func(nomc *v1alpha2.NodeObservabilityMachineConfig, err error) bool {
-				return err != nil
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := testReconciler()
-			mock := &machineconfigfakes.FakeImpl{}
-			if tt.preReq != nil {
-				tt.preReq(r, mock)
-			}
-			r.impl = mock
-
-			nomc, err := r.removeFinalizer(context.TODO(), request, finalizer)
-			if tt.asExpected != nil {
-				if !tt.asExpected(nomc, err) {
-					t.Errorf("removeFinalizer() nomc: %+v", nomc)
-					t.Errorf("removeFinalizer() error: %+v", err)
-				}
+			if tt.requeue != requeue {
+				t.Errorf("expected requeue=%v for cleanup but got %v", tt.requeue, requeue)
 			}
 		})
 	}
@@ -1697,9 +459,8 @@ func TestEnsureProfConfEnabled(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "ensureReqMCPExists failure",
+			name: "fails while enabling CRI-O config",
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				// r.CtrlConfig.SetNamespace("test")
 				m.ClientListCalls(func(
 					ctx context.Context,
 					list client.ObjectList,
@@ -1710,10 +471,18 @@ func TestEnsureProfConfEnabled(t *testing.T) {
 						nodes := testWorkerNodes()
 						for i := range nodes {
 							node := nodes[i].(*corev1.Node)
-							node.ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = Empty
 							n.Items = append(n.Items, *node)
 						}
 						n.DeepCopyInto(o)
+					}
+					return nil
+				})
+				m.ClientCreateCalls(func(ctx context.Context, o client.Object, co ...client.CreateOption) error {
+					switch o.(type) {
+					case *mcv1.MachineConfig:
+						return testError
+					case *mcv1.MachineConfigPool:
+						return nil
 					}
 					return nil
 				})
@@ -1722,9 +491,8 @@ func TestEnsureProfConfEnabled(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "ensureReqMCExists failure",
+			name: "fails while creating mcp",
 			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
-				// r.CtrlConfig.SetNamespace("test")
 				m.ClientListCalls(func(
 					ctx context.Context,
 					list client.ObjectList,
@@ -1735,16 +503,52 @@ func TestEnsureProfConfEnabled(t *testing.T) {
 						nodes := testWorkerNodes()
 						for i := range nodes {
 							node := nodes[i].(*corev1.Node)
-							node.ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = Empty
+							node.ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = empty
 							n.Items = append(n.Items, *node)
 						}
 						n.DeepCopyInto(o)
 					}
 					return nil
 				})
+				m.ClientCreateCalls(func(ctx context.Context, o client.Object, co ...client.CreateOption) error {
+					switch o.(type) {
+					case *mcv1.MachineConfig:
+						return nil
+					case *mcv1.MachineConfigPool:
+						return testError
+					}
+					return nil
+				})
 			},
 			requeue: false,
 			wantErr: true,
+		},
+		{
+			name: "successfully create crio mc",
+			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientListCalls(func(
+					ctx context.Context,
+					list client.ObjectList,
+					opts ...client.ListOption) error {
+					switch o := list.(type) {
+					case *corev1.NodeList:
+						n := &corev1.NodeList{}
+						nodes := testWorkerNodes()
+						for i := range nodes {
+							node := nodes[i].(*corev1.Node)
+							node.ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = empty
+							n.Items = append(n.Items, *node)
+						}
+						n.DeepCopyInto(o)
+					}
+					return nil
+				})
+				m.ClientCreateCalls(func(ctx context.Context, o client.Object, co ...client.CreateOption) error {
+					return nil
+				})
+			},
+			requeue: false,
+			wantErr: false,
 		},
 	}
 
@@ -1756,14 +560,11 @@ func TestEnsureProfConfEnabled(t *testing.T) {
 				tt.preReq(r, mock)
 			}
 			r.impl = mock
-
-			err := r.ensureProfConfEnabled(context.TODO(), &v1alpha2.NodeObservabilityMachineConfig{})
+			nomc := testNodeObsMC()
+			err := r.ensureProfConfEnabled(context.TODO(), nomc)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ensureProfConfEnabled() err: %v, wantErr: %v", err, tt.wantErr)
 			}
-			// if requeue != tt.requeue {
-			// 	t.Errorf("ensureProfConfEnabled() requeue: %v, wantRequeue: %v", requeue, tt.requeue)
-			// }
 		})
 	}
 }
@@ -1799,45 +600,49 @@ func TestEnsureProfConfDisabled(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ensureProfConfDisabled() err: %v, wantErr: %v", err, tt.wantErr)
 			}
-			// if requeue != tt.requeue {
-			// 	t.Errorf("ensureProfConfDisabled() requeue: %v, wantRequeue: %v", requeue, tt.requeue)
-			// }
 		})
 	}
 }
 
 func TestNewPatch(t *testing.T) {
+	tests := []struct {
+		name    string
+		arg     map[string]interface{}
+		preReq  func(*MachineConfigReconciler, *machineconfigfakes.FakeImpl)
+		action  string
+		wantErr bool
+	}{
+		{
+			name:    "bad patch data",
+			arg:     nil,
+			action:  "add",
+			preReq:  func(mcr *MachineConfigReconciler, fi *machineconfigfakes.FakeImpl) {},
+			wantErr: true,
+		},
+		{
+			name:   "invalid patch operation type",
+			arg:    map[string]interface{}{},
+			action: "dummy-action",
+			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientPatchReturns(testError)
+			},
+			wantErr: true,
+		},
+	}
 
-	// TODO: fix test
-	// tests := []struct {
-	// 	name       string
-	// 	arg        map[string]interface{}
-	// 	wantResult bool
-	// 	wantErr    bool
-	// }{
-	// 	{
-	// 		name:       "bad patch data",
-	// 		arg:        nil,
-	// 		wantResult: false,
-	// 		wantErr:    true,
-	// 	},
-	// 	{
-	// 		name:       "invalid patch operation type",
-	// 		arg:        map[string]interface{}{},
-	// 		wantResult: false,
-	// 		wantErr:    true,
-	// 	},
-	// }
-	//
-	// for _, tt := range tests {
-	// 	t.Run(tt.name, func(t *testing.T) {
-	// 		result, err := newPatch(99, "test", tt.arg)
-	// 		if (err != nil) != tt.wantErr {
-	// 			t.Errorf("newPatch() err: %v, wantErr: %v", err, tt.wantErr)
-	// 		}
-	// 		if (result != nil) != tt.wantResult {
-	// 			t.Errorf("newPatch() err: %v, wantErr: %v", result, tt.wantResult)
-	// 		}
-	// 	})
-	// }
+	r := testReconciler()
+	mock := &machineconfigfakes.FakeImpl{}
+	for _, tt := range tests {
+		if tt.preReq != nil {
+			tt.preReq(r, mock)
+		}
+		r.impl = mock
+
+		t.Run(tt.name, func(t *testing.T) {
+			err := r.patchNodeLabels(context.Background(), &corev1.Node{}, tt.action, "test", tt.arg)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("newPatch() err: %v, wantErr: %v", err, tt.wantErr)
+			}
+		})
+	}
 }

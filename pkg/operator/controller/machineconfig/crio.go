@@ -25,11 +25,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	ignutil "github.com/coreos/ignition/v2/config/util"
 	igntypes "github.com/coreos/ignition/v2/config/v3_2/types"
+	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+
 	"github.com/openshift/node-observability-operator/api/v1alpha2"
 )
 
@@ -51,7 +53,7 @@ Environment="ENABLE_PROFILE_UNIX_SOCKET=true"`
 
 // enableCrioProf creates MachineConfig CR for CRI-O profiling.
 func (r *MachineConfigReconciler) enableCrioProf(ctx context.Context, nomc *v1alpha2.NodeObservabilityMachineConfig) error {
-	criomc, err := r.getCrioProfMachineConfig(crioUnixSocketConfFile, crioUnixSocketConfData, crioServiceFile)
+	criomc, err := r.getCrioProfMachineConfig()
 	if err != nil {
 		return err
 	}
@@ -80,7 +82,7 @@ func (r *MachineConfigReconciler) deleteCrioProfMC(ctx context.Context) error {
 		return err
 	}
 
-	if err := r.ClientDelete(ctx, criomc); err != nil {
+	if err := r.ClientDelete(ctx, criomc); err != nil && !errors.IsNotFound(err) {
 		return fmt.Errorf("failed to remove crio profiling machineconfig: %w", err)
 	}
 
@@ -90,7 +92,7 @@ func (r *MachineConfigReconciler) deleteCrioProfMC(ctx context.Context) error {
 }
 
 // getCrioProfMachineConfig returns the MachineConfig CR definition to enable CRI-O profiling.
-func (r *MachineConfigReconciler) getCrioProfMachineConfig(crioSocketConfFile, crioConfData, crioServiceFile string) (*mcv1.MachineConfig, error) {
+func (r *MachineConfigReconciler) getCrioProfMachineConfig() (*mcv1.MachineConfig, error) {
 	config := igntypes.Config{
 		Ignition: igntypes.Ignition{
 			Version: igntypes.MaxVersion.String(),
@@ -100,8 +102,8 @@ func (r *MachineConfigReconciler) getCrioProfMachineConfig(crioSocketConfFile, c
 				{
 					Dropins: []igntypes.Dropin{
 						{
-							Name:     crioSocketConfFile,
-							Contents: ignutil.StrToPtr(crioConfData),
+							Name:     crioUnixSocketConfFile,
+							Contents: ignutil.StrToPtr(crioUnixSocketConfData),
 						},
 					},
 					Name: crioServiceFile,

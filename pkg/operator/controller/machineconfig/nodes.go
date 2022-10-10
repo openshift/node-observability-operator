@@ -23,16 +23,17 @@ import (
 	"path"
 	"strings"
 
-	"github.com/openshift/node-observability-operator/api/v1alpha2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/openshift/node-observability-operator/api/v1alpha2"
 )
 
 const (
-    patchAdd = "add"
-    patchRemove = "remove"
+	patchAdd    = "add"
+	patchRemove = "remove"
 )
 
 // ensureProfConfEnabled makes sure all the configuration needed to enable the

@@ -19,7 +19,6 @@ package machineconfigcontroller
 import (
 	"context"
 	"fmt"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -31,11 +30,6 @@ import (
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 
 	"github.com/openshift/node-observability-operator/api/v1alpha2"
-)
-
-const (
-	mcpChangeTimeout      = 2 * time.Minute
-	mcpChangePollInterval = 2 * time.Second
 )
 
 // createProfMCP creates MachineConfigPool CR to enable the CRI-O profiling on the targeted nodes.
@@ -66,7 +60,7 @@ func (r *MachineConfigReconciler) deleteProfMCP(ctx context.Context) error {
 		return err
 	}
 
-	if err := r.ClientDelete(ctx, mcp); err != nil {
+	if err := r.ClientDelete(ctx, mcp); err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("failed to remove crio profiling machineconfigpool: %w", err)
 	}
 
@@ -137,7 +131,7 @@ func (r *MachineConfigReconciler) syncNodeObservabilityMCPStatus(ctx context.Con
 		r.Log.V(1).Info("nodeobservability mcp", "status", mcv1.MachineConfigPoolUpdated)
 		nomc.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionTrue, v1alpha2.ReasonReady, "machineconfig update to enable debugging completed on all machines")
 		return false, nil
-	} else if mcp.Status.DegradedMachineCount != 0 {
+	} else if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolDegraded) && mcp.Status.DegradedMachineCount != 0 {
 		msg := fmt.Sprintf("%s MCP has %d machines in degraded state", mcp.Name, mcp.Status.DegradedMachineCount)
 		nomc.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonFailed, msg)
 		return false, fmt.Errorf("failed to update machineconfig on %s mcp due to degraded machines: %d", mcp.Name, mcp.Status.DegradedMachineCount)
@@ -166,7 +160,7 @@ func (r *MachineConfigReconciler) syncWorkerMCPStatus(ctx context.Context, nomc 
 		nomc.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonDisabled, "machineconfig update to disable debugging completed on all machines")
 		r.Log.V(1).Info("updating nodeobservabilitymachineconfig status to completed disabling profiling", "status", nomc.Status)
 		return false, nil
-	} else if mcp.Status.DegradedMachineCount != 0 {
+	} else if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolDegraded) && mcp.Status.DegradedMachineCount != 0 {
 		msg := fmt.Sprintf("failed to disable debugging due to %s mcp has %d machines in degraded state, reconcile again", mcp.Name, mcp.Status.DegradedMachineCount)
 		r.EventRecorder.Eventf(nomc, corev1.EventTypeWarning, "ConfigUpdate", msg)
 		nomc.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonInProgress, msg)
