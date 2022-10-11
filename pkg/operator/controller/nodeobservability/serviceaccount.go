@@ -43,13 +43,20 @@ func (r *NodeObservabilityReconciler) ensureServiceAccount(ctx context.Context, 
 		return r.currentServiceAccount(ctx, nameSpace)
 	}
 
-	var updated *corev1.ServiceAccount
-	if updated, err = r.updateServiceAccount(ctx, current, desired); err != nil {
-		return nil, fmt.Errorf("failed to update serviceaccount %q due to: %w", nameSpace, err)
+	// update serviceaccount since it already exists
+	updated, err := r.updateServiceAccount(ctx, current, desired)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update serviceaccount %q: %w", nameSpace, err)
 	}
 
-	r.Log.V(1).Info("successfully updated serviceaccount", "sa.name", nameSpace.Name, "sa.namespace", nameSpace.Namespace)
-	return updated, nil
+	if updated {
+		current, err = r.currentServiceAccount(ctx, nameSpace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get existing serviceaccount %q: %w", nameSpace, err)
+		}
+		r.Log.V(1).Info("successfully updated serviceaccount", "sa.name", nameSpace.Name, "sa.namespace", nameSpace.Namespace)
+	}
+	return current, nil
 }
 
 // currentServiceAccount checks that the serviceaccount exists
@@ -76,7 +83,7 @@ func (r *NodeObservabilityReconciler) desiredServiceAccount(nodeObs *v1alpha2.No
 	}
 }
 
-func (r *NodeObservabilityReconciler) updateServiceAccount(ctx context.Context, current, desired *corev1.ServiceAccount) (*corev1.ServiceAccount, error) {
+func (r *NodeObservabilityReconciler) updateServiceAccount(ctx context.Context, current, desired *corev1.ServiceAccount) (bool, error) {
 	updatedSA := current.DeepCopy()
 	var updated bool
 
@@ -86,8 +93,11 @@ func (r *NodeObservabilityReconciler) updateServiceAccount(ctx context.Context, 
 	}
 
 	if updated {
-		return updatedSA, r.Update(ctx, updatedSA)
+		if err := r.Update(ctx, updatedSA); err != nil {
+			return false, err
+		}
+		return true, nil
 	}
 
-	return updatedSA, nil
+	return false, nil
 }

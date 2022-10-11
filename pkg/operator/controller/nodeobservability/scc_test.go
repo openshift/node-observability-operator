@@ -199,3 +199,185 @@ func TestDeleteSCC(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateScc(t *testing.T) {
+	testCases := []struct {
+		name            string
+		desired         *securityv1.SecurityContextConstraints
+		current         *securityv1.SecurityContextConstraints
+		expectedUpdated bool
+		errExpected     bool
+	}{
+		{
+			name: "Order should not matter for some fields",
+			desired: &securityv1.SecurityContextConstraints{
+				ObjectMeta:               metav1.ObjectMeta{Name: sccName, ResourceVersion: "1"},
+				AllowPrivilegedContainer: true,
+				DefaultAddCapabilities:   []corev1.Capability{"KILL", "SYSLOG"},
+				RequiredDropCapabilities: []corev1.Capability{"MKNOD", "SYS_ADMIN"},
+				AllowedCapabilities:      []corev1.Capability{"KILL", "SYSLOG"},
+				AllowHostDirVolumePlugin: true,
+				Volumes:                  []securityv1.FSType{securityv1.FSTypeHostPath, securityv1.FSTypeSecret, securityv1.FSTypeConfigMap},
+				AllowHostNetwork:         false,
+				AllowHostPorts:           false,
+				AllowHostPID:             false,
+				AllowHostIPC:             false,
+				SELinuxContext:           securityv1.SELinuxContextStrategyOptions{Type: securityv1.SELinuxStrategyMustRunAs},
+				RunAsUser:                securityv1.RunAsUserStrategyOptions{Type: securityv1.RunAsUserStrategyRunAsAny},
+				SupplementalGroups:       securityv1.SupplementalGroupsStrategyOptions{Type: securityv1.SupplementalGroupsStrategyRunAsAny},
+				FSGroup:                  securityv1.FSGroupStrategyOptions{Type: securityv1.FSGroupStrategyRunAsAny},
+				ReadOnlyRootFilesystem:   false,
+				AllowedUnsafeSysctls:     []string{"kernel.msg*", "net.core.somaxconn"},
+				ForbiddenSysctls:         []string{"kernel.sem", "net.*"},
+				SeccompProfiles:          []string{"runtime/default", "localhost"},
+				Groups:                   []string{"system:cluster-admins", "system:nodes"},
+			},
+			current: &securityv1.SecurityContextConstraints{
+				ObjectMeta:               metav1.ObjectMeta{Name: sccName, ResourceVersion: "1"},
+				AllowPrivilegedContainer: true,
+				DefaultAddCapabilities:   []corev1.Capability{"SYSLOG", "KILL"},     // different order
+				RequiredDropCapabilities: []corev1.Capability{"SYS_ADMIN", "MKNOD"}, // different order
+				AllowedCapabilities:      []corev1.Capability{"SYSLOG", "KILL"},     // different order
+				AllowHostDirVolumePlugin: true,
+				Volumes:                  []securityv1.FSType{securityv1.FSTypeSecret, securityv1.FSTypeHostPath, securityv1.FSTypeConfigMap}, // different order
+				AllowHostNetwork:         false,
+				AllowHostPorts:           false,
+				AllowHostPID:             false,
+				AllowHostIPC:             false,
+				SELinuxContext:           securityv1.SELinuxContextStrategyOptions{Type: securityv1.SELinuxStrategyMustRunAs},
+				RunAsUser:                securityv1.RunAsUserStrategyOptions{Type: securityv1.RunAsUserStrategyRunAsAny},
+				SupplementalGroups:       securityv1.SupplementalGroupsStrategyOptions{Type: securityv1.SupplementalGroupsStrategyRunAsAny},
+				FSGroup:                  securityv1.FSGroupStrategyOptions{Type: securityv1.FSGroupStrategyRunAsAny},
+				ReadOnlyRootFilesystem:   false,
+				AllowedUnsafeSysctls:     []string{"net.core.somaxconn", "kernel.msg*"}, // different order
+				ForbiddenSysctls:         []string{"net.*", "kernel.sem"},               // different order
+				SeccompProfiles:          []string{"localhost", "runtime/default"},      // different order
+				Groups:                   []string{"system:cluster-admins", "system:nodes"},
+			},
+			expectedUpdated: false,
+		},
+		{
+			name: "Some fields should ignored",
+			desired: &securityv1.SecurityContextConstraints{
+				ObjectMeta:               metav1.ObjectMeta{Name: sccName, ResourceVersion: "1"},
+				AllowPrivilegedContainer: true,
+				DefaultAddCapabilities:   []corev1.Capability{"KILL", "SYSLOG"},
+				RequiredDropCapabilities: []corev1.Capability{"MKNOD", "SYS_ADMIN"},
+				AllowedCapabilities:      []corev1.Capability{"KILL", "SYSLOG"},
+				AllowHostDirVolumePlugin: true,
+				Volumes:                  []securityv1.FSType{securityv1.FSTypeHostPath, securityv1.FSTypeSecret, securityv1.FSTypeConfigMap},
+				AllowHostNetwork:         false,
+				AllowHostPorts:           false,
+				AllowHostPID:             false,
+				AllowHostIPC:             false,
+				SELinuxContext:           securityv1.SELinuxContextStrategyOptions{Type: securityv1.SELinuxStrategyMustRunAs},
+				RunAsUser:                securityv1.RunAsUserStrategyOptions{Type: securityv1.RunAsUserStrategyRunAsAny},
+				SupplementalGroups:       securityv1.SupplementalGroupsStrategyOptions{Type: securityv1.SupplementalGroupsStrategyRunAsAny},
+				FSGroup:                  securityv1.FSGroupStrategyOptions{Type: securityv1.FSGroupStrategyRunAsAny},
+				ReadOnlyRootFilesystem:   false,
+				AllowedUnsafeSysctls:     []string{"kernel.msg*", "net.core.somaxconn"},
+				ForbiddenSysctls:         []string{"kernel.sem", "net.*"},
+				SeccompProfiles:          []string{"runtime/default", "localhost"},
+				Groups:                   []string{"system:cluster-admins", "system:nodes"},
+			},
+			current: &securityv1.SecurityContextConstraints{
+				ObjectMeta:               metav1.ObjectMeta{Name: sccName, ResourceVersion: "1"},
+				AllowPrivilegedContainer: true,
+				DefaultAddCapabilities:   []corev1.Capability{"KILL", "SYSLOG"},
+				RequiredDropCapabilities: []corev1.Capability{"MKNOD", "SYS_ADMIN"},
+				AllowedCapabilities:      []corev1.Capability{"KILL", "SYSLOG"},
+				AllowHostDirVolumePlugin: true,
+				Volumes:                  []securityv1.FSType{securityv1.FSTypeHostPath, securityv1.FSTypeSecret, securityv1.FSTypeConfigMap},
+				AllowHostNetwork:         false,
+				AllowHostPorts:           false,
+				AllowHostPID:             false,
+				AllowHostIPC:             false,
+				SELinuxContext:           securityv1.SELinuxContextStrategyOptions{Type: securityv1.SELinuxStrategyMustRunAs},
+				RunAsUser:                securityv1.RunAsUserStrategyOptions{Type: securityv1.RunAsUserStrategyRunAsAny},
+				SupplementalGroups:       securityv1.SupplementalGroupsStrategyOptions{Type: securityv1.SupplementalGroupsStrategyRunAsAny},
+				FSGroup:                  securityv1.FSGroupStrategyOptions{Type: securityv1.FSGroupStrategyRunAsAny},
+				ReadOnlyRootFilesystem:   false,
+				AllowedUnsafeSysctls:     []string{"kernel.msg*", "net.core.somaxconn"},
+				ForbiddenSysctls:         []string{"kernel.sem", "net.*"},
+				SeccompProfiles:          []string{"runtime/default", "localhost"},
+				Groups:                   []string{"system:cluster-admins", "system:nodes", "system:master"}, // ignored
+				Users:                    []string{"system:serviceaccount:openshift-infra:default"},          // ignored
+			},
+			expectedUpdated: false,
+		},
+		{
+			name: "Should be updated",
+			desired: &securityv1.SecurityContextConstraints{
+				ObjectMeta:               metav1.ObjectMeta{Name: sccName, ResourceVersion: "1"},
+				AllowPrivilegedContainer: true,
+				DefaultAddCapabilities:   []corev1.Capability{"KILL", "SYSLOG"},
+				RequiredDropCapabilities: []corev1.Capability{"MKNOD", "SYS_ADMIN"},
+				AllowedCapabilities:      []corev1.Capability{"KILL", "SYSLOG"},
+				AllowHostDirVolumePlugin: true,
+				Volumes:                  []securityv1.FSType{securityv1.FSTypeHostPath, securityv1.FSTypeSecret, securityv1.FSTypeConfigMap},
+				AllowHostNetwork:         false,
+				AllowHostPorts:           false,
+				AllowHostPID:             false,
+				AllowHostIPC:             false,
+				SELinuxContext:           securityv1.SELinuxContextStrategyOptions{Type: securityv1.SELinuxStrategyMustRunAs},
+				RunAsUser:                securityv1.RunAsUserStrategyOptions{Type: securityv1.RunAsUserStrategyRunAsAny},
+				SupplementalGroups:       securityv1.SupplementalGroupsStrategyOptions{Type: securityv1.SupplementalGroupsStrategyRunAsAny},
+				FSGroup:                  securityv1.FSGroupStrategyOptions{Type: securityv1.FSGroupStrategyRunAsAny},
+				ReadOnlyRootFilesystem:   false,
+				AllowedUnsafeSysctls:     []string{"kernel.msg*", "net.core.somaxconn"},
+				ForbiddenSysctls:         []string{"kernel.sem", "net.*"},
+				SeccompProfiles:          []string{"runtime/default", "localhost"},
+				Groups:                   []string{"system:cluster-admins", "system:nodes"},
+			},
+			current: &securityv1.SecurityContextConstraints{
+				ObjectMeta:               metav1.ObjectMeta{Name: sccName, ResourceVersion: "1"},
+				AllowPrivilegedContainer: true,
+				DefaultAddCapabilities:   []corev1.Capability{"KILL", "SYSLOG"},
+				RequiredDropCapabilities: []corev1.Capability{"MKNOD", "SYS_ADMIN"},
+				AllowedCapabilities:      []corev1.Capability{"KILL", "SYSLOG"},
+				AllowHostDirVolumePlugin: true,
+				Volumes:                  []securityv1.FSType{securityv1.FSTypeHostPath, securityv1.FSTypeSecret, securityv1.FSTypeConfigMap},
+				AllowHostNetwork:         false,
+				AllowHostPorts:           false,
+				AllowHostPID:             false,
+				AllowHostIPC:             true, // undesired
+				SELinuxContext:           securityv1.SELinuxContextStrategyOptions{Type: securityv1.SELinuxStrategyMustRunAs},
+				RunAsUser:                securityv1.RunAsUserStrategyOptions{Type: securityv1.RunAsUserStrategyRunAsAny},
+				SupplementalGroups:       securityv1.SupplementalGroupsStrategyOptions{Type: securityv1.SupplementalGroupsStrategyRunAsAny},
+				FSGroup:                  securityv1.FSGroupStrategyOptions{Type: securityv1.FSGroupStrategyRunAsAny},
+				ReadOnlyRootFilesystem:   false,
+				AllowedUnsafeSysctls:     []string{"kernel.msg*", "net.core.somaxconn"},
+				ForbiddenSysctls:         []string{"kernel.sem", "net.*"},
+				SeccompProfiles:          []string{"runtime/default", "localhost"},
+				Groups:                   []string{"system:cluster-admins", "system:nodes", "system:master"},
+				Users:                    []string{"system:serviceaccount:openshift-infra:default"},
+			},
+			expectedUpdated: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cl := fake.NewClientBuilder().WithScheme(test.Scheme).WithRuntimeObjects(tc.current).Build()
+			r := &NodeObservabilityReconciler{
+				Client: cl,
+				Scheme: test.Scheme,
+				Log:    zap.New(zap.UseDevMode(true)),
+			}
+			gotUpdated, err := r.updateSecurityContextConstraintes(context.TODO(), tc.current, tc.desired)
+			if err != nil {
+				if !tc.errExpected {
+					t.Fatalf("Unexpected error received: %v", err)
+				}
+				return
+			}
+			if tc.errExpected {
+				t.Fatalf("Error expected but wasn't received")
+			}
+
+			if gotUpdated != tc.expectedUpdated {
+				t.Fatalf("Expected SCC to be updated %t but got %t", tc.expectedUpdated, gotUpdated)
+			}
+		})
+	}
+}

@@ -113,6 +113,9 @@ func volumesChanged(current []corev1.Volume, desired []corev1.Volume) (bool, []c
 	currentVolumeMap := buildIndexedVolumeMap(current)
 	expectedVolumeMap := buildIndexedVolumeMap(desired)
 
+	ignoreFieldsConfigMap := cmpopts.IgnoreFields(corev1.ConfigMapVolumeSource{}, "DefaultMode")
+	ignoreFieldsSecret := cmpopts.IgnoreFields(corev1.SecretVolumeSource{}, "DefaultMode")
+
 	// ensure all expected volumes are present,
 	// unsolicited ones are kept (e.g. kube api token)
 	for expName, expVol := range expectedVolumeMap {
@@ -120,9 +123,7 @@ func volumesChanged(current []corev1.Volume, desired []corev1.Volume) (bool, []c
 			updated = append(updated, expVol.Volume)
 			changed = true
 		} else {
-			// deepequal is fine here as we don't have more than 1 item
-			// neither in the secret nor in the configmap
-			if !reflect.DeepEqual(currVol.Volume, expVol.Volume) {
+			if !cmp.Equal(currVol.Volume, expVol.Volume, ignoreFieldsConfigMap, ignoreFieldsSecret) {
 				updated[currVol.Index] = expVol.Volume
 				changed = true
 			}
