@@ -6,7 +6,7 @@ require (
 	github.com/coreos/ignition/v2 v2.13.0
 	github.com/go-logr/logr v1.2.2
 	github.com/golangci/golangci-lint v1.42.1
-	github.com/google/go-cmp v0.5.8
+	github.com/google/go-cmp v0.5.9
 	github.com/maxbrunsfeld/counterfeiter/v6 v6.5.0
 	github.com/onsi/ginkgo/v2 v2.0.0
 	github.com/onsi/gomega v1.18.1

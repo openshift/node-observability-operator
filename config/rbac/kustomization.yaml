@@ -16,3 +16,8 @@ resources:
 - auth_proxy_role.yaml
 - auth_proxy_role_binding.yaml
 - auth_proxy_client_clusterrole.yaml
+
+# The following clusterrole is required by
+# the operand and is verified by the operator
+# during reconciliation
+- operand_role.yaml

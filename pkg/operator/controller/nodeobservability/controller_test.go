@@ -24,6 +24,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -90,7 +91,7 @@ func TestReconcile(t *testing.T) {
 	}{
 		{
 			name:                 "Bootstrapping",
-			existingObjects:      []runtime.Object{testNodeObservability(), makeKubeletCACM()},
+			existingObjects:      []runtime.Object{testNodeObservability(), makeKubeletCACM(), testClusterRole()},
 			inputRequest:         testRequest(),
 			expectedResult:       reconcile.Result{},
 			expectedEvents:       []test.Event{},
@@ -98,21 +99,21 @@ func TestReconcile(t *testing.T) {
 		},
 		{
 			name:                 "Deleted",
-			existingObjects:      []runtime.Object{makeKubeletCACM()},
+			existingObjects:      []runtime.Object{makeKubeletCACM(), testClusterRole()},
 			inputRequest:         testRequest(),
 			expectedResult:       reconcile.Result{},
 			expectReadyCondition: metav1.ConditionTrue,
 		},
 		{
 			name:                 "Deleting",
-			existingObjects:      []runtime.Object{testNodeObservabilityToBeDeleted(), makeKubeletCACM()},
+			existingObjects:      []runtime.Object{testNodeObservabilityToBeDeleted(), makeKubeletCACM(), testClusterRole()},
 			inputRequest:         testRequest(),
 			expectedResult:       reconcile.Result{},
 			expectReadyCondition: metav1.ConditionTrue,
 		},
 		{
 			name:            "InvalidName",
-			existingObjects: []runtime.Object{},
+			existingObjects: []runtime.Object{testClusterRole()},
 			inputRequest: ctrl.Request{
 				NamespacedName: types.NamespacedName{
 					Namespace: "",
@@ -138,23 +139,24 @@ func TestReconcile(t *testing.T) {
 				Scheme:            test.Scheme,
 				Log:               zap.New(zap.UseDevMode(true)),
 				AgentImage:        "test",
+				Namespace:         tc.inputRequest.Namespace,
 			}
 
-			// the add and modify events should only be added when there are no 'simulated' errors
+			// the add and modify events should only be added when there are no errors
 			if tc.name == "Bootstrapping" {
-				//update finalizer
+				// update finalizer
 				tc.expectedEvents = append(tc.expectedEvents, teMod)
-				//add daemonset
+				// add daemonset
 				tc.expectedEvents = append(tc.expectedEvents, teAdd)
-				//update status
+				// update status
 				tc.expectedEvents = append(tc.expectedEvents, teMod)
 			}
 			if tc.name == "Deleting" {
-				//update finalizer
+				// update finalizer
 				tc.expectedEvents = append(tc.expectedEvents, teDel)
 			}
 			if tc.name == "Bootstrapping" {
-				//update finalizer
+				// update finalizer
 				tc.expectedEvents = append(tc.expectedEvents, teMod)
 			}
 
@@ -210,7 +212,6 @@ func TestReconcile(t *testing.T) {
 }
 
 func TestIsClusterNodeObservability(t *testing.T) {
-
 	testCases := []struct {
 		name            string
 		existingObjects []runtime.Object
@@ -289,4 +290,14 @@ func testNodeObservabilityInvalidName() *operatorv1alpha2.NodeObservability {
 	o := testNodeObservability()
 	o.Name = "xxx"
 	return o
+}
+
+func testClusterRole() *rbacv1.ClusterRole {
+	return &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: clusterRoleName,
+		},
+		Rules:           []rbacv1.PolicyRule{},
+		AggregationRule: &rbacv1.AggregationRule{},
+	}
 }

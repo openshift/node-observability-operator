@@ -48,7 +48,7 @@ func (r *MachineConfigReconciler) createProfMCP(ctx context.Context) error {
 		return fmt.Errorf("failed to update controller reference in crio profiling machine config pool: %w", err)
 	}
 
-	if err := r.ClientCreate(ctx, mcp); err != nil {
+	if err := r.ClientCreate(ctx, mcp); err != nil && !apierrors.IsAlreadyExists(err) {
 		return fmt.Errorf("failed to create crio profiling machine config pool: %w", err)
 	}
 

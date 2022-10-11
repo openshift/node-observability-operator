@@ -51,7 +51,7 @@ var _ = Describe("Node Observability Operator end-to-end test suite", Ordered, f
 			Eventually(func() bool {
 				ds := &appsv1.DaemonSet{}
 				dsNamespacedName := types.NamespacedName{
-					Name:      "node-observability-ds",
+					Name:      "node-observability-agent",
 					Namespace: operatorNamespace,
 				}
 				Expect(client.IgnoreNotFound(k8sClient.Get(ctx, dsNamespacedName, ds))).To(Succeed())
@@ -191,7 +191,7 @@ var _ = Describe("Node Observability Operator end-to-end test suite using v1alph
 			Eventually(func() bool {
 				ds := &appsv1.DaemonSet{}
 				dsNamespacedName := types.NamespacedName{
-					Name:      "node-observability-ds",
+					Name:      "node-observability-agent",
 					Namespace: operatorNamespace,
 				}
 				Expect(client.IgnoreNotFound(k8sClient.Get(ctx, dsNamespacedName, ds))).To(Succeed())

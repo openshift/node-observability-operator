@@ -17,17 +17,18 @@ import (
 )
 
 const (
-	podName           = "node-observability-agent"
-	socketName        = "socket"
-	socketPath        = "/var/run/crio/crio.sock"
-	socketMountPath   = "/var/run/crio/crio.sock"
-	kbltCAMountPath   = "/var/run/secrets/kubelet-serving-ca/"
-	kbltCAMountedFile = "ca-bundle.crt"
-	kbltCAName        = "kubelet-ca"
-	defaultScheduler  = "default-scheduler"
-	daemonSetName     = "node-observability-ds"
-	certsName         = "certs"
-	certsMountPath    = "/var/run/secrets/openshift.io/certs"
+	podName               = "node-observability-agent"
+	socketName            = "socket"
+	socketPath            = "/var/run/crio/crio.sock"
+	socketMountPath       = "/var/run/crio/crio.sock"
+	kbltCAMountPath       = "/var/run/secrets/kubelet-serving-ca/"
+	kbltCAMountedFile     = "ca-bundle.crt"
+	kbltCAName            = "kubelet-ca"
+	defaultScheduler      = "default-scheduler"
+	obsoleteDaemonSetName = "node-observability-ds"
+	daemonSetName         = "node-observability-agent"
+	certsName             = "certs"
+	certsMountPath        = "/var/run/secrets/openshift.io/certs"
 )
 
 // ensureDaemonSet ensures that the daemonset exists
@@ -38,6 +39,13 @@ func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeO
 	desired := r.desiredDaemonSet(nodeObs, sa, ns)
 	if err := controllerutil.SetControllerReference(nodeObs, desired, r.Scheme); err != nil {
 		return nil, fmt.Errorf("failed to set the controller reference for daemonset: %w", err)
+	}
+
+	// migration logic for updated daemonset
+	// TODO: remove this logic before going GA.
+	err := r.purgeObsoleteDaemonset(ctx, types.NamespacedName{Name: obsoleteDaemonSetName, Namespace: ns})
+	if err != nil {
+		return nil, fmt.Errorf("failed to purge obsolete daemonset due to %w", err)
 	}
 
 	current, err := r.currentDaemonSet(ctx, nameSpace)
@@ -248,4 +256,18 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 		},
 	}
 	return ds
+}
+
+// purgeObsoleteDaemonset deletes the obsolete version of daemonset if present.
+func (r *NodeObservabilityReconciler) purgeObsoleteDaemonset(ctx context.Context, name types.NamespacedName) error {
+	ds := &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name.Name,
+			Namespace: name.Namespace,
+		},
+	}
+	if err := r.Client.Delete(context.TODO(), ds); err != nil && !errors.IsNotFound(err) {
+		return err
+	}
+	return nil
 }
