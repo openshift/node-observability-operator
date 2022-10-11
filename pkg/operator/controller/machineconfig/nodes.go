@@ -36,52 +36,6 @@ const (
 	patchRemove = "remove"
 )
 
-// ensureProfConfEnabled makes sure all the configuration needed to enable the
-// CRI-O profiling is applied.
-func (r *MachineConfigReconciler) ensureProfConfEnabled(ctx context.Context, nomc *v1alpha2.NodeObservabilityMachineConfig) error {
-
-	nodeList, err := r.listNodes(ctx, nomc.Spec.NodeSelector)
-	if err != nil {
-		return err
-	}
-
-	if len(nodeList.Items) == 0 {
-		r.Log.V(1).Info("No nodes matching the given selector were found", "NodeSelector", nomc.Spec.NodeSelector)
-		return nil
-	}
-
-	err = r.ensureReqNodeLabelExists(ctx, nodeList)
-	if err != nil {
-		return fmt.Errorf("failed to ensure nodes are labelled: %w", err)
-	}
-
-	if err := r.enableCrioProf(ctx, nomc); err != nil {
-		return fmt.Errorf("failed to enable CRIO mc due to: %w", err)
-	}
-
-	if err := r.createProfMCP(ctx, nomc); err != nil {
-		return fmt.Errorf("failed to create profiling mcp due to: %w", err)
-	}
-
-	return nil
-}
-
-// ensureProfConfDisabled disables the profiling on the requested nodes by removing the nodeobservability label.
-func (r *MachineConfigReconciler) ensureProfConfDisabled(ctx context.Context, nomc *v1alpha2.NodeObservabilityMachineConfig) error {
-
-	nodeList, err := r.listNodes(ctx, map[string]string{NodeObservabilityNodeRoleLabelName: empty})
-	if err != nil {
-		return fmt.Errorf("failed to get the list of nodes labelled nodeobservability: %w", err)
-	}
-
-	err = r.ensureReqNodeLabelNotExists(ctx, nodeList)
-	if err != nil {
-		return fmt.Errorf("failed to ensure nodes are not labelled: %w", err)
-	}
-
-	return nil
-}
-
 // ensureReqNodeLabelExists updates the given nodes with the required labels.
 func (r *MachineConfigReconciler) ensureReqNodeLabelExists(ctx context.Context, nodeList *corev1.NodeList) error {
 
@@ -150,6 +104,52 @@ func (r *MachineConfigReconciler) listNodes(ctx context.Context, matchLabels map
 	}
 
 	return nodeList, nil
+}
+
+// ensureProfConfEnabled makes sure all the configuration needed to enable the
+// CRI-O profiling is applied.
+func (r *MachineConfigReconciler) ensureProfConfEnabled(ctx context.Context, nomc *v1alpha2.NodeObservabilityMachineConfig) error {
+
+	nodeList, err := r.listNodes(ctx, nomc.Spec.NodeSelector)
+	if err != nil {
+		return err
+	}
+
+	if len(nodeList.Items) == 0 {
+		r.Log.V(1).Info("No nodes matching the given selector were found", "NodeSelector", nomc.Spec.NodeSelector)
+		return nil
+	}
+
+	err = r.ensureReqNodeLabelExists(ctx, nodeList)
+	if err != nil {
+		return fmt.Errorf("failed to ensure nodes are labelled: %w", err)
+	}
+
+	if err := r.enableCrioProf(ctx, nomc); err != nil {
+		return fmt.Errorf("failed to enable CRIO mc due to: %w", err)
+	}
+
+	if err := r.createProfMCP(ctx, nomc); err != nil {
+		return fmt.Errorf("failed to create profiling mcp due to: %w", err)
+	}
+
+	return nil
+}
+
+// ensureProfConfDisabled disables the profiling on the requested nodes by removing the nodeobservability label.
+func (r *MachineConfigReconciler) ensureProfConfDisabled(ctx context.Context, nomc *v1alpha2.NodeObservabilityMachineConfig) error {
+
+	nodeList, err := r.listNodes(ctx, map[string]string{NodeObservabilityNodeRoleLabelName: empty})
+	if err != nil {
+		return fmt.Errorf("failed to get the list of nodes labelled nodeobservability: %w", err)
+	}
+
+	err = r.ensureReqNodeLabelNotExists(ctx, nodeList)
+	if err != nil {
+		return fmt.Errorf("failed to ensure nodes are not labelled: %w", err)
+	}
+
+	return nil
 }
 
 // escape replaces characters which would cause parsing issues with their escaped equivalent
