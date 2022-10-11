@@ -40,163 +40,7 @@ const (
 	nodeObsInstanceName = "nodeobservability-sample"
 )
 
-type testDaemonsetBuilder struct {
-	name           string
-	namespace      string
-	serviceAccount string
-	version        string
-	containers     []corev1.Container
-	ownerReference []metav1.OwnerReference
-	volumes        []corev1.Volume
-	nodeSelector   map[string]string
-}
-
-func testDaemonset(name, namespace, serviceAccount string) *testDaemonsetBuilder {
-	return &testDaemonsetBuilder{
-		name:           name,
-		namespace:      namespace,
-		serviceAccount: serviceAccount,
-	}
-}
-
-func (b *testDaemonsetBuilder) withNodeSelector(selector map[string]string) *testDaemonsetBuilder {
-	b.nodeSelector = selector
-	return b
-}
-
-func (b *testDaemonsetBuilder) withResourceVersion(version string) *testDaemonsetBuilder {
-	b.version = version
-	return b
-}
-
-func (b *testDaemonsetBuilder) withContainers(containers ...corev1.Container) *testDaemonsetBuilder {
-	b.containers = containers
-	return b
-}
-
-func (b *testDaemonsetBuilder) withControllerReference(name string) *testDaemonsetBuilder {
-	b.ownerReference = []metav1.OwnerReference{
-		{
-			APIVersion:         operatorv1alpha2.GroupVersion.Identifier(),
-			Kind:               "NodeObservability",
-			Name:               name,
-			Controller:         pointer.BoolPtr(true),
-			BlockOwnerDeletion: pointer.BoolPtr(true),
-		},
-	}
-	return b
-}
-
-func (b *testDaemonsetBuilder) withVolumes(volumes ...corev1.Volume) *testDaemonsetBuilder {
-	b.volumes = volumes
-	return b
-}
-
-func (b *testDaemonsetBuilder) build() *appsv1.DaemonSet {
-	labels := labelsForNodeObservability(nodeObsInstanceName)
-	d := &appsv1.DaemonSet{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "DaemonSet",
-			APIVersion: "apps/v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:            daemonSetName,
-			Namespace:       test.TestNamespace,
-			OwnerReferences: b.ownerReference,
-		},
-		Spec: appsv1.DaemonSetSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: labelsForNodeObservability(nodeObsInstanceName),
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
-				},
-				Spec: corev1.PodSpec{
-					Containers:                    b.containers,
-					DNSPolicy:                     corev1.DNSClusterFirst,
-					RestartPolicy:                 corev1.RestartPolicyAlways,
-					SchedulerName:                 defaultScheduler,
-					ServiceAccountName:            b.serviceAccount,
-					Volumes:                       b.volumes,
-					NodeSelector:                  b.nodeSelector,
-					TerminationGracePeriodSeconds: pointer.Int64(30),
-				},
-			},
-		},
-	}
-	if b.version != "" {
-		d.ResourceVersion = b.version
-	} else {
-		d.ResourceVersion = "1"
-	}
-	return d
-}
-
-type testContainerBuilder struct {
-	name                     string
-	image                    string
-	args                     []string
-	command                  []string
-	env                      []corev1.EnvVar
-	volumeMounts             []corev1.VolumeMount
-	securityContext          *corev1.SecurityContext
-	terminationMessagePolicy corev1.TerminationMessagePolicy
-}
-
-func testContainer(name, image string) *testContainerBuilder {
-	return &testContainerBuilder{
-		name:  name,
-		image: image,
-	}
-}
-
-func (b *testContainerBuilder) withEnvs(envs ...corev1.EnvVar) *testContainerBuilder {
-	b.env = envs
-	return b
-}
-
-func (b *testContainerBuilder) withArgs(args ...string) *testContainerBuilder {
-	b.args = args
-	return b
-}
-
-func (b *testContainerBuilder) withCommand(command ...string) *testContainerBuilder {
-	b.command = command
-	return b
-}
-
-func (b *testContainerBuilder) withTerminationMessagePolicy(policy corev1.TerminationMessagePolicy) *testContainerBuilder {
-	b.terminationMessagePolicy = policy
-	return b
-}
-
-func (b *testContainerBuilder) withVolumeMounts(mounts ...corev1.VolumeMount) *testContainerBuilder {
-	b.volumeMounts = mounts
-	return b
-}
-
-func (b *testContainerBuilder) withSecurityContext(securityContext corev1.SecurityContext) *testContainerBuilder {
-	b.securityContext = &securityContext
-	return b
-}
-
-func (b *testContainerBuilder) build() corev1.Container {
-	return corev1.Container{
-		Name:                     b.name,
-		Image:                    b.image,
-		ImagePullPolicy:          corev1.PullIfNotPresent,
-		Command:                  b.command,
-		Args:                     b.args,
-		Env:                      b.env,
-		VolumeMounts:             b.volumeMounts,
-		TerminationMessagePolicy: b.terminationMessagePolicy,
-		SecurityContext:          b.securityContext,
-	}
-}
-
 func TestEnsureDaemonset(t *testing.T) {
-	vst := corev1.HostPathSocket
 	testCases := []struct {
 		name            string
 		existingObjects []runtime.Object
@@ -208,263 +52,98 @@ func TestEnsureDaemonset(t *testing.T) {
 			existingObjects: []runtime.Object{
 				makeKubeletCACM(),
 			},
-			expectedDS: testDaemonset(
-				daemonSetName,
-				test.TestNamespace,
-				serviceAccountName).
+			expectedDS: testDaemonset(daemonSetName, test.TestNamespace, serviceAccountName).
 				withNodeSelector(map[string]string{"node-role.kubernetes.io/worker": ""}).
 				withControllerReference(nodeObsInstanceName).
 				withContainers(
 					testContainer(podName, "node-observability-agent:latest").
-						withEnvs([]corev1.EnvVar{
-							{
-								Name: "NODE_IP",
-								ValueFrom: &corev1.EnvVarSource{
-									FieldRef: &corev1.ObjectFieldSelector{
-										FieldPath: "status.hostIP",
-									},
-								},
-							},
-						}...).
-						withTerminationMessagePolicy(corev1.TerminationMessageFallbackToLogsOnError).
-						withCommand([]string{"node-observability-agent"}...).
-						withArgs([]string{
+						withFieldEnv("NODE_IP", "status.hostIP").
+						withCommand("node-observability-agent").
+						withArgs(
 							"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
 							"--storage=/run/node-observability",
 							fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
-						}...).
-						withSecurityContext(corev1.SecurityContext{
-							Privileged: pointer.Bool(true),
-						}).
-						withVolumeMounts([]corev1.VolumeMount{
-							{
-								MountPath: socketMountPath,
-								Name:      socketName,
-								ReadOnly:  false,
-							},
-							{
-								MountPath: kbltCAMountPath,
-								Name:      kbltCAName,
-								ReadOnly:  true,
-							},
-						}...).
+						).
+						withPrivileged().
+						withVolumeMount(socketName, socketMountPath, false).
+						withVolumeMount(kbltCAName, kbltCAMountPath, true).
 						build(),
 					testContainer("kube-rbac-proxy", "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0").
-						withArgs([]string{
+						withArgs(
 							"--secure-listen-address=0.0.0.0:8443",
 							"--upstream=http://127.0.0.1:9000/",
 							fmt.Sprintf("--tls-cert-file=%s/tls.crt", certsMountPath),
 							fmt.Sprintf("--tls-private-key-file=%s/tls.key", certsMountPath),
 							"--logtostderr=true",
 							"--v=2",
-						}...).
-						withVolumeMounts([]corev1.VolumeMount{
-							{
-								Name:      certsName,
-								MountPath: certsMountPath,
-								ReadOnly:  true,
-							},
-						}...).
+						).
+						withVolumeMount(certsName, certsMountPath, true).
 						build(),
 				).
-				withVolumes([]corev1.Volume{
-					{
-						Name: socketName,
-						VolumeSource: corev1.VolumeSource{
-							HostPath: &corev1.HostPathVolumeSource{
-								Path: socketPath,
-								Type: &vst,
-							},
-						},
-					},
-					{
-						Name: kbltCAName,
-						VolumeSource: corev1.VolumeSource{
-							ConfigMap: &corev1.ConfigMapVolumeSource{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: nodeObsInstanceName,
-								},
-							},
-						},
-					},
-					{
-						Name: certsName,
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{
-								SecretName: secretName,
-							},
-						},
-					},
-				}...).
+				withHostPathVolume(socketName, socketPath, corev1.HostPathSocket).
+				withConfigMapVolume(kbltCAName, nodeObsInstanceName).
+				withSecretVolume(certsName, secretName).
 				build(),
 		},
 		{
 			name: "Update existing daemonset",
 			existingObjects: []runtime.Object{
 				makeKubeletCACM(),
-				testDaemonset(
-					daemonSetName,
-					test.TestNamespace,
-					serviceAccountName).
+				testDaemonset(daemonSetName, test.TestNamespace, serviceAccountName).
 					withNodeSelector(map[string]string{"node-role.kubernetes.io/worker": ""}).
 					withControllerReference(nodeObsInstanceName).
 					withResourceVersion("1").
 					withContainers(
 						testContainer(podName, "node-observability-agent:latest").
-							withEnvs([]corev1.EnvVar{
-								{
-									Name: "NODE_IP",
-									ValueFrom: &corev1.EnvVarSource{
-										FieldRef: &corev1.ObjectFieldSelector{
-											FieldPath: "status.hostIP",
-										},
-									},
-								},
-							}...).
-							withTerminationMessagePolicy(corev1.TerminationMessageFallbackToLogsOnError).
-							withCommand([]string{"node-observability"}...).
-							withArgs([]string{
+							withFieldEnv("NODE_IP", "status.hostIP").
+							withCommand("node-observability").
+							withArgs(
 								"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
 								"--storage=/run/node-observability",
 								fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
-							}...).
-							withSecurityContext(corev1.SecurityContext{
-								Privileged: pointer.Bool(true),
-							}).
-							withVolumeMounts([]corev1.VolumeMount{
-								{
-									MountPath: socketMountPath,
-									Name:      socketName,
-									ReadOnly:  true,
-								},
-								{
-									MountPath: kbltCAMountPath,
-									Name:      kbltCAName,
-									ReadOnly:  true,
-								},
-							}...).
+							).
+							withPrivileged().
+							withVolumeMount(socketName, socketMountPath, true).
+							withVolumeMount(kbltCAName, kbltCAMountPath, true).
 							build(),
 					).
-					withVolumes([]corev1.Volume{
-						{
-							Name: socketName,
-							VolumeSource: corev1.VolumeSource{
-								HostPath: &corev1.HostPathVolumeSource{
-									Path: socketPath,
-									Type: &vst,
-								},
-							},
-						},
-						{
-							Name: kbltCAName,
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{
-										Name: nodeObsInstanceName,
-									},
-								},
-							},
-						},
-						{
-							Name: certsName,
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: secretName,
-								},
-							},
-						},
-					}...).
+					withHostPathVolume(socketName, socketPath, corev1.HostPathSocket).
+					withConfigMapVolume(kbltCAName, nodeObsInstanceName).
+					withSecretVolume(certsName, secretName).
 					build(),
 			},
-			expectedDS: testDaemonset(
-				daemonSetName,
-				test.TestNamespace,
-				serviceAccountName).
+			expectedDS: testDaemonset(daemonSetName, test.TestNamespace, serviceAccountName).
 				withNodeSelector(map[string]string{"node-role.kubernetes.io/worker": ""}).
 				withControllerReference(nodeObsInstanceName).
 				withResourceVersion("2").
 				withContainers(
 					testContainer(podName, "node-observability-agent:latest").
-						withEnvs([]corev1.EnvVar{
-							{
-								Name: "NODE_IP",
-								ValueFrom: &corev1.EnvVarSource{
-									FieldRef: &corev1.ObjectFieldSelector{
-										FieldPath: "status.hostIP",
-									},
-								},
-							},
-						}...).
-						withTerminationMessagePolicy(corev1.TerminationMessageFallbackToLogsOnError).
-						withCommand([]string{"node-observability-agent"}...).
-						withArgs([]string{
+						withFieldEnv("NODE_IP", "status.hostIP").
+						withCommand("node-observability-agent").
+						withArgs(
 							"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
 							"--storage=/run/node-observability",
 							fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
-						}...).
-						withSecurityContext(corev1.SecurityContext{
-							Privileged: pointer.Bool(true),
-						}).
-						withVolumeMounts([]corev1.VolumeMount{
-							{
-								MountPath: socketMountPath,
-								Name:      socketName,
-								ReadOnly:  false,
-							},
-							{
-								MountPath: kbltCAMountPath,
-								Name:      kbltCAName,
-								ReadOnly:  true,
-							},
-						}...).
+						).
+						withPrivileged().
+						withVolumeMount(socketName, socketMountPath, false).
+						withVolumeMount(kbltCAName, kbltCAMountPath, true).
 						build(),
 					testContainer("kube-rbac-proxy", "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0").
-						withArgs([]string{
+						withArgs(
 							"--secure-listen-address=0.0.0.0:8443",
 							"--upstream=http://127.0.0.1:9000/",
 							fmt.Sprintf("--tls-cert-file=%s/tls.crt", certsMountPath),
 							fmt.Sprintf("--tls-private-key-file=%s/tls.key", certsMountPath),
 							"--logtostderr=true",
 							"--v=2",
-						}...).
-						withVolumeMounts([]corev1.VolumeMount{
-							{
-								Name:      certsName,
-								MountPath: certsMountPath,
-								ReadOnly:  true,
-							},
-						}...).
+						).
+						withVolumeMount(certsName, certsMountPath, true).
 						build(),
 				).
-				withVolumes([]corev1.Volume{
-					{
-						Name: socketName,
-						VolumeSource: corev1.VolumeSource{
-							HostPath: &corev1.HostPathVolumeSource{
-								Path: socketPath,
-								Type: &vst,
-							},
-						},
-					},
-					{
-						Name: kbltCAName,
-						VolumeSource: corev1.VolumeSource{
-							ConfigMap: &corev1.ConfigMapVolumeSource{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: nodeObsInstanceName,
-								},
-							},
-						},
-					},
-					{
-						Name: certsName,
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{
-								SecretName: secretName,
-							},
-						},
-					},
-				}...).
+				withHostPathVolume(socketName, socketPath, corev1.HostPathSocket).
+				withConfigMapVolume(kbltCAName, nodeObsInstanceName).
+				withSecretVolume(certsName, secretName).
 				build(),
 		},
 		{
@@ -473,95 +152,38 @@ func TestEnsureDaemonset(t *testing.T) {
 				makeKubeletCACM(),
 				makeTargetKubeletCACM(),
 			},
-			expectedDS: testDaemonset(
-				daemonSetName,
-				test.TestNamespace,
-				serviceAccountName).
+			expectedDS: testDaemonset(daemonSetName, test.TestNamespace, serviceAccountName).
 				withNodeSelector(map[string]string{"node-role.kubernetes.io/worker": ""}).
 				withControllerReference(nodeObsInstanceName).
 				withResourceVersion("1").
 				withContainers(
 					testContainer(podName, "node-observability-agent:latest").
-						withEnvs([]corev1.EnvVar{
-							{
-								Name: "NODE_IP",
-								ValueFrom: &corev1.EnvVarSource{
-									FieldRef: &corev1.ObjectFieldSelector{
-										FieldPath: "status.hostIP",
-									},
-								},
-							},
-						}...).
-						withTerminationMessagePolicy(corev1.TerminationMessageFallbackToLogsOnError).
-						withCommand([]string{"node-observability-agent"}...).
-						withArgs([]string{
+						withFieldEnv("NODE_IP", "status.hostIP").
+						withCommand("node-observability-agent").
+						withArgs(
 							"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
 							"--storage=/run/node-observability",
 							fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
-						}...).
-						withSecurityContext(corev1.SecurityContext{
-							Privileged: pointer.Bool(true),
-						}).
-						withVolumeMounts([]corev1.VolumeMount{
-							{
-								MountPath: socketMountPath,
-								Name:      socketName,
-								ReadOnly:  false,
-							},
-							{
-								MountPath: kbltCAMountPath,
-								Name:      kbltCAName,
-								ReadOnly:  true,
-							},
-						}...).
+						).
+						withPrivileged().
+						withVolumeMount(socketName, socketMountPath, false).
+						withVolumeMount(kbltCAName, kbltCAMountPath, true).
 						build(),
 					testContainer("kube-rbac-proxy", "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0").
-						withArgs([]string{
+						withArgs(
 							"--secure-listen-address=0.0.0.0:8443",
 							"--upstream=http://127.0.0.1:9000/",
 							fmt.Sprintf("--tls-cert-file=%s/tls.crt", certsMountPath),
 							fmt.Sprintf("--tls-private-key-file=%s/tls.key", certsMountPath),
 							"--logtostderr=true",
 							"--v=2",
-						}...).
-						withVolumeMounts([]corev1.VolumeMount{
-							{
-								Name:      certsName,
-								MountPath: certsMountPath,
-								ReadOnly:  true,
-							},
-						}...).
+						).
+						withVolumeMount(certsName, certsMountPath, true).
 						build(),
 				).
-				withVolumes([]corev1.Volume{
-					{
-						Name: socketName,
-						VolumeSource: corev1.VolumeSource{
-							HostPath: &corev1.HostPathVolumeSource{
-								Path: socketPath,
-								Type: &vst,
-							},
-						},
-					},
-					{
-						Name: kbltCAName,
-						VolumeSource: corev1.VolumeSource{
-							ConfigMap: &corev1.ConfigMapVolumeSource{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: nodeObsInstanceName,
-								},
-							},
-						},
-					},
-					{
-						Name: certsName,
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{
-								SecretName: secretName,
-							},
-						},
-					},
-				}...).
+				withHostPathVolume(socketName, socketPath, corev1.HostPathSocket).
+				withConfigMapVolume(kbltCAName, nodeObsInstanceName).
+				withSecretVolume(certsName, secretName).
 				build(),
 		},
 	}
@@ -637,17 +259,17 @@ func TestUpdateDaemonSet(t *testing.T) {
 			name: "container args changed",
 			existingDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(testContainer("agent", "agent:v1").
-					withArgs([]string{"--arg1=1"}...).
+					withArgs("--arg1=1").
 					build(),
 				).build(),
 			desiredDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(testContainer("agent", "agent:v2").
-					withArgs([]string{"--arg=value"}...).
+					withArgs("--arg=value").
 					build(),
 				).build(),
 			expectedDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(testContainer("agent", "agent:v2").
-					withArgs([]string{"--arg=value"}...).
+					withArgs("--arg=value").
 					build(),
 				).build(),
 			expectUpdate: true,
@@ -657,25 +279,25 @@ func TestUpdateDaemonSet(t *testing.T) {
 			existingDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(
 					testContainer("agent", "agent:v1").
-						withArgs([]string{"--arg1=1"}...).
+						withArgs("--arg1=1").
 						build(),
 					testContainer("random-container", "agent:v1").
-						withArgs([]string{"--arg1=1"}...).
+						withArgs("--arg1=1").
 						build(),
 				).build(),
 			desiredDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(
 					testContainer("agent", "agent:v1").
-						withArgs([]string{"--arg1=1"}...).
+						withArgs("--arg1=1").
 						build(),
 				).build(),
 			expectedDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(
 					testContainer("agent", "agent:v1").
-						withArgs([]string{"--arg1=1"}...).
+						withArgs("--arg1=1").
 						build(),
 					testContainer("random-container", "agent:v1").
-						withArgs([]string{"--arg1=1"}...).
+						withArgs("--arg1=1").
 						build(),
 				).build(),
 			expectUpdate: false,
@@ -684,18 +306,18 @@ func TestUpdateDaemonSet(t *testing.T) {
 			name: "container env modified",
 			existingDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(testContainer("agent", "agent:v1").
-					withEnvs([]corev1.EnvVar{{Name: "env2", Value: "ENV1"}}...).
-					withEnvs([]corev1.EnvVar{{Name: "env1", Value: "Modified"}}...).
+					withEnv("env2", "ENV1").
+					withEnv("env1", "Modified").
 					build(),
 				).build(),
 			desiredDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(testContainer("agent", "agent:v2").
-					withEnvs([]corev1.EnvVar{{Name: "env1", Value: "ENV1"}}...).
+					withEnv("env1", "ENV1").
 					build(),
 				).build(),
 			expectedDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(testContainer("agent", "agent:v2").
-					withEnvs([]corev1.EnvVar{{Name: "env1", Value: "ENV1"}}...).
+					withEnv("env1", "ENV1").
 					build(),
 				).build(),
 			expectUpdate: true,
@@ -704,21 +326,19 @@ func TestUpdateDaemonSet(t *testing.T) {
 			name: "container volume mount modified and new volume mount injected",
 			existingDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(testContainer("agent", "agent:v1").
-					withVolumeMounts([]corev1.VolumeMount{
-						{Name: "vol", MountPath: "/root"},
-						{Name: "random-volume"}}...).
+					withVolumeMount("vol", "/root", false).
+					withVolumeMount("random-volume", "", false).
 					build(),
 				).build(),
 			desiredDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(testContainer("agent", "agent:v2").
-					withVolumeMounts([]corev1.VolumeMount{{Name: "vol", MountPath: "/tmp"}}...).
+					withVolumeMount("vol", "/tmp", false).
 					build(),
 				).build(),
 			expectedDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(testContainer("agent", "agent:v2").
-					withVolumeMounts([]corev1.VolumeMount{
-						{Name: "vol", MountPath: "/tmp"},
-						{Name: "random-volume"}}...).
+					withVolumeMount("vol", "/tmp", false).
+					withVolumeMount("random-volume", "", false).
 					build(),
 				).build(),
 			expectUpdate: true,
@@ -726,62 +346,18 @@ func TestUpdateDaemonSet(t *testing.T) {
 		{
 			name: "daemonset volumes modified and new volume injected",
 			existingDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
-				withContainers(
-					testContainer("agent", "agent:v1").build()).
-				withVolumes([]corev1.Volume{
-					{
-						Name: "volume",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{
-								SecretName: "secret",
-							},
-						},
-					},
-					{
-						Name: "random-volume",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{
-								SecretName: "random-secret",
-							},
-						},
-					},
-				}...).
+				withContainers(testContainer("agent", "agent:v1").build()).
+				withSecretVolume("volume", "secret").
+				withSecretVolume("random-volume", "random-secret").
 				build(),
 			desiredDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
-				withContainers(
-					testContainer("agent", "agent:v1").build()).
-				withVolumes([]corev1.Volume{
-					{
-						Name: "volume",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{
-								SecretName: "secret",
-							},
-						},
-					},
-				}...).
+				withContainers(testContainer("agent", "agent:v1").build()).
+				withSecretVolume("volume", "secret").
 				build(),
 			expectedDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
-				withContainers(
-					testContainer("agent", "agent:v1").build()).
-				withVolumes([]corev1.Volume{
-					{
-						Name: "volume",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{
-								SecretName: "secret",
-							},
-						},
-					},
-					{
-						Name: "random-volume",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{
-								SecretName: "random-secret",
-							},
-						},
-					},
-				}...).
+				withContainers(testContainer("agent", "agent:v1").build()).
+				withSecretVolume("volume", "secret").
+				withSecretVolume("random-volume", "random-secret").
 				build(),
 			expectUpdate: false,
 		},
@@ -789,17 +365,17 @@ func TestUpdateDaemonSet(t *testing.T) {
 			name: "security context is modified",
 			existingDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(testContainer("agent", "agent:v1").
-					withSecurityContext(corev1.SecurityContext{Privileged: pointer.Bool(false)}).
+					withUnprivileged().
 					build(),
 				).build(),
 			desiredDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(testContainer("agent", "agent:v2").
-					withSecurityContext(corev1.SecurityContext{Privileged: pointer.Bool(true)}).
+					withPrivileged().
 					build(),
 				).build(),
 			expectedDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(testContainer("agent", "agent:v2").
-					withSecurityContext(corev1.SecurityContext{Privileged: pointer.Bool(true)}).
+					withPrivileged().
 					build(),
 				).build(),
 			expectUpdate: true,
@@ -809,19 +385,19 @@ func TestUpdateDaemonSet(t *testing.T) {
 			existingDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(
 					testContainer("agent", "agent:v1").
-						withArgs([]string{"--arg1=1"}...).
+						withArgs("--arg1=1").
 						build(),
 				).build(),
 			desiredDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(
 					testContainer("agent", "agent:v1").
-						withArgs([]string{"--arg1=1"}...).
+						withArgs("--arg1=1").
 						build(),
 				).build(),
 			expectedDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(
 					testContainer("agent", "agent:v1").
-						withArgs([]string{"--arg1=1"}...).
+						withArgs("--arg1=1").
 						build(),
 				).build(),
 			expectUpdate: false,
@@ -906,6 +482,213 @@ func TestHasSecurityContextChanged(t *testing.T) {
 				t.Errorf("expected %v, instead was %v", tc.changed, changed)
 			}
 		})
+	}
+}
+
+type testDaemonsetBuilder struct {
+	name           string
+	namespace      string
+	serviceAccount string
+	version        string
+	containers     []corev1.Container
+	ownerReference []metav1.OwnerReference
+	volumes        []corev1.Volume
+	nodeSelector   map[string]string
+}
+
+func testDaemonset(name, namespace, serviceAccount string) *testDaemonsetBuilder {
+	return &testDaemonsetBuilder{
+		name:           name,
+		namespace:      namespace,
+		serviceAccount: serviceAccount,
+	}
+}
+
+func (b *testDaemonsetBuilder) withNodeSelector(selector map[string]string) *testDaemonsetBuilder {
+	b.nodeSelector = selector
+	return b
+}
+
+func (b *testDaemonsetBuilder) withResourceVersion(version string) *testDaemonsetBuilder {
+	b.version = version
+	return b
+}
+
+func (b *testDaemonsetBuilder) withContainers(containers ...corev1.Container) *testDaemonsetBuilder {
+	b.containers = containers
+	return b
+}
+
+func (b *testDaemonsetBuilder) withControllerReference(name string) *testDaemonsetBuilder {
+	b.ownerReference = []metav1.OwnerReference{
+		{
+			APIVersion:         operatorv1alpha2.GroupVersion.Identifier(),
+			Kind:               "NodeObservability",
+			Name:               name,
+			Controller:         pointer.BoolPtr(true),
+			BlockOwnerDeletion: pointer.BoolPtr(true),
+		},
+	}
+	return b
+}
+
+func (b *testDaemonsetBuilder) withHostPathVolume(name, path string, ptype corev1.HostPathType) *testDaemonsetBuilder {
+	b.volumes = append(b.volumes, corev1.Volume{
+		Name: name,
+		VolumeSource: corev1.VolumeSource{
+			HostPath: &corev1.HostPathVolumeSource{
+				Path: path,
+				Type: &ptype,
+			},
+		},
+	})
+	return b
+}
+
+func (b *testDaemonsetBuilder) withConfigMapVolume(name, cmname string) *testDaemonsetBuilder {
+	b.volumes = append(b.volumes, corev1.Volume{
+		Name: name,
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: cmname,
+				},
+			},
+		},
+	})
+	return b
+}
+
+func (b *testDaemonsetBuilder) withSecretVolume(name, sname string) *testDaemonsetBuilder {
+	b.volumes = append(b.volumes, corev1.Volume{
+		Name: name,
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: sname,
+			},
+		},
+	})
+	return b
+}
+
+func (b *testDaemonsetBuilder) build() *appsv1.DaemonSet {
+	labels := labelsForNodeObservability(nodeObsInstanceName)
+	d := &appsv1.DaemonSet{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "DaemonSet",
+			APIVersion: "apps/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            daemonSetName,
+			Namespace:       test.TestNamespace,
+			OwnerReferences: b.ownerReference,
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labelsForNodeObservability(nodeObsInstanceName),
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
+					Containers:                    b.containers,
+					DNSPolicy:                     corev1.DNSClusterFirst,
+					RestartPolicy:                 corev1.RestartPolicyAlways,
+					SchedulerName:                 defaultScheduler,
+					ServiceAccountName:            b.serviceAccount,
+					Volumes:                       b.volumes,
+					NodeSelector:                  b.nodeSelector,
+					TerminationGracePeriodSeconds: pointer.Int64(30),
+				},
+			},
+		},
+	}
+	if b.version != "" {
+		d.ResourceVersion = b.version
+	} else {
+		d.ResourceVersion = "1"
+	}
+	return d
+}
+
+type testContainerBuilder struct {
+	name            string
+	image           string
+	args            []string
+	command         []string
+	env             []corev1.EnvVar
+	volumeMounts    []corev1.VolumeMount
+	securityContext *corev1.SecurityContext
+}
+
+func testContainer(name, image string) *testContainerBuilder {
+	return &testContainerBuilder{
+		name:  name,
+		image: image,
+	}
+}
+
+func (b *testContainerBuilder) withEnv(name, value string) *testContainerBuilder {
+	b.env = append(b.env, corev1.EnvVar{Name: name, Value: value})
+	return b
+}
+
+func (b *testContainerBuilder) withFieldEnv(name, field string) *testContainerBuilder {
+	b.env = append(b.env, corev1.EnvVar{
+		Name: name,
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				FieldPath: field,
+			},
+		},
+	})
+	return b
+}
+
+func (b *testContainerBuilder) withArgs(args ...string) *testContainerBuilder {
+	b.args = args
+	return b
+}
+
+func (b *testContainerBuilder) withCommand(command ...string) *testContainerBuilder {
+	b.command = command
+	return b
+}
+
+func (b *testContainerBuilder) withVolumeMount(name, path string, readOnly bool) *testContainerBuilder {
+	b.volumeMounts = append(b.volumeMounts, corev1.VolumeMount{
+		Name:      name,
+		MountPath: path,
+		ReadOnly:  readOnly,
+	})
+	return b
+}
+
+func (b *testContainerBuilder) withPrivileged() *testContainerBuilder {
+	b.securityContext = &corev1.SecurityContext{
+		Privileged: pointer.Bool(true),
+	}
+	return b
+}
+
+func (b *testContainerBuilder) withUnprivileged() *testContainerBuilder {
+	b.securityContext = &corev1.SecurityContext{
+		Privileged: pointer.Bool(false),
+	}
+	return b
+}
+
+func (b *testContainerBuilder) build() corev1.Container {
+	return corev1.Container{
+		Name:            b.name,
+		Image:           b.image,
+		ImagePullPolicy: corev1.PullIfNotPresent,
+		Command:         b.command,
+		Args:            b.args,
+		Env:             b.env,
+		VolumeMounts:    b.volumeMounts,
+		SecurityContext: b.securityContext,
 	}
 }
 
