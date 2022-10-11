@@ -70,7 +70,6 @@ func New(mgr ctrl.Manager) *MachineConfigReconciler {
 func (r *MachineConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha2.NodeObservabilityMachineConfig{}, builder.WithPredicates(ignoreNOMCStatusUpdates())).
-		// TODO: add missing watches
 		Owns(&mcv1.MachineConfig{}).
 		Owns(&mcv1.MachineConfigPool{}).
 		Complete(r)
