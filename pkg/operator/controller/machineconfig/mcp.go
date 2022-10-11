@@ -133,7 +133,7 @@ func (r *MachineConfigReconciler) syncNodeObservabilityMCPStatus(ctx context.Con
 		return false, nil
 	} else if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolDegraded) && mcp.Status.DegradedMachineCount != 0 {
 		msg := fmt.Sprintf("%s MCP has %d machines in degraded state", mcp.Name, mcp.Status.DegradedMachineCount)
-		nomc.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonFailed, msg)
+		nomc.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonInProgress, msg)
 		return false, fmt.Errorf("failed to update machineconfig on %s mcp due to degraded machines: %d", mcp.Name, mcp.Status.DegradedMachineCount)
 	}
 

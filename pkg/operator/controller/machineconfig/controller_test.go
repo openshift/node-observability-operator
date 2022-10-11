@@ -137,6 +137,226 @@ func testMachineConfigPoolWithConditions(name string, mcCount, updatedCount, rea
 }
 
 // TODO: add tests for syncNodeObservabilityMCP
+func TestSyncNodeObservabilityMCP(t *testing.T) {
+	tests := []struct {
+		name               string
+		requeue            bool
+		expectedConditions []metav1.Condition
+		preReq             func(*MachineConfigReconciler, *machineconfigfakes.FakeImpl)
+		wantErr            bool
+	}{
+		{
+			name: "missing node observability mcp",
+			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientGetReturns(testError)
+			},
+			wantErr:            true,
+			requeue:            false,
+			expectedConditions: []metav1.Condition{},
+		},
+		{
+			name: "nodeobservability mcp is still updating",
+			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientGetCalls(func(
+					ctx context.Context,
+					ns types.NamespacedName,
+					obj client.Object) error {
+					switch o := obj.(type) {
+					case *mcv1.MachineConfigPool:
+						mcp := testMachineConfigPoolWithConditions("nodeobservability", 3, 2, 2, 0, 0, []mcv1.MachineConfigPoolCondition{
+							{
+								Type:   mcv1.MachineConfigPoolUpdating,
+								Status: corev1.ConditionStatus(metav1.ConditionTrue),
+							},
+						})
+						mcp.DeepCopyInto(o)
+					}
+					return nil
+				})
+			},
+			wantErr: false,
+			requeue: true,
+			expectedConditions: []metav1.Condition{
+				{
+					Type:   v1alpha2.DebugReady,
+					Status: metav1.ConditionFalse,
+					Reason: v1alpha2.ReasonInProgress,
+				},
+			},
+		},
+		{
+			name: "nodeobservability mcp has degraded machines",
+			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientGetCalls(func(
+					ctx context.Context,
+					ns types.NamespacedName,
+					obj client.Object) error {
+					switch o := obj.(type) {
+					case *mcv1.MachineConfigPool:
+						mcp := testMachineConfigPoolWithConditions("nodeobservability", 3, 2, 2, 1, 1, []mcv1.MachineConfigPoolCondition{
+							{
+								Type:   mcv1.MachineConfigPoolDegraded,
+								Status: corev1.ConditionStatus(metav1.ConditionTrue),
+							},
+						})
+						mcp.DeepCopyInto(o)
+					}
+					return nil
+				})
+			},
+			wantErr: true,
+			requeue: false,
+			expectedConditions: []metav1.Condition{
+				{
+					Type:   v1alpha2.DebugReady,
+					Status: metav1.ConditionFalse,
+					Reason: v1alpha2.ReasonInProgress,
+				},
+			},
+		},
+		{
+			name: "nodeobservability mcp completed updating and has required machinecount",
+			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientListCalls(func(
+					ctx context.Context,
+					list client.ObjectList,
+					opts ...client.ListOption) error {
+					switch o := list.(type) {
+					case *corev1.NodeList:
+						n := &corev1.NodeList{}
+						nodes := testWorkerNodes()
+						for i := range nodes {
+							node := nodes[i].(*corev1.Node)
+							node.ObjectMeta.Labels[NodeObservabilityNodeRoleLabelName] = empty
+							n.Items = append(n.Items, *node)
+						}
+						n.DeepCopyInto(o)
+					}
+					return nil
+				})
+				m.ClientGetCalls(func(
+					ctx context.Context,
+					ns types.NamespacedName,
+					obj client.Object) error {
+					switch o := obj.(type) {
+					case *mcv1.MachineConfigPool:
+						mcp := testMachineConfigPoolWithConditions("nodeobservability", 3, 3, 3, 0, 0, []mcv1.MachineConfigPoolCondition{
+							{
+								Type:   mcv1.MachineConfigPoolUpdated,
+								Status: corev1.ConditionStatus(metav1.ConditionTrue),
+							},
+						})
+						mcp.DeepCopyInto(o)
+					}
+					return nil
+				})
+			},
+			wantErr: false,
+			requeue: false,
+			expectedConditions: []metav1.Condition{
+				{
+					Type:   v1alpha2.DebugReady,
+					Status: metav1.ConditionTrue,
+					Reason: v1alpha2.ReasonReady,
+				},
+			},
+		},
+		{
+			name: "nodeobservability mcp does not have required machine count",
+			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientGetCalls(func(
+					ctx context.Context,
+					ns types.NamespacedName,
+					obj client.Object) error {
+					switch o := obj.(type) {
+					case *mcv1.MachineConfigPool:
+						mcp := testMachineConfigPoolWithConditions("nodeobservability", 3, 2, 2, 0, 0, []mcv1.MachineConfigPoolCondition{
+							{
+								Type:   mcv1.MachineConfigPoolUpdated,
+								Status: corev1.ConditionStatus(metav1.ConditionTrue),
+							},
+						})
+						mcp.DeepCopyInto(o)
+					}
+					return nil
+				})
+			},
+			wantErr: false,
+			requeue: true,
+			expectedConditions: []metav1.Condition{
+				{
+					Type:   v1alpha2.DebugReady,
+					Status: metav1.ConditionFalse,
+					Reason: v1alpha2.ReasonInProgress,
+				},
+			},
+		},
+		{
+			name: "nodeobservability mcp has unknown conditions",
+			preReq: func(r *MachineConfigReconciler, m *machineconfigfakes.FakeImpl) {
+				m.ClientGetCalls(func(
+					ctx context.Context,
+					ns types.NamespacedName,
+					obj client.Object) error {
+					switch o := obj.(type) {
+					case *mcv1.MachineConfigPool:
+						mcp := testMachineConfigPoolWithConditions("nodeobservability", 3, 2, 2, 1, 1, []mcv1.MachineConfigPoolCondition{
+							{
+								Type:   "random-condition",
+								Status: corev1.ConditionStatus(metav1.ConditionTrue),
+							},
+						})
+						mcp.DeepCopyInto(o)
+					}
+					return nil
+				})
+			},
+			wantErr: false,
+			requeue: true,
+			expectedConditions: []metav1.Condition{
+				{
+					Type:   v1alpha2.DebugReady,
+					Status: metav1.ConditionFalse,
+					Reason: v1alpha2.ReasonInProgress,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Log("------------------------------")
+			r := testReconciler()
+			mock := &machineconfigfakes.FakeImpl{}
+			if tt.preReq != nil {
+				tt.preReq(r, mock)
+			}
+			r.impl = mock
+
+			nomc := testNodeObsMC()
+			requeue, err := r.syncNodeObservabilityMCPStatus(context.TODO(), nomc)
+			if err != nil {
+				if !tt.wantErr {
+					t.Errorf("err: %v, wantErr: %v", err, tt.wantErr)
+				}
+			}
+
+			for _, c1 := range nomc.Status.Conditions {
+				for _, c2 := range tt.expectedConditions {
+					if c1.Type == c2.Type {
+						if c1.Status != c2.Status || c1.Reason != c2.Reason {
+							t.Errorf("failed expected %+v but got %+v condition on nomc", c2, c1)
+						}
+					}
+				}
+			}
+			if tt.requeue != requeue {
+				t.Errorf("expected requeue=%v for cleanup but got %v", tt.requeue, requeue)
+			}
+		})
+	}
+}
 
 func TestCleanUp(t *testing.T) {
 
@@ -389,21 +609,20 @@ func TestCleanUp(t *testing.T) {
 			if err != nil {
 				if !tt.wantErr {
 					t.Errorf("cleanUp() err: %v, wantErr: %v", err, tt.wantErr)
-				} else {
-					for _, c1 := range nomc.Status.Conditions {
-						for _, c2 := range tt.expectedConditions {
-							if c1.Type == c2.Type {
-								if c1.Status != c2.Status || c1.Reason != c2.Reason {
-									t.Errorf("failed expected %+v but got %+v condition on nomc", c2, c1)
-								}
-							}
+				}
+			}
+
+			for _, c1 := range nomc.Status.Conditions {
+				for _, c2 := range tt.expectedConditions {
+					if c1.Type == c2.Type {
+						if c1.Status != c2.Status || c1.Reason != c2.Reason {
+							t.Errorf("failed expected %+v but got %+v condition on nomc", c2, c1)
 						}
 					}
 				}
 			}
-
 			if tt.requeue != requeue {
-				t.Errorf("expected requeue=%v for cleanup but got %v", tt.requeue, requeue)
+				t.Errorf("expected requeue=%v but got %v", tt.requeue, requeue)
 			}
 		})
 	}
