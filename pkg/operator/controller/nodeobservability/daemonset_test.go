@@ -70,6 +70,7 @@ func TestEnsureDaemonset(t *testing.T) {
 						withPrivileged().
 						withVolumeMount(socketName, socketMountPath, false).
 						withVolumeMount(kbltCAName, kbltCAMountPath, true).
+						withVolumeMount("profiledata", "/run/node-observability", false).
 						build(),
 					testContainer("kube-rbac-proxy", "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0").
 						withArgs(
@@ -86,6 +87,7 @@ func TestEnsureDaemonset(t *testing.T) {
 				withHostPathVolume(socketName, socketPath, corev1.HostPathSocket).
 				withConfigMapVolume(kbltCAName, kubeletCAConfigMapName).
 				withSecretVolume(certsName, "node-observability-agent").
+				withEmptyDirVolume("profiledata").
 				build(),
 		},
 		{
@@ -132,6 +134,7 @@ func TestEnsureDaemonset(t *testing.T) {
 						withPrivileged().
 						withVolumeMount(socketName, socketMountPath, false).
 						withVolumeMount(kbltCAName, kbltCAMountPath, true).
+						withVolumeMount("profiledata", "/run/node-observability", false).
 						build(),
 					testContainer("kube-rbac-proxy", "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0").
 						withArgs(
@@ -148,6 +151,7 @@ func TestEnsureDaemonset(t *testing.T) {
 				withHostPathVolume(socketName, socketPath, corev1.HostPathSocket).
 				withConfigMapVolume(kbltCAName, kubeletCAConfigMapName).
 				withSecretVolume(certsName, "node-observability-agent").
+				withEmptyDirVolume("profiledata").
 				build(),
 		},
 		{
@@ -173,6 +177,7 @@ func TestEnsureDaemonset(t *testing.T) {
 						withPrivileged().
 						withVolumeMount(socketName, socketMountPath, false).
 						withVolumeMount(kbltCAName, kbltCAMountPath, true).
+						withVolumeMount("profiledata", "/run/node-observability", false).
 						build(),
 					testContainer("kube-rbac-proxy", "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0").
 						withArgs(
@@ -189,6 +194,7 @@ func TestEnsureDaemonset(t *testing.T) {
 				withHostPathVolume(socketName, socketPath, corev1.HostPathSocket).
 				withConfigMapVolume(kbltCAName, kubeletCAConfigMapName).
 				withSecretVolume(certsName, "node-observability-agent").
+				withEmptyDirVolume("profiledata").
 				build(),
 		},
 	}
@@ -654,6 +660,16 @@ func (b *testDaemonsetBuilder) withTemplateAnnotation(key, value string) *testDa
 		b.templateAnnotations = map[string]string{}
 	}
 	b.templateAnnotations[key] = value
+	return b
+}
+
+func (b *testDaemonsetBuilder) withEmptyDirVolume(name string) *testDaemonsetBuilder {
+	b.volumes = append(b.volumes, corev1.Volume{
+		Name: name,
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	})
 	return b
 }
 

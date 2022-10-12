@@ -50,17 +50,17 @@ func buildIndexedVolumeMountMap(volumeMounts []corev1.VolumeMount) map[string]in
 }
 
 // volumeMountsChanged checks that the current volume mounts have all expected ones,
-// returns true if the current volume mounts had to be changed to match the expected.
+// returns true if the current volume mounts have to be changed to match the expected.
 func volumeMountsChanged(current, expected []corev1.VolumeMount) (bool, []corev1.VolumeMount) {
-	updated := make([]corev1.VolumeMount, len(expected))
-	copy(updated, expected)
-
 	if len(current) == 0 {
 		if len(expected) == 0 {
-			return false, updated
+			return false, nil
 		}
 		return true, expected
 	}
+
+	updated := make([]corev1.VolumeMount, len(current))
+	copy(updated, current)
 
 	changed := false
 
@@ -69,13 +69,15 @@ func volumeMountsChanged(current, expected []corev1.VolumeMount) (bool, []corev1
 
 	// ensure all expected volume mounts are present,
 	// unsolicited ones are kept (e.g. kube api token)
-	for currName, currVol := range currentVolumeMountMap {
-		if expVol, expExists := expectedVolumeMountMap[currName]; !expExists {
-			updated = append(updated, currVol.VolumeMount)
+	for expName, expVol := range expectedVolumeMountMap {
+		if currVol, currExists := currentVolumeMountMap[expName]; !currExists {
+			updated = append(updated, expVol.VolumeMount)
 			changed = true
 		} else {
+			// deepequal is fine here as we don't have more than 1 item
+			// neither in the secret nor in the configmap
 			if !reflect.DeepEqual(currVol.VolumeMount, expVol.VolumeMount) {
-				updated[expVol.Index] = expVol.VolumeMount
+				updated[currVol.Index] = expVol.VolumeMount
 				changed = true
 			}
 		}
@@ -96,24 +98,23 @@ func buildIndexedVolumeMap(volumes []corev1.Volume) map[string]indexedVolume {
 	return m
 }
 
-// volumeMountsChanged checks that the current volume have all expected volumes,
-// returns true if the current volumes had to be changed to match the expected.
-func volumesChanged(current []corev1.Volume, desired []corev1.Volume) (bool, []corev1.Volume) {
-	updated := make([]corev1.Volume, len(desired))
-	copy(updated, desired)
-
+// volumesChanged checks that the currents volume have all expected volumes,
+// returns true if the current volumes have to be changed to match the expected.
+func volumesChanged(current []corev1.Volume, expected []corev1.Volume) (bool, []corev1.Volume) {
 	if len(current) == 0 {
-		if len(desired) == 0 {
+		if len(expected) == 0 {
 			return false, nil
 		}
-		updated = desired
-		return true, updated
+		return true, expected
 	}
+
+	updated := make([]corev1.Volume, len(current))
+	copy(updated, current)
 
 	changed := false
 
 	currentVolumeMap := buildIndexedVolumeMap(current)
-	expectedVolumeMap := buildIndexedVolumeMap(desired)
+	expectedVolumeMap := buildIndexedVolumeMap(expected)
 
 	ignoreFieldsConfigMap := cmpopts.IgnoreFields(corev1.ConfigMapVolumeSource{}, "DefaultMode")
 	ignoreFieldsSecret := cmpopts.IgnoreFields(corev1.SecretVolumeSource{}, "DefaultMode")
