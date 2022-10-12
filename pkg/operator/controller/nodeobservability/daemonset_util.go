@@ -161,20 +161,21 @@ func buildIndexedContainerMap(containers []corev1.Container) map[string]indexedC
 }
 
 // containersChanged checks that the current containers have all expected containers,
-// returns true if the current containers had to be changed to match the expected.
-func containersChanged(current, desired []corev1.Container) (bool, []corev1.Container) {
+// returns true if the current containers have to be changed to match the expected.
+func containersChanged(current, expected []corev1.Container) (bool, []corev1.Container) {
 	changed := false
 
-	updatedContainers := make([]corev1.Container, len(desired))
-	copy(updatedContainers, desired)
+	updatedContainers := make([]corev1.Container, len(current))
+	copy(updatedContainers, current)
 
 	currentContMap := buildIndexedContainerMap(current)
-	desiredContMap := buildIndexedContainerMap(desired)
+	expectedContMap := buildIndexedContainerMap(expected)
 
-	// let's check that all the current containers have the desired values set
-	for currName, currCont := range currentContMap {
-		// if the current container is expected: check its fields
-		if expCont, found := desiredContMap[currName]; found {
+	// ensure all expected containers are present,
+	// unsolicited ones are kept (e.g. service mesh proxy injection)
+	for expName, expCont := range expectedContMap {
+		// expected container is present
+		if currCont, found := currentContMap[expName]; found {
 			if currCont.Image != expCont.Image {
 				updatedContainers[currCont.Index].Image = expCont.Image
 				changed = true
@@ -202,8 +203,9 @@ func containersChanged(current, desired []corev1.Container) (bool, []corev1.Cont
 			}
 
 		} else {
-			updatedContainers = append(updatedContainers, currentContMap[currName].Container)
-			changed = false
+			// expected container is not present - add it
+			updatedContainers = append(updatedContainers, expCont.Container)
+			changed = true
 		}
 	}
 
