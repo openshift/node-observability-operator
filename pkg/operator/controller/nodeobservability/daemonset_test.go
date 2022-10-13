@@ -303,6 +303,34 @@ func TestUpdateDaemonSet(t *testing.T) {
 			expectUpdate: false,
 		},
 		{
+			name: "new container added to desired daemonset",
+			existingDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(
+					testContainer("agent", "agent:v1").
+						withArgs("--arg1=1").
+						build(),
+				).build(),
+			desiredDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(
+					testContainer("agent", "agent:v1").
+						withArgs("--arg1=1").
+						build(),
+					testContainer("agent2", "agent:v2").
+						withArgs("--arg2=2").
+						build(),
+				).build(),
+			expectedDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
+				withContainers(
+					testContainer("agent", "agent:v1").
+						withArgs("--arg1=1").
+						build(),
+					testContainer("agent2", "agent:v2").
+						withArgs("--arg2=2").
+						build(),
+				).build(),
+			expectUpdate: true,
+		},
+		{
 			name: "container env modified",
 			existingDaemonset: testDaemonset("daemonset", "test-namespace", "test-sa").
 				withContainers(testContainer("agent", "agent:v1").
