@@ -20,18 +20,28 @@ import (
 	"context"
 	"fmt"
 
+	securityv1 "github.com/openshift/api/security/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilclock "k8s.io/apimachinery/pkg/util/clock"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
 	logr "github.com/go-logr/logr"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	operatorv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
+	"github.com/openshift/node-observability-operator/pkg/operator/controller/utils"
 )
 
 const (
@@ -144,7 +154,7 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	// - clusterrole (use the scc)
 	// - clusterrolebinding (bind the sa to the role)
 
-	// ensure scc
+	// ensure scc (cannot be part of OLM bundle yet)
 	scc, err := r.ensureSecurityContextConstraints(ctx, nodeObs)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure securitycontectconstraints : %w", err)
@@ -222,10 +232,36 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *NodeObservabilityReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// SCC doesn't belong to any NOB instance, thus no owner reference.
+	// Enqueing any NOB would ensure SCC.
+	anyNobInstance := func(o client.Object) []reconcile.Request {
+		nobList := &operatorv1alpha2.NodeObservabilityList{}
+		if err := mgr.GetCache().List(context.Background(), nobList); err != nil {
+			r.Log.Error(err, "failed to list node observability instances for scc")
+			return []reconcile.Request{}
+		}
+		if len(nobList.Items) == 0 {
+			r.Log.Error(nil, "no node observability instances found for scc")
+			return []reconcile.Request{}
+		}
+		return []reconcile.Request{
+			{
+				NamespacedName: types.NamespacedName{
+					Name: nobList.Items[0].Name,
+				},
+			},
+		}
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&operatorv1alpha2.NodeObservability{}).
 		Owns(&appsv1.DaemonSet{}).
+		Owns(&corev1.ServiceAccount{}).
+		Owns(&corev1.Service{}).
+		Owns(&rbacv1.ClusterRoleBinding{}).
 		Owns(&operatorv1alpha2.NodeObservabilityMachineConfig{}).
+		Watches(&source.Kind{Type: &securityv1.SecurityContextConstraints{}},
+			handler.EnqueueRequestsFromMapFunc(anyNobInstance),
+			builder.WithPredicates(predicate.NewPredicateFuncs(utils.HasName(sccName)))).
 		Complete(r)
 }
 

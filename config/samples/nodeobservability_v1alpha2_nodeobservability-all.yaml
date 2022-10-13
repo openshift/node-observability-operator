@@ -4,5 +4,5 @@ metadata:
   name: cluster
 spec:
   nodeSelector:
-    kubernetes.io/hostname: worker-a
+    node-role.kubernetes.io/worker: ""
   type: crio-kubelet

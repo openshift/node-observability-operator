@@ -56,7 +56,19 @@ func (r *NodeObservabilityReconciler) ensureService(ctx context.Context, nodeObs
 	}
 
 	// update service since it already exists
-	return r.updateService(ctx, current, desired)
+	updated, err := r.updateService(ctx, current, desired)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update service %q: %w", nameSpace, err)
+	}
+
+	if updated {
+		current, err = r.currentService(ctx, nameSpace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get existing service %q: %w", nameSpace, err)
+		}
+		r.Log.V(1).Info("successfully updated service", "svc.name", nameSpace.Name, "svc.namespace", nameSpace.Namespace)
+	}
+	return current, nil
 }
 
 // currentService gets the current service
@@ -73,7 +85,7 @@ func (r *NodeObservabilityReconciler) createService(ctx context.Context, svc *co
 	return r.Create(ctx, svc)
 }
 
-func (r *NodeObservabilityReconciler) updateService(ctx context.Context, current, desired *corev1.Service) (*corev1.Service, error) {
+func (r *NodeObservabilityReconciler) updateService(ctx context.Context, current, desired *corev1.Service) (bool, error) {
 	updatedService := current.DeepCopy()
 	var updated bool
 
@@ -108,9 +120,13 @@ func (r *NodeObservabilityReconciler) updateService(ctx context.Context, current
 	}
 
 	if updated {
-		return updatedService, r.Update(ctx, updatedService)
+		if err := r.Update(ctx, updatedService); err != nil {
+			return false, err
+		}
+		return true, nil
 	}
-	return updatedService, nil
+
+	return false, nil
 }
 
 // desiredService returns a service object

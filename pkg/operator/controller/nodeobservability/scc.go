@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	securityv1 "github.com/openshift/api/security/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -32,7 +33,7 @@ func (r *NodeObservabilityReconciler) ensureSecurityContextConstraints(ctx conte
 		if err := r.createSecurityContextConstraints(ctx, desired); err != nil {
 			return nil, fmt.Errorf("failed to create securitycontextconstraints %q: %w", sccName, err)
 		}
-		r.Log.Info("created securitycontextconstraints", "scc.name", sccName)
+		r.Log.Info("successfully created securitycontextconstraints", "scc.name", sccName)
 		return r.currentSecurityContextConstraints(ctx)
 	}
 
@@ -42,7 +43,7 @@ func (r *NodeObservabilityReconciler) ensureSecurityContextConstraints(ctx conte
 	}
 
 	if updated {
-		r.Log.V(1).Info("updated securitycontextconstraints", "scc.name", sccName)
+		r.Log.V(1).Info("successfully updated securitycontextconstraints", "scc.name", sccName)
 		return r.currentSecurityContextConstraints(ctx)
 	}
 
@@ -106,17 +107,17 @@ func (r *NodeObservabilityReconciler) updateSecurityContextConstraintes(ctx cont
 		updated = true
 	}
 
-	if !cmp.Equal(desired.DefaultAddCapabilities, current.DefaultAddCapabilities) {
+	if !capabilitiesEqual(desired.DefaultAddCapabilities, current.DefaultAddCapabilities) {
 		updatedScc.DefaultAddCapabilities = desired.DefaultAddCapabilities
 		updated = true
 	}
 
-	if !cmp.Equal(desired.RequiredDropCapabilities, current.RequiredDropCapabilities) {
+	if !capabilitiesEqual(desired.RequiredDropCapabilities, current.RequiredDropCapabilities) {
 		updatedScc.RequiredDropCapabilities = desired.RequiredDropCapabilities
 		updated = true
 	}
 
-	if !cmp.Equal(desired.AllowedCapabilities, current.AllowedCapabilities) {
+	if !capabilitiesEqual(desired.AllowedCapabilities, current.AllowedCapabilities) {
 		updatedScc.AllowedCapabilities = desired.AllowedCapabilities
 		updated = true
 	}
@@ -126,7 +127,7 @@ func (r *NodeObservabilityReconciler) updateSecurityContextConstraintes(ctx cont
 		updated = true
 	}
 
-	if !cmp.Equal(desired.Volumes, current.Volumes) {
+	if !volumesEqual(desired.Volumes, current.Volumes) {
 		updatedScc.Volumes = desired.Volumes
 		updated = true
 	}
@@ -175,17 +176,17 @@ func (r *NodeObservabilityReconciler) updateSecurityContextConstraintes(ctx cont
 		updated = true
 	}
 
-	if !cmp.Equal(desired.AllowedUnsafeSysctls, current.AllowedUnsafeSysctls) {
+	if !stringSlicesEqual(desired.AllowedUnsafeSysctls, current.AllowedUnsafeSysctls) {
 		updatedScc.AllowedUnsafeSysctls = desired.AllowedUnsafeSysctls
 		updated = true
 	}
 
-	if !cmp.Equal(desired.SeccompProfiles, current.SeccompProfiles) {
+	if !stringSlicesEqual(desired.SeccompProfiles, current.SeccompProfiles) {
 		updatedScc.SeccompProfiles = desired.SeccompProfiles
 		updated = true
 	}
 
-	if !cmp.Equal(desired.ForbiddenSysctls, current.ForbiddenSysctls) {
+	if !stringSlicesEqual(desired.ForbiddenSysctls, current.ForbiddenSysctls) {
 		updatedScc.ForbiddenSysctls = desired.ForbiddenSysctls
 		updated = true
 	}
@@ -209,4 +210,34 @@ func (r *NodeObservabilityReconciler) deleteSecurityContextConstraints(nodeObs *
 		return err
 	}
 	return nil
+}
+
+// volumesEqual compares fstype slices, order doesn't matter.
+func volumesEqual(desired, current []securityv1.FSType) bool {
+	if len(desired) != len(current) {
+		return false
+	}
+
+	sortOpt := cmpopts.SortSlices(func(a, b securityv1.FSType) bool { return string(a) < string(b) })
+	return cmp.Equal(desired, current, sortOpt)
+}
+
+// capabilitiesEqual compares capability slices, order doesn't matter.
+func capabilitiesEqual(desired, current []corev1.Capability) bool {
+	if len(desired) != len(current) {
+		return false
+	}
+
+	sortOpt := cmpopts.SortSlices(func(a, b corev1.Capability) bool { return string(a) < string(b) })
+	return cmp.Equal(desired, current, sortOpt)
+}
+
+// stringSlicesEqual compares string slices, order doesn't matter.
+func stringSlicesEqual(desired, current []string) bool {
+	if len(desired) != len(current) {
+		return false
+	}
+
+	sortOpt := cmpopts.SortSlices(func(a, b string) bool { return a < b })
+	return cmp.Equal(desired, current, sortOpt)
 }
