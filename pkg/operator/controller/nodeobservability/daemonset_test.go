@@ -627,7 +627,7 @@ func (b *testDaemonsetBuilder) build() *appsv1.DaemonSet {
 					ServiceAccountName:            b.serviceAccount,
 					Volumes:                       b.volumes,
 					NodeSelector:                  b.nodeSelector,
-					TerminationGracePeriodSeconds: pointer.Int64(30),
+					TerminationGracePeriodSeconds: pointer.Int64(45),
 				},
 			},
 		},
