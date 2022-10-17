@@ -138,7 +138,9 @@ func (r *NodeObservabilityReconciler) updateDaemonset(ctx context.Context, curre
 // desiredDaemonSet returns a DaemonSet object
 func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObservability, sa *corev1.ServiceAccount, ns string) *appsv1.DaemonSet {
 	ls := labelsForNodeObservability(nodeObs.Name)
-	tgp := int64(30)
+	// profiling probe currently takes 30 seconds (default),
+	// giving enough time to gracefully finish all the profiling requests
+	tgp := int64(45)
 	vst := corev1.HostPathSocket
 	privileged := true
 
