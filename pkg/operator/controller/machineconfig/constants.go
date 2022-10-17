@@ -17,6 +17,7 @@ limitations under the License.
 package machineconfigcontroller
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -36,10 +37,9 @@ const (
 	// CrioServiceFile is the name of the CRI-O systemd service unit
 	CrioServiceFile = "crio.service"
 
-	// CrioUnixSocketConfData contains the configuration required
-	// for enabling CRI-O profiling
-	CrioUnixSocketConfData = `[Service]
-Environment="ENABLE_PROFILE_UNIX_SOCKET=true"`
+	// CrioUnixSocketEnvString refers to the environment variable info
+	// string that helps in finding if the profiling is enabled by default
+	CrioUnixSocketEnvString = "ENABLE_PROFILE_UNIX_SOCKET=true"
 
 	// CrioUnixSocketConfFile is the name of the CRI-O config file
 	CrioUnixSocketConfFile = "10-mco-profile-unix-socket.conf"
@@ -96,6 +96,11 @@ const (
 )
 
 var (
+	// CrioUnixSocketConfData contains the configuration required
+	// for enabling CRI-O profiling
+	CrioUnixSocketConfData = fmt.Sprintf(`[Service]
+Environment="%s"`, CrioUnixSocketEnvString)
+
 	// NodeSelectorLabels is for storing the labels to
 	// match the nodes to include in MCP
 	NodeSelectorLabels = map[string]string{
