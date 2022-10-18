@@ -19,6 +19,7 @@ package nodeobservabilitycontroller
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	securityv1 "github.com/openshift/api/security/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -31,7 +32,7 @@ import (
 	utilclock "k8s.io/apimachinery/pkg/util/clock"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 
-	logr "github.com/go-logr/logr"
+	"github.com/go-logr/logr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -40,7 +41,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
+	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+
 	operatorv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
+	machineconfigcontroller "github.com/openshift/node-observability-operator/pkg/operator/controller/machineconfig"
 	"github.com/openshift/node-observability-operator/pkg/operator/controller/utils"
 )
 
@@ -201,18 +205,18 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	dsReady := ds.Status.NumberReady == ds.Status.DesiredNumberScheduled
 
 	// if machine config change is not requested, we can mark it as ready
-	var nomcReady bool = true
-	if machineConfigChangeRequested(nodeObs) {
+	var mcReady bool = true
+	if r.machineConfigChangeRequested(ctx, nodeObs) {
 		nomc, err := r.ensureNOMC(ctx, nodeObs)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to ensure nodeobservabilitymachineconfig : %w", err)
 		}
 		r.Log.V(1).Info("nodeobservabilitymachineconfig ensured", "nomc.name", nomc.Name)
-		nomcReady = nomc.Status.IsReady()
+		mcReady = nomc.Status.IsReady()
 	}
 
-	msg := fmt.Sprintf("DaemonSet %s ready: %t NodeObservabilityMachineConfig ready: %t", ds.Name, dsReady, nomcReady)
-	if dsReady && nomcReady {
+	msg := fmt.Sprintf("DaemonSet %s ready: %t MachineConfig ready: %t", ds.Name, dsReady, mcReady)
+	if dsReady && mcReady {
 		nodeObs.Status.SetCondition(operatorv1alpha2.DebugReady, metav1.ConditionTrue, operatorv1alpha2.ReasonReady, msg)
 	} else {
 		nodeObs.Status.SetCondition(operatorv1alpha2.DebugReady, metav1.ConditionFalse, operatorv1alpha2.ReasonInProgress, msg)
@@ -335,8 +339,38 @@ func (r *NodeObservabilityReconciler) ensureNodeObservabilityDeleted(ctx context
 
 // machineConfigChangeRequested returns true, when a given NodeObservabilityType needs
 // machine config change. Only CrioKubeletNodeObservabilityType requires a MC change, false otherwise
-func machineConfigChangeRequested(nodeObs *operatorv1alpha2.NodeObservability) bool {
-	return nodeObs.Spec.Type == operatorv1alpha2.CrioKubeletNodeObservabilityType
+func (r *NodeObservabilityReconciler) machineConfigChangeRequested(ctx context.Context, nodeObs *operatorv1alpha2.NodeObservability) bool {
+	isChangeRequested := nodeObs.Spec.Type == operatorv1alpha2.CrioKubeletNodeObservabilityType
+	if !isChangeRequested {
+		return isChangeRequested
+	}
+	// avoid the creation of a new NOMC if the CRIO profiling is already enabled in the rendered MC
+	mcpName := types.NamespacedName{Name: machineconfigcontroller.WorkerNodeMCPName}
+	mcp := &mcv1.MachineConfigPool{}
+	if err := r.Client.Get(ctx, mcpName, mcp); err != nil {
+		r.Log.Error(err, "failed to get the machineconfigpool instance ", "mcp.name", mcpName.Name)
+		return isChangeRequested
+	}
+	// getting the rendered mc name from the obtained machine config pool resource
+	mcName := types.NamespacedName{Name: mcp.Spec.Configuration.Name}
+	renderedMC := &mcv1.MachineConfig{}
+	if err := r.Client.Get(ctx, mcName, renderedMC); err != nil {
+		r.Log.Error(err, "failed to get the machineconfig instance ", "mc.name", mcName.Name)
+		return isChangeRequested
+	}
+	bData, err := renderedMC.Spec.Config.Marshal()
+	if err != nil {
+		r.Log.Error(err, "failed to marshal the rendered machineconfig ", "mc.name", renderedMC.Name)
+		return isChangeRequested
+	}
+	if bData != nil {
+		if strings.Contains(string(bData), machineconfigcontroller.CrioUnixSocketEnvString) {
+			// profiling has already been enabled on the CRIO and hence not creating a new NOMC
+			r.Log.V(1).Info("crio-profiling already enabled, skipping the node observability machine config creation")
+			isChangeRequested = false
+		}
+	}
+	return isChangeRequested
 }
 
 func isClusterNodeObservability(ctx context.Context, nodeObs *operatorv1alpha2.NodeObservability) error {
