@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM docker.io/golang:1.17 as builder
+FROM docker.io/golang:1.19 as builder
 # TODO: Switch to UBI golang image when 1.17 is released
 # FROM registry.access.redhat.com/ubi8/go-toolset:latest
 

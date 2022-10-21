@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/onsi/ginkgo/v2/formatter"
@@ -35,18 +36,20 @@ type Suite struct {
 	interruptHandler  interrupt_handler.InterruptHandlerInterface
 	config            types.SuiteConfig
 
-	skipAll           bool
-	report            types.Report
-	currentSpecReport types.SpecReport
-	currentNode       Node
+	skipAll                         bool
+	report                          types.Report
+	currentSpecReport               types.SpecReport
+	currentSpecReportUserAccessLock *sync.Mutex
+	currentNode                     Node
 
 	client parallel_support.Client
 }
 
 func NewSuite() *Suite {
 	return &Suite{
-		tree:  &TreeNode{},
-		phase: PhaseBuildTopLevel,
+		tree:                            &TreeNode{},
+		phase:                           PhaseBuildTopLevel,
+		currentSpecReportUserAccessLock: &sync.Mutex{},
 	}
 }
 
@@ -83,6 +86,10 @@ func (suite *Suite) Run(description string, suiteLabels Labels, suitePath string
 	success := suite.runSpecs(description, suiteLabels, suitePath, hasProgrammaticFocus, specs)
 
 	return success, hasProgrammaticFocus
+}
+
+func (suite *Suite) InRunPhase() bool {
+	return suite.phase == PhaseRun
 }
 
 /*
@@ -208,14 +215,20 @@ func (suite *Suite) pushCleanupNode(node Node) error {
   Spec Running methods - used during PhaseRun
 */
 func (suite *Suite) CurrentSpecReport() types.SpecReport {
+	suite.currentSpecReportUserAccessLock.Lock()
+	defer suite.currentSpecReportUserAccessLock.Unlock()
 	report := suite.currentSpecReport
 	if suite.writer != nil {
 		report.CapturedGinkgoWriterOutput = string(suite.writer.Bytes())
 	}
+	report.ReportEntries = make([]ReportEntry, len(report.ReportEntries))
+	copy(report.ReportEntries, suite.currentSpecReport.ReportEntries)
 	return report
 }
 
 func (suite *Suite) AddReportEntry(entry ReportEntry) error {
+	suite.currentSpecReportUserAccessLock.Lock()
+	defer suite.currentSpecReportUserAccessLock.Unlock()
 	if suite.phase != PhaseRun {
 		return types.GinkgoErrors.AddReportEntryNotDuringRunPhase(entry.Location)
 	}
@@ -296,7 +309,7 @@ func (suite *Suite) runSpecs(description string, suiteLabels Labels, suitePath s
 			// the complexity for running groups of specs is very high because of Ordered containers and FlakeAttempts
 			// we encapsulate that complexity in the notion of a Group that can run
 			// Group is really just an extension of suite so it gets passed a suite and has access to all its internals
-			// Note that group is stateful and intedned for single use!
+			// Note that group is stateful and intended for single use!
 			newGroup(suite).run(specs.AtIndices(groupedSpecIndices[groupedSpecIdx]))
 		}
 
@@ -389,10 +402,6 @@ func (suite *Suite) runReportAfterSuite() {
 }
 
 func (suite *Suite) reportEach(spec Spec, nodeType types.NodeType) {
-	if suite.config.DryRun {
-		return
-	}
-
 	nodes := spec.Nodes.WithType(nodeType)
 	if nodeType == types.NodeTypeReportAfterEach {
 		nodes = nodes.SortedByDescendingNestingLevel()
@@ -521,11 +530,6 @@ func (suite *Suite) runSuiteNode(node Node, interruptChannel chan interface{}) {
 }
 
 func (suite *Suite) runReportAfterSuiteNode(node Node, report types.Report) {
-	if suite.config.DryRun {
-		suite.currentSpecReport.State = types.SpecStatePassed
-		return
-	}
-
 	suite.writer.Truncate()
 	suite.outputInterceptor.StartInterceptingOutput()
 	suite.currentSpecReport.StartTime = time.Now()
@@ -565,7 +569,7 @@ func (suite *Suite) runNode(node Node, interruptChannel chan interface{}, text s
 		suite.currentNode = Node{}
 	}()
 
-	if suite.config.EmitSpecProgress {
+	if suite.config.EmitSpecProgress && !node.MarkedSuppressProgressReporting {
 		if text == "" {
 			text = "TOP-LEVEL"
 		}

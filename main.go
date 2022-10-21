@@ -20,7 +20,6 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"time"
 
@@ -103,7 +102,7 @@ func main() {
 	logger := zap.New(zap.UseFlagOptions(&opts))
 	ctrl.SetLogger(logger)
 
-	token, err := ioutil.ReadFile(tokenFile)
+	token, err := os.ReadFile(tokenFile)
 	if err != nil {
 		setupLog.Error(err, "unable to read serviceaccount token")
 		os.Exit(1)
@@ -220,7 +219,7 @@ func main() {
 }
 
 func readCACert(caCertFile string) (*x509.CertPool, error) {
-	content, err := ioutil.ReadFile(caCertFile)
+	content, err := os.ReadFile(caCertFile)
 	if err != nil {
 		return nil, err
 	}

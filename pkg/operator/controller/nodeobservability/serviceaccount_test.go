@@ -82,11 +82,6 @@ func TestEnsureServiceAccount(t *testing.T) {
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
-
-			if s == nil {
-				t.Fatalf("expected serviceaccount %s/%s not created", tc.expectedSA.GetNamespace(), tc.expectedSA.GetName())
-			}
-
 		})
 	}
 }
