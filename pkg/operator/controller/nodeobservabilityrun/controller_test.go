@@ -5,9 +5,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -384,8 +384,11 @@ func fakeHttpServer() error {
 
 	http.HandleFunc("/node-observability-pprof", pong)
 	http.HandleFunc("/node-observability-status", pong)
-
-	return http.ListenAndServeTLS("127.0.0.1:8443", certPath, keyPath, nil)
+	server := &http.Server{
+		Addr:              "127.0.0.1:8443",
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	return server.ListenAndServeTLS(certPath, keyPath)
 }
 
 func pong(w http.ResponseWriter, req *http.Request) {
@@ -394,7 +397,7 @@ func pong(w http.ResponseWriter, req *http.Request) {
 }
 
 func readCACert(caCertFile string) (*x509.CertPool, error) {
-	content, err := ioutil.ReadFile(caCertFile)
+	content, err := os.ReadFile(caCertFile)
 	if err != nil {
 		return nil, err
 	}

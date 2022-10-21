@@ -79,8 +79,11 @@ receives a SpecReport.  They are called before the spec starts.
 You cannot nest any other Ginkgo nodes within a ReportBeforeEach node's closure.
 You can learn more about ReportBeforeEach here: https://onsi.github.io/ginkgo/#generating-reports-programmatically
 */
-func ReportBeforeEach(body func(SpecReport)) bool {
-	return pushNode(internal.NewReportBeforeEachNode(body, types.NewCodeLocation(1)))
+func ReportBeforeEach(body func(SpecReport), args ...interface{}) bool {
+	combinedArgs := []interface{}{body}
+	combinedArgs = append(combinedArgs, args...)
+
+	return pushNode(internal.NewNode(deprecationTracker, types.NodeTypeReportBeforeEach, "", combinedArgs...))
 }
 
 /*
@@ -90,8 +93,11 @@ receives a SpecReport.  They are called after the spec has completed and receive
 You cannot nest any other Ginkgo nodes within a ReportAfterEach node's closure.
 You can learn more about ReportAfterEach here: https://onsi.github.io/ginkgo/#generating-reports-programmatically
 */
-func ReportAfterEach(body func(SpecReport)) bool {
-	return pushNode(internal.NewReportAfterEachNode(body, types.NewCodeLocation(1)))
+func ReportAfterEach(body func(SpecReport), args ...interface{}) bool {
+	combinedArgs := []interface{}{body}
+	combinedArgs = append(combinedArgs, args...)
+
+	return pushNode(internal.NewNode(deprecationTracker, types.NodeTypeReportAfterEach, "", combinedArgs...))
 }
 
 /*
@@ -103,7 +109,7 @@ ReportAftersuite nodes must be created at the top-level (i.e. not nested in a Co
 When running in parallel, Ginkgo ensures that only one of the parallel nodes runs the ReportAfterSuite and that it is passed a report that is aggregated across
 all parallel nodes
 
-In addition to using ReportAfterSuite to programatically generate suite reports, you can also generate JSON, JUnit, and Teamcity formatted reports using the --json-report, --junit-report, and --teamcity-report ginkgo CLI flags.
+In addition to using ReportAfterSuite to programmatically generate suite reports, you can also generate JSON, JUnit, and Teamcity formatted reports using the --json-report, --junit-report, and --teamcity-report ginkgo CLI flags.
 
 You cannot nest any other Ginkgo nodes within a ReportAfterSuite node's closure.
 You can learn more about ReportAfterSuite here: https://onsi.github.io/ginkgo/#generating-reports-programmatically
