@@ -391,7 +391,7 @@ spec:
                     fieldRef:
                       fieldPath: metadata.namespace
                 - name: RELATED_IMAGE_AGENT
-                  value: quay.io/node-observability-operator/node-observability-agent@sha256:ac858cd54e895a61de6fb537d79a3f1245ffb4a1f12c81bade7d28168bd5951f
+                  value: quay.io/node-observability-operator/node-observability-agent@sha256:977a6adc59ac1467d9f6d1a77854593786b8c43e36111a50925acd64d58e15a6
                 image: quay.io/openshift/node-observability-operator:v0.0.1
                 imagePullPolicy: Always
                 livenessProbe:
@@ -573,7 +573,7 @@ spec:
   provider:
     name: Red Hat, Inc.
   relatedImages:
-  - image: quay.io/node-observability-operator/node-observability-agent@sha256:ac858cd54e895a61de6fb537d79a3f1245ffb4a1f12c81bade7d28168bd5951f
+  - image: quay.io/node-observability-operator/node-observability-agent@sha256:977a6adc59ac1467d9f6d1a77854593786b8c43e36111a50925acd64d58e15a6
     name: agent
   version: 0.0.1
   webhookdefinitions:
