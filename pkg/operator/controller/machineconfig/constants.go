@@ -17,7 +17,6 @@ limitations under the License.
 package machineconfigcontroller
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -71,11 +70,6 @@ const (
 )
 
 var (
-	// CrioUnixSocketConfData contains the configuration required
-	// for enabling CRI-O profiling
-	CrioUnixSocketConfData = fmt.Sprintf(`[Service]
-Environment="%s"`, CrioUnixSocketEnvString)
-
 	// NodeSelectorLabels is for storing the labels to
 	// match the nodes to include in MCP
 	NodeSelectorLabels = map[string]string{

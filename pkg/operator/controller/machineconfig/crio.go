@@ -35,6 +35,11 @@ import (
 	"github.com/openshift/node-observability-operator/api/v1alpha2"
 )
 
+// CrioUnixSocketConfData contains the configuration required
+// for enabling CRI-O profiling
+var crioUnixSocketConfData = fmt.Sprintf(`[Service]
+Environment="%s"`, CrioUnixSocketEnvString)
+
 const (
 	// crioProfilingConfigName is the name CRI-O MachineConfig CR
 	crioProfilingConfigName = "10-crio-nodeobservability"
@@ -42,10 +47,9 @@ const (
 	// crioServiceFile is the name of the CRI-O systemd service unit
 	crioServiceFile = "crio.service"
 
-	// crioUnixSocketConfData contains the configuration required
-	// for enabling CRI-O profiling
-	crioUnixSocketConfData = `[Service]
-Environment="ENABLE_PROFILE_UNIX_SOCKET=true"`
+	// CrioUnixSocketEnvString refers to the environment variable info
+	// string that helps in finding if the profiling is enabled by default
+	CrioUnixSocketEnvString = "ENABLE_PROFILE_UNIX_SOCKET=true"
 
 	// crioUnixSocketConfFile is the name of the CRI-O config file
 	crioUnixSocketConfFile = "10-mco-profile-unix-socket.conf"
@@ -66,9 +70,9 @@ func (r *MachineConfigReconciler) enableCrioProf(ctx context.Context, nomc *v1al
 		return fmt.Errorf("failed to create crio profiling machine config: %w", err)
 	}
 
-	// TODO: check if there is a diff between desired and exists
+	// TODO: check if there is a diff between desired and existing
 
-	r.Log.V(1).Info("Successfully created MachineConfig to enable CRI-O profiling", "CrioProfilingConfigName", crioProfilingConfigName)
+	r.Log.V(1).Info("successfully created MachineConfig to enable CRI-O profiling", "mc.name", crioProfilingConfigName)
 	return nil
 }
 
@@ -86,7 +90,7 @@ func (r *MachineConfigReconciler) deleteCrioProfMC(ctx context.Context) error {
 		return fmt.Errorf("failed to remove crio profiling machineconfig: %w", err)
 	}
 
-	r.Log.V(1).Info("successfully removed machineconfig to disable CRI-O profiling", "CrioProfilingConfigName", crioProfilingConfigName)
+	r.Log.V(1).Info("successfully removed machineconfig to disable CRI-O profiling", "mc.name", crioProfilingConfigName)
 
 	return nil
 }

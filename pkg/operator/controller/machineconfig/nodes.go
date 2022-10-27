@@ -51,16 +51,15 @@ func (r *MachineConfigReconciler) ensureReqNodeLabelExists(ctx context.Context, 
 		if err != nil {
 			return fmt.Errorf("failed to patch node due to %w", err)
 		}
-		r.Log.V(1).Info("successfully performed add operation for labels", "Node", node.Name, "Label", NodeObservabilityNodeRoleLabelName)
+		r.Log.V(1).Info("successfully performed add operation for labels", "node.name", node.Name, "node.label", NodeObservabilityNodeRoleLabelName)
 		nodeCount++
 	}
 
 	if nodeCount == requiredNodeCount {
-		r.Log.V(1).Info("nodeobservability role is present on all the nodes with worker role", "UpdatedNodeCount", nodeCount)
+		r.Log.V(1).Info("nodeobservability role is present on all the nodes with worker role", "updatednodecount", nodeCount)
 		return nil
 	}
 
-	r.Log.V(1).Info("nodeobservability role is not present on all the nodes with worker role", "Nodes", requiredNodeCount, "UpdatedNodeCount", nodeCount)
 	return fmt.Errorf("failed to ensure required label, expected updates on %d nodes but got %d", requiredNodeCount, nodeCount)
 }
 
@@ -116,7 +115,7 @@ func (r *MachineConfigReconciler) ensureProfConfEnabled(ctx context.Context, nom
 	}
 
 	if len(nodeList.Items) == 0 {
-		r.Log.V(1).Info("No nodes matching the given selector were found", "NodeSelector", nomc.Spec.NodeSelector)
+		r.Log.V(1).Info("no nodes matching the given selector were found", "nodeselector", nomc.Spec.NodeSelector)
 		return nil
 	}
 
@@ -126,11 +125,11 @@ func (r *MachineConfigReconciler) ensureProfConfEnabled(ctx context.Context, nom
 	}
 
 	if err := r.enableCrioProf(ctx, nomc); err != nil {
-		return fmt.Errorf("failed to enable CRIO mc due to: %w", err)
+		return fmt.Errorf("failed to enable CRIO mc: %w", err)
 	}
 
 	if err := r.createProfMCP(ctx, nomc); err != nil {
-		return fmt.Errorf("failed to create profiling mcp due to: %w", err)
+		return fmt.Errorf("failed to create profiling mcp: %w", err)
 	}
 
 	return nil
@@ -176,12 +175,8 @@ func (r *MachineConfigReconciler) patchNodeLabels(ctx context.Context, node *cor
 
 	data, err := json.Marshal(values)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to marshal patch values: %w", err)
 	}
 
-	if err := r.ClientPatch(ctx, node, client.RawPatch(types.JSONPatchType, data)); err != nil {
-		return err
-	}
-
-	return nil
+	return r.ClientPatch(ctx, node, client.RawPatch(types.JSONPatchType, data))
 }
