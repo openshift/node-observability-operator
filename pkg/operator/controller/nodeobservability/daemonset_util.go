@@ -1,6 +1,8 @@
 package nodeobservabilitycontroller
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"reflect"
 	"sort"
 
@@ -235,4 +237,24 @@ func equalBoolPtr(current, desired *bool) bool {
 	}
 
 	return *current == *desired
+}
+
+func buildMapHash(data map[string]string) (string, error) {
+	keys := make([]string, 0, len(data))
+	for k := range data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	hash := sha256.New()
+	for _, k := range keys {
+		_, err := hash.Write([]byte(k))
+		if err != nil {
+			return "", err
+		}
+		_, err = hash.Write([]byte(data[k]))
+		if err != nil {
+			return "", err
+		}
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }

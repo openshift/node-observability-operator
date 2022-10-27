@@ -55,6 +55,7 @@ func TestEnsureDaemonset(t *testing.T) {
 				makeKubeletCACM(),
 			},
 			expectedDS: testDaemonset(daemonSetName, test.TestNamespace, serviceAccountName).
+				withTemplateAnnotation("nodeobservability.olm.openshift.io/kubelet-ca-configmap-hash", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855").
 				withNodeSelector(map[string]string{"node-role.kubernetes.io/worker": ""}).
 				withControllerReference(nodeObsInstanceName).
 				withContainers(
@@ -115,6 +116,7 @@ func TestEnsureDaemonset(t *testing.T) {
 					build(),
 			},
 			expectedDS: testDaemonset(daemonSetName, test.TestNamespace, serviceAccountName).
+				withTemplateAnnotation("nodeobservability.olm.openshift.io/kubelet-ca-configmap-hash", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855").
 				withNodeSelector(map[string]string{"node-role.kubernetes.io/worker": ""}).
 				withControllerReference(nodeObsInstanceName).
 				withResourceVersion("2").
@@ -155,6 +157,7 @@ func TestEnsureDaemonset(t *testing.T) {
 				makeTargetKubeletCACM(),
 			},
 			expectedDS: testDaemonset(daemonSetName, test.TestNamespace, serviceAccountName).
+				withTemplateAnnotation("nodeobservability.olm.openshift.io/kubelet-ca-configmap-hash", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855").
 				withNodeSelector(map[string]string{"node-role.kubernetes.io/worker": ""}).
 				withControllerReference(nodeObsInstanceName).
 				withResourceVersion("1").
@@ -518,15 +521,57 @@ func TestHasSecurityContextChanged(t *testing.T) {
 	}
 }
 
+func TestBuildMapHash(t *testing.T) {
+	testCases := []struct {
+		name         string
+		inputData    map[string]string
+		expectedHash string
+		errExpected  bool
+	}{
+		{
+			name: "correct hash",
+			inputData: map[string]string{
+				"ca-bundle.crt": "cadata",
+			},
+			expectedHash: "f5d3280e9b466526a60b8de15465941e612fbbde5481e638e913925cc4dc99e9",
+			errExpected:  false,
+		},
+		{
+			name:         "empty data",
+			inputData:    map[string]string{},
+			expectedHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			errExpected:  false,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotHash, err := buildMapHash(tc.inputData)
+			if err != nil {
+				if !tc.errExpected {
+					t.Fatalf("unexpected error received: %v", err)
+				}
+				return
+			}
+			if tc.errExpected {
+				t.Fatalf("error expected but wasn't received")
+			}
+			if gotHash != tc.expectedHash {
+				t.Errorf("unexpected hash: %s", gotHash)
+			}
+		})
+	}
+}
+
 type testDaemonsetBuilder struct {
-	name           string
-	namespace      string
-	serviceAccount string
-	version        string
-	containers     []corev1.Container
-	ownerReference []metav1.OwnerReference
-	volumes        []corev1.Volume
-	nodeSelector   map[string]string
+	name                string
+	namespace           string
+	serviceAccount      string
+	version             string
+	containers          []corev1.Container
+	ownerReference      []metav1.OwnerReference
+	volumes             []corev1.Volume
+	nodeSelector        map[string]string
+	templateAnnotations map[string]string
 }
 
 func testDaemonset(name, namespace, serviceAccount string) *testDaemonsetBuilder {
@@ -604,6 +649,14 @@ func (b *testDaemonsetBuilder) withSecretVolume(name, sname string) *testDaemons
 	return b
 }
 
+func (b *testDaemonsetBuilder) withTemplateAnnotation(key, value string) *testDaemonsetBuilder {
+	if b.templateAnnotations == nil {
+		b.templateAnnotations = map[string]string{}
+	}
+	b.templateAnnotations[key] = value
+	return b
+}
+
 func (b *testDaemonsetBuilder) build() *appsv1.DaemonSet {
 	labels := labelsForNodeObservability(nodeObsInstanceName)
 	d := &appsv1.DaemonSet{
@@ -622,7 +675,8 @@ func (b *testDaemonsetBuilder) build() *appsv1.DaemonSet {
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
+					Labels:      labels,
+					Annotations: b.templateAnnotations,
 				},
 				Spec: corev1.PodSpec{
 					Containers:                    b.containers,

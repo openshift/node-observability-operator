@@ -199,7 +199,6 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	r.Log.V(1).Info("clusterrolebinding ensured", "clusterrolebinding.name", crb.Name)
 
 	// configuring kubelet-ca configmap
-	var kubeletCAConfigMap *corev1.ConfigMap
 	configMapNsName := opctrl.NamespacedKubeletCAConfigMapName(r.Namespace)
 	configMapExists, kubeletCAConfigMap, err := r.currentNodeObsKubeletCAConfigMap(ctx, configMapNsName)
 	if err != nil {
@@ -271,6 +270,29 @@ func (r *NodeObservabilityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			},
 		}
 	}
+
+	// Kubelet CA configmap doesn't belong to any NOB instance, thus no owner reference.
+	// However it's needed for the NOBs of type crio-kubelet.
+	allCrioKubeletNobInstances := func(o client.Object) []reconcile.Request {
+		nobList := &operatorv1alpha2.NodeObservabilityList{}
+		requests := []reconcile.Request{}
+		if err := mgr.GetCache().List(context.Background(), nobList); err != nil {
+			r.Log.Error(err, "failed to list node observability instances for kubelet ca configmap")
+			return []reconcile.Request{}
+		}
+		for _, n := range nobList.Items {
+			if n.Spec.Type == operatorv1alpha2.CrioKubeletNodeObservabilityType {
+				r.Log.Info("queueing node observability instance for kubelet ca configmap", "name", n.Name)
+				requests = append(requests, reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name: n.Name,
+					},
+				})
+			}
+		}
+		return requests
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&operatorv1alpha2.NodeObservability{}).
 		Owns(&appsv1.DaemonSet{}).
@@ -281,6 +303,11 @@ func (r *NodeObservabilityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&source.Kind{Type: &securityv1.SecurityContextConstraints{}},
 			handler.EnqueueRequestsFromMapFunc(anyNobInstance),
 			builder.WithPredicates(predicate.NewPredicateFuncs(ctrlutils.HasName(sccName)))).
+		Watches(&source.Kind{Type: &corev1.ConfigMap{}},
+			handler.EnqueueRequestsFromMapFunc(allCrioKubeletNobInstances),
+			builder.WithPredicates(predicate.And(
+				predicate.NewPredicateFuncs(ctrlutils.InNamespace(r.Namespace))),
+				predicate.NewPredicateFuncs(ctrlutils.HasName(opctrl.KubeletCAConfigMapName)))).
 		Complete(r)
 }
 

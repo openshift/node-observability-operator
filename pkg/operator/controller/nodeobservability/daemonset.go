@@ -29,20 +29,24 @@ const (
 	daemonSetName         = "node-observability-agent"
 	certsName             = "certs"
 	certsMountPath        = "/var/run/secrets/openshift.io/certs"
+	kubeletCAAnnotation   = "nodeobservability.olm.openshift.io/kubelet-ca-configmap-hash"
 )
 
 // ensureDaemonSet ensures that the daemonset exists
 // Returns a Boolean value indicating whether it exists, a pointer to the
 // daemonset and an error when relevant
 func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeObs *v1alpha2.NodeObservability, sa *corev1.ServiceAccount, ns string, kubeletCAConfigMap *corev1.ConfigMap) (*appsv1.DaemonSet, error) {
-	desired := r.desiredDaemonSet(nodeObs, sa, ns, kubeletCAConfigMap.Name)
+	kubeletCAHash, err := buildMapHash(kubeletCAConfigMap.Data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build hash of kubelet ca: %w", err)
+	}
+	desired := r.desiredDaemonSet(nodeObs, sa, ns, kubeletCAConfigMap.Name, kubeletCAHash)
 	if err := controllerutil.SetControllerReference(nodeObs, desired, r.Scheme); err != nil {
 		return nil, fmt.Errorf("failed to set the controller reference for daemonset: %w", err)
 	}
 	// migration logic for updated daemonset
 	// TODO: remove this logic before going GA.
-	err := r.purgeObsoleteDaemonset(ctx, types.NamespacedName{Name: obsoleteDaemonSetName, Namespace: ns})
-	if err != nil {
+	if err := r.purgeObsoleteDaemonset(ctx, types.NamespacedName{Name: obsoleteDaemonSetName, Namespace: ns}); err != nil {
 		return nil, fmt.Errorf("failed to purge obsolete daemonset due to %w", err)
 	}
 	nameSpace := types.NamespacedName{Namespace: ns, Name: daemonSetName}
@@ -102,6 +106,11 @@ func (r *NodeObservabilityReconciler) updateDaemonset(ctx context.Context, curre
 		updated = true
 	}
 
+	if !cmp.Equal(current.Spec.Template.Annotations, desired.Spec.Template.Annotations) {
+		updatedDS.Spec.Template.Annotations = desired.Spec.Template.Annotations
+		updated = true
+	}
+
 	if changed, updatedContainers := containersChanged(current.Spec.Template.Spec.Containers, desired.Spec.Template.Spec.Containers); changed {
 		updatedDS.Spec.Template.Spec.Containers = updatedContainers
 		updated = true
@@ -128,8 +137,11 @@ func (r *NodeObservabilityReconciler) updateDaemonset(ctx context.Context, curre
 }
 
 // desiredDaemonSet returns a DaemonSet object
-func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObservability, sa *corev1.ServiceAccount, ns string, kubeletCAConfigMapName string) *appsv1.DaemonSet {
+func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObservability, sa *corev1.ServiceAccount, ns, kubeletCAConfigMapName, kubeletCAHash string) *appsv1.DaemonSet {
 	ls := labelsForNodeObservability(nodeObs.Name)
+	annotations := map[string]string{
+		kubeletCAAnnotation: kubeletCAHash,
+	}
 	// profiling probe currently takes 30 seconds (default),
 	// giving enough time to gracefully finish all the profiling requests
 	tgp := int64(45)
@@ -147,7 +159,8 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: ls,
+					Labels:      ls,
+					Annotations: annotations,
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
