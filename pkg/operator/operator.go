@@ -26,13 +26,15 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	nodeobservabilityv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 	nodeobservabilityv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 	operatorconfig "github.com/openshift/node-observability-operator/pkg/operator/config"
-	controller "github.com/openshift/node-observability-operator/pkg/operator/controller"
+	opctrl "github.com/openshift/node-observability-operator/pkg/operator/controller"
+	caconfigmapcontroller "github.com/openshift/node-observability-operator/pkg/operator/controller/ca-configmap"
 	machineconfigcontroller "github.com/openshift/node-observability-operator/pkg/operator/controller/machineconfig"
 	nodeobservabilitycontroller "github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservability"
 	nodeobservabilityrun "github.com/openshift/node-observability-operator/pkg/operator/controller/nodeobservabilityrun"
@@ -84,28 +86,49 @@ func New(cliCfg *rest.Config, opCfg *operatorconfig.Config) (*Operator, error) {
 	}
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		return nil, fmt.Errorf("failed to set up health check: %w", err)
-
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		return nil, fmt.Errorf("failed to set up ready check: %w", err)
 	}
-	clusterWideCli, err := client.New(mgr.GetConfig(), client.Options{
-		Scheme: GetOperatorScheme(),
+	// Cluster is a runnable managed by controller-runtime's manager
+	// with its own client and cache.
+	// We deliberately use a dedicated cache for the watches of ca-configmap-controller
+	// to avoid the unnecessary cluster level permissions.
+	// ca-configmap-controller needs a namespace different from the operator's (source namespace)
+	// which forces the usage of the multinamespace shared cache of the manager.
+	// The additional namespace in turn obliges all the other controllers to have the rights
+	// to watch in it which results into cluster level permissions for all the operands:
+	// daemonset, serviceaccounts, services, since the local role cannot be created in another namespace via OLM.
+	// Inspired by https://github.com/kubernetes-sigs/controller-runtime/blob/master/designs/move-cluster-specific-code-out-of-manager.md
+	cluster, err := cluster.New(config, func(opts *cluster.Options) {
+		opts.NewClient = newNoCacheClientFunc
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create client: %w", err)
+		return nil, fmt.Errorf("failed to create controller-runtime cluster: %w", err)
 	}
+
+	if err := mgr.Add(cluster); err != nil {
+		return nil, fmt.Errorf("failed to add controller-runtime cluster to manager: %w", err)
+	}
+	// Create and register the CA config map controller with the operator manager.
+	if _, err := caconfigmapcontroller.New(mgr, caconfigmapcontroller.Config{
+		SourceNamespace: opctrl.SourceKubeletCAConfigMapNamespace,
+		TargetNamespace: opCfg.OperatorNamespace,
+		CAConfigMapName: opctrl.KubeletCAConfigMapName,
+		Cluster:         cluster,
+	}); err != nil {
+		return nil, fmt.Errorf("failed to create CA config map controller controller: %w", err)
+	}
+
 	if err := (&nodeobservabilitycontroller.NodeObservabilityReconciler{
-		Client:            mgr.GetClient(),
-		Scheme:            GetOperatorScheme(),
-		Log:               ctrl.Log.WithName("controller.nodeobservability"),
-		Namespace:         opCfg.OperatorNamespace,
-		AgentImage:        opCfg.AgentImage,
-		ClusterWideClient: clusterWideCli,
+		Client:     mgr.GetClient(),
+		Scheme:     mgr.GetScheme(),
+		Log:        ctrl.Log.WithName("controller.nodeobservability"),
+		Namespace:  opCfg.OperatorNamespace,
+		AgentImage: opCfg.AgentImage,
 	}).SetupWithManager(mgr); err != nil {
 		return nil, fmt.Errorf("failed to create nodeobservability controller: %w", err)
 	}
-
 	if err := machineconfigcontroller.New(mgr).SetupWithManager(mgr); err != nil {
 		return nil, fmt.Errorf("failed to create nodeobservabilitymachineconfig controller: %w", err)
 	}
@@ -115,7 +138,7 @@ func New(cliCfg *rest.Config, opCfg *operatorconfig.Config) (*Operator, error) {
 		Scheme:    mgr.GetScheme(),
 		Log:       ctrl.Log.WithName("controller.nodeobservabilityrun"),
 		Namespace: opCfg.OperatorNamespace,
-		AgentName: controller.AgentName,
+		AgentName: opctrl.AgentName,
 		AuthToken: token,
 		CACert:    ca,
 	}).SetupWithManager(mgr); err != nil {

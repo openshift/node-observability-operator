@@ -1,5 +1,5 @@
 /*
-Copyright 2021.
+Copyright 2022.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,8 +21,9 @@ import (
 )
 
 const (
-	TestNamespace     = ""
-	OperatorNamespace = "node-observability-operator"
+	TestNamespace            = ""
+	OperatorNamespace        = "node-observability-operator"
+	KubeletCASourceNamespace = "openshift-config-managed"
 )
 
 var (

@@ -24,7 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	operatorv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
-	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
+	"github.com/openshift/node-observability-operator/pkg/operator/controller/utils/test"
 )
 
 const (

@@ -1,5 +1,5 @@
 /*
-Copyright 2021.
+Copyright 2022.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -33,11 +33,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	operatorv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
-	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
+	"github.com/openshift/node-observability-operator/pkg/operator/controller/utils/test"
 )
 
 const (
-	nodeObsInstanceName = "nodeobservability-sample"
+	nodeObsInstanceName            = "nodeobservability-sample"
+	kubeletCAConfigMapName         = "kubelet-serving-ca"
+	srcKubeletCAConfigMapNameSpace = "openshift-config-managed"
 )
 
 func TestEnsureDaemonset(t *testing.T) {
@@ -81,7 +83,7 @@ func TestEnsureDaemonset(t *testing.T) {
 						build(),
 				).
 				withHostPathVolume(socketName, socketPath, corev1.HostPathSocket).
-				withConfigMapVolume(kbltCAName, nodeObsInstanceName).
+				withConfigMapVolume(kbltCAName, kubeletCAConfigMapName).
 				withSecretVolume(certsName, secretName).
 				build(),
 		},
@@ -108,7 +110,7 @@ func TestEnsureDaemonset(t *testing.T) {
 							build(),
 					).
 					withHostPathVolume(socketName, socketPath, corev1.HostPathSocket).
-					withConfigMapVolume(kbltCAName, nodeObsInstanceName).
+					withConfigMapVolume(kbltCAName, kubeletCAConfigMapName).
 					withSecretVolume(certsName, secretName).
 					build(),
 			},
@@ -142,7 +144,7 @@ func TestEnsureDaemonset(t *testing.T) {
 						build(),
 				).
 				withHostPathVolume(socketName, socketPath, corev1.HostPathSocket).
-				withConfigMapVolume(kbltCAName, nodeObsInstanceName).
+				withConfigMapVolume(kbltCAName, kubeletCAConfigMapName).
 				withSecretVolume(certsName, secretName).
 				build(),
 		},
@@ -182,7 +184,7 @@ func TestEnsureDaemonset(t *testing.T) {
 						build(),
 				).
 				withHostPathVolume(socketName, socketPath, corev1.HostPathSocket).
-				withConfigMapVolume(kbltCAName, nodeObsInstanceName).
+				withConfigMapVolume(kbltCAName, kubeletCAConfigMapName).
 				withSecretVolume(certsName, secretName).
 				build(),
 		},
@@ -191,12 +193,11 @@ func TestEnsureDaemonset(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cl := fake.NewClientBuilder().WithRuntimeObjects(tc.existingObjects...).Build()
 			r := &NodeObservabilityReconciler{
-				Client:            cl,
-				ClusterWideClient: cl,
-				Scheme:            test.Scheme,
-				Namespace:         test.TestNamespace,
-				Log:               zap.New(zap.UseDevMode(true)),
-				AgentImage:        "node-observability-agent:latest",
+				Client:     cl,
+				Scheme:     test.Scheme,
+				Namespace:  test.TestNamespace,
+				Log:        zap.New(zap.UseDevMode(true)),
+				AgentImage: "node-observability-agent:latest",
 			}
 			nodeObs := &operatorv1alpha2.NodeObservability{
 				ObjectMeta: metav1.ObjectMeta{Name: nodeObsInstanceName},
@@ -212,8 +213,13 @@ func TestEnsureDaemonset(t *testing.T) {
 					Name:      serviceAccountName,
 				},
 			}
-
-			_, err := r.ensureDaemonSet(context.TODO(), nodeObs, sa, r.Namespace)
+			tempCM := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: test.OperatorNamespace,
+					Name:      kubeletCAConfigMapName,
+				},
+			}
+			_, err := r.ensureDaemonSet(context.TODO(), nodeObs, sa, r.Namespace, tempCM)
 			if err != nil {
 				t.Fatalf("unexpected error received: %v", err)
 			}
@@ -434,12 +440,11 @@ func TestUpdateDaemonSet(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cl := fake.NewClientBuilder().WithObjects(tc.existingDaemonset).Build()
 			r := &NodeObservabilityReconciler{
-				Client:            cl,
-				ClusterWideClient: cl,
-				Scheme:            test.Scheme,
-				Namespace:         test.TestNamespace,
-				Log:               zap.New(zap.UseDevMode(true)),
-				AgentImage:        "node-observability-agent:latest",
+				Client:     cl,
+				Scheme:     test.Scheme,
+				Namespace:  test.TestNamespace,
+				Log:        zap.New(zap.UseDevMode(true)),
+				AgentImage: "node-observability-agent:latest",
 			}
 			updated, err := r.updateDaemonset(context.Background(), tc.existingDaemonset, tc.desiredDaemonset)
 			if err != nil {
@@ -723,8 +728,8 @@ func (b *testContainerBuilder) build() corev1.Container {
 func makeKubeletCACM() *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      srcKbltCAConfigMapName,
-			Namespace: srcKbltCAConfigMapNameSpace,
+			Name:      kubeletCAConfigMapName,
+			Namespace: srcKubeletCAConfigMapNameSpace,
 		},
 		Data: map[string]string{
 			"ca-bundle.crt": "empty",
@@ -735,7 +740,7 @@ func makeKubeletCACM() *corev1.ConfigMap {
 func makeTargetKubeletCACM() *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      nodeObsInstanceName,
+			Name:      kubeletCAConfigMapName,
 			Namespace: test.OperatorNamespace,
 		},
 		Data: map[string]string{

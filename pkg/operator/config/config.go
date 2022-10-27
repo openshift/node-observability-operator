@@ -22,7 +22,6 @@ const (
 	DefaultMetricsAddr          = ":8080"
 	DefaultEnableWebhook        = true
 	DefaultHealthProbeAddr      = ":8081"
-	DefaultRequeuePeriodSeconds = 5
 	DefaultEnableLeaderElection = false
 	// #nosec G101: Potential hardcoded credentials; path to token, not the content itself
 	DefaultTokenFile  = "/var/run/secrets/kubernetes.io/serviceaccount/token"
@@ -54,9 +53,6 @@ type Config struct {
 
 	// EnableWebhook is the flag indicating if the webhook server should be started.
 	EnableWebhook bool
-
-	// RequeuePeriodSeconds is the number of seconds to wait after a failed reconciliation.
-	RequeuePeriodSeconds int
 
 	// EnableLeaderElection enables the controller runtime's leader election.
 	EnableLeaderElection bool

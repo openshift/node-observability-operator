@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	operatorv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
-	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
+	"github.com/openshift/node-observability-operator/pkg/operator/controller/utils/test"
 )
 
 func testControllerService(name, namespace string, selector, annotations map[string]string) *corev1.Service {

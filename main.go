@@ -28,6 +28,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
+
 	"github.com/openshift/node-observability-operator/pkg/operator"
 	operatorconfig "github.com/openshift/node-observability-operator/pkg/operator/config"
 	"github.com/openshift/node-observability-operator/pkg/version"

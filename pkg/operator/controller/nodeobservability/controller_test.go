@@ -1,5 +1,5 @@
 // /*
-// Copyright 2021.
+// Copyright 2022.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	operatorv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
-	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
+	"github.com/openshift/node-observability-operator/pkg/operator/controller/utils/test"
 )
 
 func TestReconcile(t *testing.T) {
@@ -91,7 +91,7 @@ func TestReconcile(t *testing.T) {
 	}{
 		{
 			name:                 "Bootstrapping",
-			existingObjects:      []runtime.Object{testNodeObservability(), makeKubeletCACM(), testClusterRole()},
+			existingObjects:      []runtime.Object{testNodeObservability(), makeKubeletCACM(), makeTestTargetKubeletCACM(), testClusterRole()},
 			inputRequest:         testRequest(),
 			expectedResult:       reconcile.Result{},
 			expectedEvents:       []test.Event{},
@@ -134,12 +134,11 @@ func TestReconcile(t *testing.T) {
 			tc.expectedEvents = nil
 
 			r := &NodeObservabilityReconciler{
-				Client:            cl,
-				ClusterWideClient: cl,
-				Scheme:            test.Scheme,
-				Log:               zap.New(zap.UseDevMode(true)),
-				AgentImage:        "test",
-				Namespace:         tc.inputRequest.Namespace,
+				Client:     cl,
+				Scheme:     test.Scheme,
+				Namespace:  test.TestNamespace,
+				Log:        zap.New(zap.UseDevMode(true)),
+				AgentImage: "test",
 			}
 
 			// the add and modify events should only be added when there are no errors
@@ -299,5 +298,16 @@ func testClusterRole() *rbacv1.ClusterRole {
 		},
 		Rules:           []rbacv1.PolicyRule{},
 		AggregationRule: &rbacv1.AggregationRule{},
+	}
+}
+func makeTestTargetKubeletCACM() *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      kubeletCAConfigMapName,
+			Namespace: test.TestNamespace,
+		},
+		Data: map[string]string{
+			"ca-bundle.crt": "empty",
+		},
 	}
 }
