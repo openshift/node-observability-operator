@@ -1,5 +1,5 @@
 /*
-Copyright 2021.
+Copyright 2022.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	operatorv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
-	"github.com/openshift/node-observability-operator/pkg/operator/controller/test"
+	"github.com/openshift/node-observability-operator/pkg/operator/controller/utils/test"
 )
 
 func makeClusterRoleBinding(subjects []rbacv1.Subject, roleref rbacv1.RoleRef) *rbacv1.ClusterRoleBinding {

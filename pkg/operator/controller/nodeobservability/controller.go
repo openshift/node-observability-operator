@@ -20,8 +20,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
+	logr "github.com/go-logr/logr"
 	securityv1 "github.com/openshift/api/security/v1"
+	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -31,8 +34,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilclock "k8s.io/utils/clock"
-
-	"github.com/go-logr/logr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,17 +42,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
-
 	operatorv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
+	opctrl "github.com/openshift/node-observability-operator/pkg/operator/controller"
 	machineconfigcontroller "github.com/openshift/node-observability-operator/pkg/operator/controller/machineconfig"
-	"github.com/openshift/node-observability-operator/pkg/operator/controller/utils"
+	ctrlutils "github.com/openshift/node-observability-operator/pkg/operator/controller/utils"
 )
 
 const (
 	finalizer = "NodeObservability"
 	// the name of the NodeObservability resource which will be reconciled
-	nodeObsCRName = "cluster"
+	nodeObsCRName        = "cluster"
+	defaultRequeuePeriod = time.Duration(5) * time.Second
 )
 
 var clock utilclock.Clock = utilclock.RealClock{}
@@ -59,18 +60,19 @@ var clock utilclock.Clock = utilclock.RealClock{}
 // NodeObservabilityReconciler reconciles a NodeObservability object
 type NodeObservabilityReconciler struct {
 	client.Client
-	ClusterWideClient client.Client
-	Log               logr.Logger
-	Scheme            *runtime.Scheme
-	Namespace         string
-	AgentImage        string
+	Log        logr.Logger
+	Scheme     *runtime.Scheme
+	Namespace  string
+	AgentImage string
+	// Used to inject errors for testing
+	Err error
 }
 
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilities,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilities/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=nodeobservability.olm.openshift.io,resources=nodeobservabilities/finalizers,verbs=update
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=list;get;watch
-//+kubebuilder:rbac:groups=core,resources=configmaps,resourceNames=kubelet-serving-ca,verbs=get;list;
+//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;
 //+kubebuilder:rbac:groups=core,resources=nodes,verbs=list;get;
 //+kubebuilder:rbac:groups=core,resources=nodes/proxy,verbs=list;get;
 //+kubebuilder:rbac:urls=/debug/*,verbs=get;
@@ -91,6 +93,7 @@ type NodeObservabilityReconciler struct {
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.10.0/pkg/reconcile
+
 func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	if ctxLog, err := logr.FromContext(ctx); err == nil {
 		r.Log = ctxLog
@@ -195,8 +198,20 @@ func (r *NodeObservabilityReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	}
 	r.Log.V(1).Info("clusterrolebinding ensured", "clusterrolebinding.name", crb.Name)
 
+	// configuring kubelet-ca configmap
+	var kubeletCAConfigMap *corev1.ConfigMap
+	configMapNsName := opctrl.NamespacedKubeletCAConfigMapName(r.Namespace)
+	configMapExists, kubeletCAConfigMap, err := r.currentNodeObsKubeletCAConfigMap(ctx, configMapNsName)
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("failed to get the target CA configmap %q: %w", configMapNsName, err)
+	}
+	if !configMapExists {
+		// kubelet CA configmap was not synced yet or doesn't exist at all,
+		// either way: no need to requeue immediately polluting the logs.
+		return reconcile.Result{RequeueAfter: defaultRequeuePeriod}, fmt.Errorf("target CA configmap %q not found", configMapNsName)
+	}
 	// check daemonset
-	ds, err := r.ensureDaemonSet(ctx, nodeObs, sa, r.Namespace)
+	ds, err := r.ensureDaemonSet(ctx, nodeObs, sa, r.Namespace, kubeletCAConfigMap)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to ensure daemonset : %w", err)
 	}
@@ -265,7 +280,7 @@ func (r *NodeObservabilityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&operatorv1alpha2.NodeObservabilityMachineConfig{}).
 		Watches(&source.Kind{Type: &securityv1.SecurityContextConstraints{}},
 			handler.EnqueueRequestsFromMapFunc(anyNobInstance),
-			builder.WithPredicates(predicate.NewPredicateFuncs(utils.HasName(sccName)))).
+			builder.WithPredicates(predicate.NewPredicateFuncs(ctrlutils.HasName(sccName)))).
 		Complete(r)
 }
 
@@ -380,4 +395,17 @@ func isClusterNodeObservability(ctx context.Context, nodeObs *operatorv1alpha2.N
 	}
 
 	return fmt.Errorf("a single NodeObservability with name 'cluster' is authorized. Resource %s will be ignored", nodeObs.Name)
+}
+
+// currentNodeObsKubeletCAConfigMap gets the kubelet CA configmap resource.
+func (r *NodeObservabilityReconciler) currentNodeObsKubeletCAConfigMap(ctx context.Context, nsName types.NamespacedName) (bool, *corev1.ConfigMap, error) {
+	cm := &corev1.ConfigMap{}
+	if err := r.Get(ctx, nsName, cm); err != nil {
+		if errors.IsNotFound(err) {
+			return false, nil, nil
+		}
+		return false, nil, err
+	}
+
+	return true, cm, nil
 }

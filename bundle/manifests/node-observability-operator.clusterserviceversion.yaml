@@ -183,13 +183,12 @@ spec:
           - create
         - apiGroups:
           - ""
-          resourceNames:
-          - kubelet-serving-ca
           resources:
           - configmaps
           verbs:
           - get
           - list
+          - watch
         - apiGroups:
           - ""
           resources:

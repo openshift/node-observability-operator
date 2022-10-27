@@ -34,31 +34,23 @@ const (
 // ensureDaemonSet ensures that the daemonset exists
 // Returns a Boolean value indicating whether it exists, a pointer to the
 // daemonset and an error when relevant
-func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeObs *v1alpha2.NodeObservability, sa *corev1.ServiceAccount, ns string) (*appsv1.DaemonSet, error) {
-	nameSpace := types.NamespacedName{Namespace: ns, Name: daemonSetName}
-	desired := r.desiredDaemonSet(nodeObs, sa, ns)
+func (r *NodeObservabilityReconciler) ensureDaemonSet(ctx context.Context, nodeObs *v1alpha2.NodeObservability, sa *corev1.ServiceAccount, ns string, kubeletCAConfigMap *corev1.ConfigMap) (*appsv1.DaemonSet, error) {
+	desired := r.desiredDaemonSet(nodeObs, sa, ns, kubeletCAConfigMap.Name)
 	if err := controllerutil.SetControllerReference(nodeObs, desired, r.Scheme); err != nil {
 		return nil, fmt.Errorf("failed to set the controller reference for daemonset: %w", err)
 	}
-
 	// migration logic for updated daemonset
 	// TODO: remove this logic before going GA.
 	err := r.purgeObsoleteDaemonset(ctx, types.NamespacedName{Name: obsoleteDaemonSetName, Namespace: ns})
 	if err != nil {
 		return nil, fmt.Errorf("failed to purge obsolete daemonset due to %w", err)
 	}
-
+	nameSpace := types.NamespacedName{Namespace: ns, Name: daemonSetName}
 	current, err := r.currentDaemonSet(ctx, nameSpace)
 	if err != nil && !errors.IsNotFound(err) {
 		return nil, fmt.Errorf("failed to get daemonset %q due to: %w", nameSpace, err)
 	} else if err != nil && errors.IsNotFound(err) {
-
 		// create daemon since it doesn't exist
-		err := r.createConfigMap(ctx, nodeObs, ns)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create the configmap for kubelet-serving-ca: %w", err)
-		}
-
 		if err := r.createDaemonSet(ctx, desired); err != nil {
 			return nil, fmt.Errorf("failed to create daemonset %q: %w", nameSpace, err)
 		}
@@ -136,7 +128,7 @@ func (r *NodeObservabilityReconciler) updateDaemonset(ctx context.Context, curre
 }
 
 // desiredDaemonSet returns a DaemonSet object
-func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObservability, sa *corev1.ServiceAccount, ns string) *appsv1.DaemonSet {
+func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObservability, sa *corev1.ServiceAccount, ns string, kubeletCAConfigMapName string) *appsv1.DaemonSet {
 	ls := labelsForNodeObservability(nodeObs.Name)
 	// profiling probe currently takes 30 seconds (default),
 	// giving enough time to gracefully finish all the profiling requests
@@ -237,7 +229,7 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
-										Name: nodeObs.Name,
+										Name: kubeletCAConfigMapName,
 									},
 								},
 							},
