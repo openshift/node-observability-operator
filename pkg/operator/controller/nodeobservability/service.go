@@ -17,25 +17,20 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	v1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
+	opctrl "github.com/openshift/node-observability-operator/pkg/operator/controller"
 )
 
 const (
-	serviceName    = podName
-	secretName     = podName
 	injectCertsKey = "service.beta.openshift.io/serving-cert-secret-name"
 	port           = 8443
 	targetPort     = port
-)
-
-var (
-	requestCerts = map[string]string{injectCertsKey: serviceName}
 )
 
 // ensureService ensures that the service exists
 // Returns a Boolean value indicating whether it exists, a pointer to the
 // service and an error when relevant
 func (r *NodeObservabilityReconciler) ensureService(ctx context.Context, nodeObs *v1alpha2.NodeObservability, ns string) (*corev1.Service, error) {
-	nameSpace := types.NamespacedName{Namespace: ns, Name: serviceName}
+	nameSpace := types.NamespacedName{Namespace: ns, Name: opctrl.AgentServiceName}
 
 	desired := r.desiredService(nodeObs, ns)
 	if err := controllerutil.SetControllerReference(nodeObs, desired, r.Scheme); err != nil {
@@ -132,12 +127,14 @@ func (r *NodeObservabilityReconciler) updateService(ctx context.Context, current
 // desiredService returns a service object
 func (r *NodeObservabilityReconciler) desiredService(nodeObs *v1alpha2.NodeObservability, ns string) *corev1.Service {
 	ls := labelsForNodeObservability(nodeObs.Name)
-	svc := &corev1.Service{
+	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   ns,
-			Name:        serviceName,
-			Annotations: requestCerts,
-			Labels:      ls,
+			Namespace: ns,
+			Name:      opctrl.AgentServiceName,
+			Annotations: map[string]string{
+				injectCertsKey: opctrl.ServingCertSecretName,
+			},
+			Labels: ls,
 		},
 		Spec: corev1.ServiceSpec{
 			ClusterIP: corev1.ClusterIPNone,
@@ -152,7 +149,6 @@ func (r *NodeObservabilityReconciler) desiredService(nodeObs *v1alpha2.NodeObser
 			},
 		},
 	}
-	return svc
 }
 
 type SortableServicePort []corev1.ServicePort

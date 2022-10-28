@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	v1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
+	opctrl "github.com/openshift/node-observability-operator/pkg/operator/controller"
 )
 
 const (
@@ -238,7 +239,7 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 							Name: certsName,
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
-									SecretName: secretName,
+									SecretName: opctrl.ServingCertSecretName,
 								},
 							},
 						},
