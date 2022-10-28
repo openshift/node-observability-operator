@@ -87,7 +87,6 @@ func (r *MachineConfigReconciler) ensureReqNodeLabelNotExists(ctx context.Contex
 		return nil
 	}
 
-	r.Log.V(1).Info("nodeobservability role is not removed on all the nodes with worker role", "Nodes", requiredNodeCount, "UpdatedNodeCount", nodeCount)
 	return fmt.Errorf("failed to ensure removal of labels, expected updates on %d nodes but got %d", requiredNodeCount, nodeCount)
 }
 

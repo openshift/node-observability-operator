@@ -107,8 +107,6 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, fmt.Errorf("failed to fetch nodeobservabilitymachineconfig %q: %w", req.NamespacedName, err)
 	}
 
-	r.Log.V(1).Info("reconciling", "nodeobservabilitymachineconfig", req.NamespacedName)
-
 	// adding a deferred update to sync statuses even during errors since we have multiple
 	// intermediate status conditions to depict intermediate states of the operator.
 	defer func() (ctrl.Result, error) {
@@ -175,7 +173,7 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}
 
-	r.Log.V(2).Info("reconciliation completed", "nodeobservabilitymachineconfig", req.NamespacedName)
+	r.Log.V(1).Info("reconciliation completed")
 	return ctrl.Result{}, nil
 }
 
@@ -295,22 +293,20 @@ func ignoreNOMCStatusUpdates() predicate.Predicate {
 // if does not exist
 func (r *MachineConfigReconciler) addFinalizer(ctx context.Context, nomc *v1alpha2.NodeObservabilityMachineConfig) (*v1alpha2.NodeObservabilityMachineConfig, error) {
 	if !controllerutil.ContainsFinalizer(nomc, finalizer) {
-		updated := nomc.DeepCopy()
-
-		if !controllerutil.AddFinalizer(updated, finalizer) {
+		if !controllerutil.AddFinalizer(nomc, finalizer) {
 			return nil, fmt.Errorf("failed to append finalizers on %q nomc", nomc.Name)
 		}
 
 		// update nomc since finalizer added
-		if err := r.ClientUpdate(ctx, updated); err != nil {
+		if err := r.ClientUpdate(ctx, nomc); err != nil {
 			return nil, fmt.Errorf("failed to add finalizers on %q nomc due to %w", nomc.Name, err)
 		}
 
-		if err := r.ClientGet(ctx, types.NamespacedName{Namespace: updated.Namespace, Name: updated.Name}, updated); err != nil {
+		updated := &v1alpha2.NodeObservabilityMachineConfig{}
+		if err := r.ClientGet(ctx, types.NamespacedName{Namespace: nomc.Namespace, Name: nomc.Name}, updated); err != nil {
 			return nil, fmt.Errorf("failed to get nodeobservabilitymachineconfig: %w", err)
 		}
 		return updated, nil
-
 	}
 
 	return nomc, nil
@@ -319,15 +315,12 @@ func (r *MachineConfigReconciler) addFinalizer(ctx context.Context, nomc *v1alph
 // removeFinalizer removes finalizers added to
 // NodeObservabilityMachineConfig resource if present
 func (r *MachineConfigReconciler) removeFinalizer(ctx context.Context, nomc *v1alpha2.NodeObservabilityMachineConfig, finalizer string) error {
-
 	if controllerutil.ContainsFinalizer(nomc, finalizer) {
-		updated := nomc.DeepCopy()
-
-		if !controllerutil.RemoveFinalizer(updated, finalizer) {
+		if !controllerutil.RemoveFinalizer(nomc, finalizer) {
 			return fmt.Errorf("failed to remove finalizers on %q nomc", nomc.Name)
 		}
 
-		if err := r.ClientUpdate(ctx, updated); err != nil {
+		if err := r.ClientUpdate(ctx, nomc); err != nil {
 			return err
 		}
 		return nil
