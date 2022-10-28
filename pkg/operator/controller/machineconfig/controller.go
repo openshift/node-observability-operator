@@ -121,7 +121,7 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}() //nolint:errcheck
 
 	if !nomc.DeletionTimestamp.IsZero() {
-		r.Log.V(1).Info("marked for deletion, skipping reconciliation")
+		r.Log.V(1).Info("marked for deletion, triggering cleanup")
 
 		// triggering clean up of machineconfigs, cleanUp() updates
 		// nomc status based on state of clean up
@@ -131,17 +131,18 @@ func (r *MachineConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
 		}
 
-		if !controllerutil.RemoveFinalizer(nomc, finalizer) {
-			r.Log.V(3).Info("failed to remove finalizer nodeobservabilitymachineconfig", "finalizer", finalizer, "nodeobservabilitymachineconfig.name", req.NamespacedName)
+		if err := r.removeFinalizer(ctx, nomc, finalizer); err != nil {
+			return ctrl.Result{}, err
 		}
 
-		r.Log.V(1).Info("removed finalizer, cleanup complete", "nodeobservabilitymachineconfig", req.NamespacedName)
+		r.Log.V(1).Info("removed finalizer, cleanup complete")
 		return ctrl.Result{}, nil
 	}
 
 	// Set finalizers on the NodeObservabilityMachineConfig resource
-	if !controllerutil.AddFinalizer(nomc, finalizer) {
-		return ctrl.Result{}, fmt.Errorf("failed to update %q nodeobservabilitymachineconfig with finalizer=%q", req.NamespacedName, finalizer)
+	nomc, err := r.addFinalizer(ctx, nomc)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to update nodeobservabilitymachineconfig with finalizers: %w", err)
 	}
 
 	if err := r.handleProfilingRequest(ctx, nomc); err != nil {
@@ -288,4 +289,49 @@ func ignoreNOMCStatusUpdates() predicate.Predicate {
 			return true
 		},
 	}
+}
+
+// addFinalizer adds finalizer to NodeObservabilityMachineConfig resource
+// if does not exist
+func (r *MachineConfigReconciler) addFinalizer(ctx context.Context, nomc *v1alpha2.NodeObservabilityMachineConfig) (*v1alpha2.NodeObservabilityMachineConfig, error) {
+	if !controllerutil.ContainsFinalizer(nomc, finalizer) {
+		updated := nomc.DeepCopy()
+
+		if !controllerutil.AddFinalizer(updated, finalizer) {
+			return nil, fmt.Errorf("failed to append finalizers on %q nomc", nomc.Name)
+		}
+
+		// update nomc since finalizer added
+		if err := r.ClientUpdate(ctx, updated); err != nil {
+			return nil, fmt.Errorf("failed to add finalizers on %q nomc due to %w", nomc.Name, err)
+		}
+
+		if err := r.ClientGet(ctx, types.NamespacedName{Namespace: updated.Namespace, Name: updated.Name}, updated); err != nil {
+			return nil, fmt.Errorf("failed to get nodeobservabilitymachineconfig: %w", err)
+		}
+		return updated, nil
+
+	}
+
+	return nomc, nil
+}
+
+// removeFinalizer removes finalizers added to
+// NodeObservabilityMachineConfig resource if present
+func (r *MachineConfigReconciler) removeFinalizer(ctx context.Context, nomc *v1alpha2.NodeObservabilityMachineConfig, finalizer string) error {
+
+	if controllerutil.ContainsFinalizer(nomc, finalizer) {
+		updated := nomc.DeepCopy()
+
+		if !controllerutil.RemoveFinalizer(updated, finalizer) {
+			return fmt.Errorf("failed to remove finalizers on %q nomc", nomc.Name)
+		}
+
+		if err := r.ClientUpdate(ctx, updated); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	return nil
 }

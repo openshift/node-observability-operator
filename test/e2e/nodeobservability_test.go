@@ -15,9 +15,11 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -25,6 +27,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 
 	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 	operatorv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
@@ -259,5 +263,71 @@ var _ = Describe("Node Observability Operator end-to-end test suite using v1alph
 			// which will result into a conflict
 			AbortSuite("Aborting whole test suite to avoid conflicts")
 		}
+	})
+})
+
+var _ = Describe("Node Observability MachineConfig controller end-to-end test suite", Ordered, func() {
+
+	Context("Happy Path scenario - NodeObservabilityMachineConfig is created with CRIO-profiling enabled", func() {
+		var (
+			nobmc       *operatorv1alpha2.NodeObservabilityMachineConfig
+			matchLabels = map[string]string{"node-role.kubernetes.io/worker": ""}
+		)
+
+		It("create NodeObservabilityMachineConfig", func() {
+
+			By("deploying NodeObservabilityMachineConfig with CRIO profiling enabled", func() {
+				mcp := &mcv1.MachineConfigPool{}
+				nobmc = testNodeObservabilityMachineConfig("enabled-crio", matchLabels, true)
+				Expect(k8sClient.Create(ctx, nobmc)).To(Succeed(), "NodeObservabilityMachineConfig resource is expected to be created")
+				Eventually(func() bool {
+					mcpNameSpacedName := types.NamespacedName{
+						Name: "nodeobservability",
+					}
+					Eventually(func() error {
+						err := k8sClient.Get(ctx, mcpNameSpacedName, mcp)
+						return err
+					}, 30, time.Second).Should(BeNil(), "failed to fetch nodeobservability mcp")
+
+					fmt.Fprintf(GinkgoWriter, "MCP fetched: %v\n", mcp)
+
+					listOpts := []client.ListOption{
+						client.MatchingLabels(matchLabels),
+					}
+
+					nodeList := &corev1.NodeList{}
+					Expect(client.IgnoreNotFound(k8sClient.List(ctx, nodeList, listOpts...)))
+
+					return int(mcp.Status.MachineCount) == len(nodeList.Items) &&
+						mcp.Status.DegradedMachineCount == 0 &&
+						mcp.Status.UnavailableMachineCount == 0 &&
+						int(mcp.Status.ReadyMachineCount) == len(nodeList.Items)
+				}, "15m").Should(BeTrue(), fmt.Sprintf("unexpected nodeobservability mcp status: %+v", mcp.Status))
+			})
+
+		})
+
+		AfterEach(func() {
+			Expect(k8sClient.Delete(ctx, nobmc)).To(Succeed())
+			Eventually(func() bool {
+				mcp := &mcv1.MachineConfigPool{}
+				mcpNameSpacedName := types.NamespacedName{
+					Name: "worker",
+				}
+				Expect(client.IgnoreNotFound(k8sClient.Get(ctx, mcpNameSpacedName, mcp))).To(Succeed())
+
+				listOpts := []client.ListOption{
+					client.MatchingLabels(matchLabels),
+				}
+
+				nodeList := &corev1.NodeList{}
+				Expect(client.IgnoreNotFound(k8sClient.List(ctx, nodeList, listOpts...)))
+
+				return int(mcp.Status.MachineCount) == len(nodeList.Items) &&
+					mcp.Status.DegradedMachineCount == 0 &&
+					mcp.Status.UnavailableMachineCount == 0 &&
+					int(mcp.Status.ReadyMachineCount) == len(nodeList.Items)
+			}, "15m").Should(BeTrue(), "failed to reset nodes to neutral state")
+		})
 	})
 })
