@@ -18,16 +18,13 @@ package machineconfigcontroller
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
-	ctrl "sigs.k8s.io/controller-runtime"
+
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
@@ -35,16 +32,11 @@ import (
 	"github.com/openshift/node-observability-operator/api/v1alpha2"
 )
 
-const (
-	mcpChangeTimeout      = 2 * time.Minute
-	mcpChangePollInterval = 2 * time.Second
-)
-
 // createProfMCP creates MachineConfigPool CR to enable the CRI-O profiling on the targeted nodes.
-func (r *MachineConfigReconciler) createProfMCP(ctx context.Context) error {
+func (r *MachineConfigReconciler) createProfMCP(ctx context.Context, nomc *v1alpha2.NodeObservabilityMachineConfig) error {
 	mcp := r.getCrioProfMachineConfigPool(ProfilingMCPName)
 
-	if err := ctrlutil.SetControllerReference(r.CtrlConfig, mcp, r.Scheme); err != nil {
+	if err := ctrlutil.SetControllerReference(nomc, mcp, r.Scheme); err != nil {
 		return fmt.Errorf("failed to update controller reference in crio profiling machine config pool: %w", err)
 	}
 
@@ -52,7 +44,9 @@ func (r *MachineConfigReconciler) createProfMCP(ctx context.Context) error {
 		return fmt.Errorf("failed to create crio profiling machine config pool: %w", err)
 	}
 
-	r.Log.V(1).Info("Successfully created MachineConfigPool to enable CRI-O profiling", "MCPName", ProfilingMCPName)
+	// TODO: check if there is a diff between desired and existing
+
+	r.Log.V(1).Info("successfully created MachineConfigPool to enable CRI-O profiling", "mcp.name", ProfilingMCPName)
 	return nil
 }
 
@@ -66,11 +60,11 @@ func (r *MachineConfigReconciler) deleteProfMCP(ctx context.Context) error {
 		return err
 	}
 
-	if err := r.ClientDelete(ctx, mcp); err != nil {
-		return fmt.Errorf("failed to remove crio profiling machine config pool: %w", err)
+	if err := r.ClientDelete(ctx, mcp); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("failed to remove crio profiling machineconfigpool: %w", err)
 	}
 
-	r.Log.V(1).Info("Successfully removed MachineConfigPool which was enabling CRI-O profiling", "MCPName", ProfilingMCPName)
+	r.Log.V(1).Info("successfully removed machineconfigpool which was enabling CRI-O profiling", "mcp.name", ProfilingMCPName)
 	return nil
 }
 
@@ -108,7 +102,7 @@ func (r *MachineConfigReconciler) getCrioProfMachineConfigPool(name string) *mcv
 					{
 						APIVersion: MCAPIVersion,
 						Kind:       MCKind,
-						Name:       CrioProfilingConfigName,
+						Name:       crioProfilingConfigName,
 					},
 				},
 			},
@@ -116,148 +110,80 @@ func (r *MachineConfigReconciler) getCrioProfMachineConfigPool(name string) *mcv
 	}
 }
 
-// checkNodeObservabilityMCPStatus is for reconciling update status of all machines in profiling MCP
-func (r *MachineConfigReconciler) checkNodeObservabilityMCPStatus(ctx context.Context) (ctrl.Result, error) {
+// syncNodeObservabilityMCPStatus is for reconciling update status
+// of all machines in profiling MCP. It returns a boolean indicating
+// if the request needs to be requeued. It also evaluates the status
+// on the associated nodeobservabilitymachineconfig.
+func (r *MachineConfigReconciler) syncNodeObservabilityMCPStatus(ctx context.Context, nomc *v1alpha2.NodeObservabilityMachineConfig) (bool, error) {
 	mcp := &mcv1.MachineConfigPool{}
 	if err := r.ClientGet(ctx, types.NamespacedName{Name: ProfilingMCPName}, mcp); err != nil {
-		if apierrors.IsNotFound(err) {
-			r.Log.V(1).Info("Profiling MCP does not exist, skipping status check", "MCP", ProfilingMCPName)
-			return ctrl.Result{}, nil
-		}
-		return ctrl.Result{}, err
+		return false, err
 	}
 
-	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdating) &&
-		mcp.Status.DegradedMachineCount == 0 {
-		msg := "Machine config update to enable debugging in progress"
-		r.Log.V(1).Info(msg)
-		r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonInProgress, msg)
-
-		return ctrl.Result{}, nil
-	}
-
-	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdated) {
-		r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "ConfigUpdate", "debug config enabled on all machines")
-		msg := "Machine config update to enable debugging completed on all machines"
-		r.Log.V(1).Info(msg)
-
-		r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionTrue, v1alpha2.ReasonReady, msg)
-
-		return ctrl.Result{}, nil
-	}
-
-	if mcp.Status.DegradedMachineCount != 0 {
-		r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeWarning, "ConfigUpdate", "%s MCP has %d machines in degraded state",
-			mcp.Name, mcp.Status.DegradedMachineCount)
-
-		if err := r.revertEnabledProfConf(ctx); err != nil {
-			msg := fmt.Sprintf("%s MCP has %d machines in degraded state. Reverting changes failed, reconcile again",
-				mcp.Name, mcp.Status.DegradedMachineCount)
-			r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonInProgress, msg)
-
-			return ctrl.Result{RequeueAfter: defaultRequeueTime},
-				fmt.Errorf("failed to revert changes to recover degraded machines: %w", err)
-		}
-
-		msg := fmt.Sprintf("%s MCP has %d machines in degraded state, reverted changes", mcp.Name, mcp.Status.DegradedMachineCount)
-		r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonFailed, msg)
-		return ctrl.Result{}, nil
-	}
-
-	r.Log.V(1).Info("Waiting for machine config update to complete on all machines", "MCP", mcp.Name)
-	return ctrl.Result{}, nil
-}
-
-// checkWorkerMCPStatus is for reconciling update status of all machines in profiling MCP
-func (r *MachineConfigReconciler) checkWorkerMCPStatus(ctx context.Context) (ctrl.Result, error) {
-	mcp := &mcv1.MachineConfigPool{}
-	if err := r.ClientGet(ctx, types.NamespacedName{Name: WorkerNodeMCPName}, mcp); err != nil {
-		return ctrl.Result{}, err
-	}
+	r.Log.V(1).Info("checking current status of nodeobservability machineconfigpool")
 
 	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdating) && mcp.Status.DegradedMachineCount == 0 {
-		r.Log.V(1).Info("worker MCP is updating")
-
-		var msg string
-		if !r.CtrlConfig.Status.IsDebuggingEnabled() {
-			msg = "Machine config update to disable debugging in progress"
-			r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonInProgress, msg)
-		}
-		if r.CtrlConfig.Status.IsDebuggingFailed() {
-			msg = "Reverting machine config changes due to failure on all machines"
-			r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonInProgress, msg)
-		}
-		r.Log.V(1).Info(msg)
-		return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
-	}
-
-	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdated) && mcp.Status.DegradedMachineCount == 0 {
-		r.Log.V(1).Info("worker MCP is updated")
-
-		if err := r.disableCrioProf(ctx); err != nil {
-			return ctrl.Result{RequeueAfter: defaultRequeueTime}, err
-		}
-		if err := r.deleteProfMCP(ctx); err != nil {
-			return ctrl.Result{RequeueAfter: defaultRequeueTime}, err
-		}
-
-		var msg string
-		if !r.CtrlConfig.Status.IsDebuggingEnabled() {
-			r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "ConfigUpdate", "debug config disabled on all machines")
-			msg = "Machine config update to disable debugging completed on all machines"
-			r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonDisabled, msg)
-		}
-		if r.CtrlConfig.Status.IsDebuggingFailed() {
-			r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeNormal, "ConfigUpdate", "debug config reverted on all machines")
-			msg = "Reverted machine config changes due to failure on all machines"
-			r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonFailed, msg)
-		}
-
-		r.Log.V(1).Info(msg)
-
-		return ctrl.Result{}, nil
-	}
-
-	if mcp.Status.DegradedMachineCount != 0 {
+		r.Log.V(1).Info("nodeobservability mcp updating, debug enabling in progress")
+		nomc.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonInProgress, "machineconfig update to enable debugging in progress")
+		return true, nil
+	} else if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdated) && r.hasRequiredMachineCount(ctx, mcp) && mcp.Status.DegradedMachineCount == 0 {
+		r.EventRecorder.Eventf(nomc, corev1.EventTypeNormal, "ConfigUpdate", "debug config enabled on all machines")
+		r.Log.V(1).Info("nodeobservability mcp updated debug enabled on all machines")
+		nomc.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionTrue, v1alpha2.ReasonReady, "machineconfig update to enable debugging completed on all machines")
+		return false, nil
+	} else if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolDegraded) && mcp.Status.DegradedMachineCount != 0 {
 		msg := fmt.Sprintf("%s MCP has %d machines in degraded state", mcp.Name, mcp.Status.DegradedMachineCount)
-		r.EventRecorder.Eventf(r.CtrlConfig, corev1.EventTypeWarning, "ConfigUpdate", msg)
-
-		if !r.CtrlConfig.Status.IsDebuggingEnabled() {
-			msg = fmt.Sprintf("%s, failed to disable debugging, reconcile again", msg)
-			r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonInProgress, msg)
-		}
-		if r.CtrlConfig.Status.IsDebuggingFailed() {
-			msg = fmt.Sprintf("%s, failed to revert changes, reconcile again", msg)
-			r.CtrlConfig.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonInProgress, msg)
-		}
-
-		r.Log.V(1).Info(msg)
-
-		return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
+		nomc.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonInProgress, msg)
+		return false, fmt.Errorf("failed to update machineconfig on %s mcp due to degraded machines: %d", mcp.Name, mcp.Status.DegradedMachineCount)
 	}
 
-	if !r.CtrlConfig.Status.IsDebuggingEnabled() {
-		r.Log.V(1).Info("waiting for disabling debugging to complete on all machines", "MCP", mcp.Name)
-	}
-	if r.CtrlConfig.Status.IsDebuggingFailed() {
-		r.Log.V(1).Info("waiting for reverting to complete on all machines", "MCP", mcp.Name)
-	}
-	return ctrl.Result{}, nil
+	r.Log.V(1).Info("waiting for nodeobservability mcp to complete updating on all machines")
+	return true, nil
 }
 
-// waitForWorkerMCPStatusUpdating waits for the worker MCP to become updating.
-func (r *MachineConfigReconciler) waitWorkerMCPStatusUpdating(ctx context.Context) (ctrl.Result, error) {
-	err := wait.PollImmediateWithContext(ctx, mcpChangePollInterval, mcpChangeTimeout, func(ctx context.Context) (bool, error) {
-		mcp := &mcv1.MachineConfigPool{}
-		if err := r.ClientGet(ctx, types.NamespacedName{Name: WorkerNodeMCPName}, mcp); err != nil {
-			return false, nil
-		}
-		return mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdating), nil
-	})
-	if errors.Is(err, wait.ErrWaitTimeout) {
-		r.Log.V(1).Info("timed out waiting for worker MCP to become updating")
-		// ask for a requeue after some time anyway
-		return ctrl.Result{RequeueAfter: defaultRequeueTime}, nil
+// syncWorkerMCPStatus is for reconciling update status of all machines in profiling MCP
+func (r *MachineConfigReconciler) syncWorkerMCPStatus(ctx context.Context, nomc *v1alpha2.NodeObservabilityMachineConfig) (bool, error) {
+	mcp := &mcv1.MachineConfigPool{}
+	if err := r.ClientGet(ctx, types.NamespacedName{Name: WorkerNodeMCPName}, mcp); err != nil {
+		return false, err
 	}
-	return ctrl.Result{}, nil
+
+	r.Log.V(1).Info("checking current status of worker machineconfigpool")
+
+	// if worker mcp is still updating, update nomc status to in progress and requeue.
+	if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdating) && mcp.Status.DegradedMachineCount == 0 {
+		nomc.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonInProgress, "machineconfig update to disable debugging in progress")
+		r.Log.V(1).Info("worker mcp updating, debug debug disabling in progress")
+		return true, nil
+	} else if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolUpdated) && r.hasRequiredMachineCount(ctx, mcp) && mcp.Status.DegradedMachineCount == 0 {
+		r.EventRecorder.Eventf(nomc, corev1.EventTypeNormal, "ConfigUpdate", "debug config disabled on all machines")
+		nomc.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonDisabled, "machineconfig update to disable debugging completed on all machines")
+		r.Log.V(1).Info("worker mcp updated, debug config desiabled on all machines")
+		return false, nil
+	} else if mcv1.IsMachineConfigPoolConditionTrue(mcp.Status.Conditions, mcv1.MachineConfigPoolDegraded) && mcp.Status.DegradedMachineCount != 0 {
+		msg := fmt.Sprintf("failed to disable debugging due to %s mcp has %d machines in degraded state, reconcile again", mcp.Name, mcp.Status.DegradedMachineCount)
+		r.EventRecorder.Eventf(nomc, corev1.EventTypeWarning, "ConfigUpdate", msg)
+		nomc.Status.SetCondition(v1alpha2.DebugReady, metav1.ConditionFalse, v1alpha2.ReasonInProgress, msg)
+		return true, nil
+	}
+
+	// trigger requeue since still waiting for update
+	r.Log.V(1).Info("waiting for worker mcp to complete updating on all machines")
+	return true, nil
+}
+
+func (r *MachineConfigReconciler) hasRequiredMachineCount(ctx context.Context, mcp *mcv1.MachineConfigPool) bool {
+	labels := mcp.Spec.NodeSelector.MatchLabels
+	nodeList, err := r.listNodes(ctx, labels)
+	if err != nil {
+		r.Log.Error(err, "failed to list nodes with", "matchlabels", labels)
+		return false
+	}
+
+	requiredNodeCount := len(nodeList.Items)
+	r.Log.V(2).Info("got required node count", "count", requiredNodeCount, "mcp.Status", mcp.Status)
+
+	return mcp.Status.MachineCount == int32(requiredNodeCount) &&
+		mcp.Status.UpdatedMachineCount == int32(requiredNodeCount) &&
+		mcp.Status.ReadyMachineCount == int32(requiredNodeCount)
 }

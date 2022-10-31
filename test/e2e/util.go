@@ -54,6 +54,20 @@ func testNodeObservabilityRun(testName string) *operatorv1alpha2.NodeObservabili
 	}
 }
 
+func testNodeObservabilityMachineConfig(testName string, nodeSelector map[string]string, enable bool) *operatorv1alpha2.NodeObservabilityMachineConfig {
+	return &operatorv1alpha2.NodeObservabilityMachineConfig{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: testName,
+		},
+		Spec: operatorv1alpha2.NodeObservabilityMachineConfigSpec{
+			NodeSelector: nodeSelector,
+			Debug: operatorv1alpha2.NodeObservabilityDebug{
+				EnableCrioProfiling: enable,
+			},
+		},
+	}
+}
+
 // waitForOperatorDeploymentStatusCondition waits for the given condition(s) on the operator deployment.
 func waitForOperatorDeploymentStatusCondition(cl client.Client, conditions ...appsv1.DeploymentCondition) error {
 	return wait.Poll(2*time.Second, 1*time.Minute, func() (bool, error) {

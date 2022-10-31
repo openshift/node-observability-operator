@@ -25,21 +25,44 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	ignutil "github.com/coreos/ignition/v2/config/util"
 	igntypes "github.com/coreos/ignition/v2/config/v3_2/types"
+	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
+
+	"github.com/openshift/node-observability-operator/api/v1alpha2"
+)
+
+// CrioUnixSocketConfData contains the configuration required
+// for enabling CRI-O profiling
+var crioUnixSocketConfData = fmt.Sprintf(`[Service]
+Environment="%s"`, CrioUnixSocketEnvString)
+
+const (
+	// crioProfilingConfigName is the name CRI-O MachineConfig CR
+	crioProfilingConfigName = "10-crio-nodeobservability"
+
+	// crioServiceFile is the name of the CRI-O systemd service unit
+	crioServiceFile = "crio.service"
+
+	// CrioUnixSocketEnvString refers to the environment variable info
+	// string that helps in finding if the profiling is enabled by default
+	CrioUnixSocketEnvString = "ENABLE_PROFILE_UNIX_SOCKET=true"
+
+	// crioUnixSocketConfFile is the name of the CRI-O config file
+	crioUnixSocketConfFile = "10-mco-profile-unix-socket.conf"
 )
 
 // enableCrioProf creates MachineConfig CR for CRI-O profiling.
-func (r *MachineConfigReconciler) enableCrioProf(ctx context.Context) error {
+func (r *MachineConfigReconciler) enableCrioProf(ctx context.Context, nomc *v1alpha2.NodeObservabilityMachineConfig) error {
 	criomc, err := r.getCrioProfMachineConfig()
 	if err != nil {
 		return err
 	}
 
-	if err := ctrlutil.SetControllerReference(r.CtrlConfig, criomc, r.Scheme); err != nil {
+	if err := ctrlutil.SetControllerReference(nomc, criomc, r.Scheme); err != nil {
 		return fmt.Errorf("failed to update controller reference in crio profiling machine config: %w", err)
 	}
 
@@ -47,32 +70,51 @@ func (r *MachineConfigReconciler) enableCrioProf(ctx context.Context) error {
 		return fmt.Errorf("failed to create crio profiling machine config: %w", err)
 	}
 
-	r.Log.V(1).Info("Successfully created MachineConfig to enable CRI-O profiling", "CrioProfilingConfigName", CrioProfilingConfigName)
+	// TODO: check if there is a diff between desired and existing
+
+	r.Log.V(1).Info("successfully created MachineConfig to enable CRI-O profiling", "mc.name", crioProfilingConfigName)
 	return nil
 }
 
-// disableCrioProf deletes MachineConfig CR for CRI-O profiling if it exists.
-func (r *MachineConfigReconciler) disableCrioProf(ctx context.Context) error {
+// deleteCrioProfMC deletes MachineConfig CR for CRI-O profiling if it exists.
+func (r *MachineConfigReconciler) deleteCrioProfMC(ctx context.Context) error {
 	criomc := &mcv1.MachineConfig{}
-	if err := r.ClientGet(ctx, types.NamespacedName{Name: CrioProfilingConfigName}, criomc); err != nil {
+	if err := r.ClientGet(ctx, types.NamespacedName{Name: crioProfilingConfigName}, criomc); err != nil {
 		if errors.IsNotFound(err) {
 			return nil
 		}
 		return err
 	}
 
-	if err := r.ClientDelete(ctx, criomc); err != nil {
-		return fmt.Errorf("failed to remove crio profiling machine config: %w", err)
+	if err := r.ClientDelete(ctx, criomc); err != nil && !errors.IsNotFound(err) {
+		return fmt.Errorf("failed to remove crio profiling machineconfig: %w", err)
 	}
 
-	r.Log.V(1).Info("Successfully removed MachineConfig to disable CRI-O profiling", "CrioProfilingConfigName", CrioProfilingConfigName)
+	r.Log.V(1).Info("successfully removed machineconfig to disable CRI-O profiling", "mc.name", crioProfilingConfigName)
 
 	return nil
 }
 
 // getCrioProfMachineConfig returns the MachineConfig CR definition to enable CRI-O profiling.
 func (r *MachineConfigReconciler) getCrioProfMachineConfig() (*mcv1.MachineConfig, error) {
-	config := getCrioProfIgnitionConfig()
+	config := igntypes.Config{
+		Ignition: igntypes.Ignition{
+			Version: igntypes.MaxVersion.String(),
+		},
+		Systemd: igntypes.Systemd{
+			Units: []igntypes.Unit{
+				{
+					Dropins: []igntypes.Dropin{
+						{
+							Name:     crioUnixSocketConfFile,
+							Contents: ignutil.StrToPtr(crioUnixSocketConfData),
+						},
+					},
+					Name: crioServiceFile,
+				},
+			},
+		},
+	}
 
 	rawExt, err := convertIgnConfToRawExt(config)
 	if err != nil {
@@ -85,39 +127,13 @@ func (r *MachineConfigReconciler) getCrioProfMachineConfig() (*mcv1.MachineConfi
 			APIVersion: MCAPIVersion,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   CrioProfilingConfigName,
+			Name:   crioProfilingConfigName,
 			Labels: MachineConfigLabels,
 		},
 		Spec: mcv1.MachineConfigSpec{
 			Config: rawExt,
 		},
 	}, nil
-}
-
-// getCrioProfIgnitionConfig returns the ignition config to enable CRI-O profiling.
-func getCrioProfIgnitionConfig() igntypes.Config {
-	dropins := []igntypes.Dropin{
-		{
-			Name:     CrioUnixSocketConfFile,
-			Contents: ignutil.StrToPtr(CrioUnixSocketConfData),
-		},
-	}
-
-	units := []igntypes.Unit{
-		{
-			Dropins: dropins,
-			Name:    CrioServiceFile,
-		},
-	}
-
-	return igntypes.Config{
-		Ignition: igntypes.Ignition{
-			Version: igntypes.MaxVersion.String(),
-		},
-		Systemd: igntypes.Systemd{
-			Units: units,
-		},
-	}
 }
 
 // convertIgnConfToRawExt converts the CRI-O ignition configuration

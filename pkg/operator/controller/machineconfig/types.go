@@ -23,6 +23,3 @@ type ResourcePatchValue struct {
 	Path  string      `json:"path"`
 	Value interface{} `json:"value,omitempty"`
 }
-
-// patchOp is defined for patch operation type
-type patchOp int
