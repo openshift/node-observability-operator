@@ -31,6 +31,8 @@ const (
 	certsName             = "certs"
 	certsMountPath        = "/var/run/secrets/openshift.io/certs"
 	kubeletCAAnnotation   = "nodeobservability.olm.openshift.io/kubelet-ca-configmap-hash"
+	dataVolumeName        = "profiledata"
+	dataMountPath         = "/run/node-observability"
 )
 
 // ensureDaemonSet ensures that the daemonset exists
@@ -172,7 +174,7 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 							Command:         []string{"node-observability-agent"},
 							Args: []string{
 								"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
-								"--storage=/run/node-observability",
+								fmt.Sprintf("--storage=%s", dataMountPath),
 								fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
 							},
 							Resources: corev1.ResourceRequirements{},
@@ -199,6 +201,10 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 									MountPath: kbltCAMountPath,
 									Name:      kbltCAName,
 									ReadOnly:  true,
+								},
+								{
+									Name:      dataVolumeName,
+									MountPath: dataMountPath,
 								},
 							},
 						},
@@ -254,6 +260,12 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 								Secret: &corev1.SecretVolumeSource{
 									SecretName: opctrl.ServingCertSecretName,
 								},
+							},
+						},
+						{
+							Name: dataVolumeName,
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
 							},
 						},
 					},

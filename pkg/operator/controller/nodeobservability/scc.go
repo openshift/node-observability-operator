@@ -21,7 +21,7 @@ const (
 
 // ensureSecurityContextConstraints ensures that the securitycontextconstraints exists
 // Returns a Boolean value indicatiing whether it exists, a pointer to the
-// securitycontextconstraints and an error when relevant
+// securitycontextconstraints and an error when relevant.
 func (r *NodeObservabilityReconciler) ensureSecurityContextConstraints(ctx context.Context, nodeObs *v1alpha2.NodeObservability) (*securityv1.SecurityContextConstraints, error) {
 	desired := r.desiredSecurityContextConstraints(nodeObs)
 	current, err := r.currentSecurityContextConstraints(ctx)
@@ -50,7 +50,7 @@ func (r *NodeObservabilityReconciler) ensureSecurityContextConstraints(ctx conte
 	return current, nil
 }
 
-// currentSecurityContextConstraints checks that the securitycontextconstraints exists
+// currentSecurityContextConstraints checks that the securitycontextconstraints exists.
 func (r *NodeObservabilityReconciler) currentSecurityContextConstraints(ctx context.Context) (*securityv1.SecurityContextConstraints, error) {
 	nameSpace := types.NamespacedName{Name: sccName}
 	scc := &securityv1.SecurityContextConstraints{}
@@ -60,12 +60,12 @@ func (r *NodeObservabilityReconciler) currentSecurityContextConstraints(ctx cont
 	return scc, nil
 }
 
-// createSecurityContextConstraints creates the securitycontextconstraints
+// createSecurityContextConstraints creates the securitycontextconstraints.
 func (r *NodeObservabilityReconciler) createSecurityContextConstraints(ctx context.Context, scc *securityv1.SecurityContextConstraints) error {
 	return r.Client.Create(ctx, scc)
 }
 
-// desiredSecurityContextConstraints en the desired securitycontextconstraints
+// desiredSecurityContextConstraints returns the desired securitycontextconstraints.
 func (r *NodeObservabilityReconciler) desiredSecurityContextConstraints(nodeObs *v1alpha2.NodeObservability) *securityv1.SecurityContextConstraints {
 	scc := &securityv1.SecurityContextConstraints{
 		ObjectMeta:               metav1.ObjectMeta{Name: sccName},
@@ -75,7 +75,7 @@ func (r *NodeObservabilityReconciler) desiredSecurityContextConstraints(nodeObs 
 		RequiredDropCapabilities: []corev1.Capability{"MKNOD"},
 		AllowedCapabilities:      nil,
 		AllowHostDirVolumePlugin: true,
-		Volumes:                  []securityv1.FSType{securityv1.FSTypeHostPath, securityv1.FSTypeSecret, securityv1.FSTypeConfigMap},
+		Volumes:                  []securityv1.FSType{securityv1.FSTypeHostPath, securityv1.FSTypeSecret, securityv1.FSTypeConfigMap, securityv1.FSTypeEmptyDir},
 		AllowHostNetwork:         false,
 		AllowHostPorts:           false,
 		AllowHostPID:             false,
