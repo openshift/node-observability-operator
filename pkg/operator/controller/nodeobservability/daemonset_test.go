@@ -66,28 +66,33 @@ func TestEnsureDaemonset(t *testing.T) {
 							"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
 							"--storage=/run/node-observability",
 							fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
+							"--unixSocket=/var/run/nob/agent.sock",
+							"--preferUnixSocket",
 						).
 						withPrivileged().
 						withVolumeMount(socketName, socketMountPath, false).
 						withVolumeMount(kbltCAName, kbltCAMountPath, true).
 						withVolumeMount("profiledata", "/run/node-observability", false).
+						withVolumeMount("nob", "/var/run/nob", false).
 						build(),
-					testContainer("kube-rbac-proxy", "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0").
+					testContainer("kube-rbac-proxy", "quay.io/alebedev/kube-rbac-proxy:12.2.171").
 						withArgs(
 							"--secure-listen-address=0.0.0.0:8443",
-							"--upstream=http://127.0.0.1:9000/",
+							"--upstream-unix-socket=/var/run/nob/agent.sock",
 							fmt.Sprintf("--tls-cert-file=%s/tls.crt", certsMountPath),
 							fmt.Sprintf("--tls-private-key-file=%s/tls.key", certsMountPath),
 							"--logtostderr=true",
 							"--v=2",
 						).
 						withVolumeMount(certsName, certsMountPath, true).
+						withVolumeMount("nob", "/var/run/nob", false).
 						build(),
 				).
 				withHostPathVolume(socketName, socketPath, corev1.HostPathSocket).
 				withConfigMapVolume(kbltCAName, kubeletCAConfigMapName).
 				withSecretVolume(certsName, "node-observability-agent").
 				withEmptyDirVolume("profiledata").
+				withEmptyDirVolume("nob").
 				build(),
 		},
 		{
@@ -106,6 +111,8 @@ func TestEnsureDaemonset(t *testing.T) {
 								"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
 								"--storage=/run/node-observability",
 								fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
+								"--unixSocket=/var/run/nob/agent.sock",
+								"--preferUnixSocket",
 							).
 							withPrivileged().
 							withVolumeMount(socketName, socketMountPath, true).
@@ -115,6 +122,8 @@ func TestEnsureDaemonset(t *testing.T) {
 					withHostPathVolume(socketName, socketPath, corev1.HostPathSocket).
 					withConfigMapVolume(kbltCAName, kubeletCAConfigMapName).
 					withSecretVolume(certsName, "node-observability-agent").
+					withEmptyDirVolume("profiledata").
+					withEmptyDirVolume("nob").
 					build(),
 			},
 			expectedDS: testDaemonset(daemonSetName, test.TestNamespace, serviceAccountName).
@@ -130,28 +139,33 @@ func TestEnsureDaemonset(t *testing.T) {
 							"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
 							"--storage=/run/node-observability",
 							fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
+							"--unixSocket=/var/run/nob/agent.sock",
+							"--preferUnixSocket",
 						).
 						withPrivileged().
 						withVolumeMount(socketName, socketMountPath, false).
 						withVolumeMount(kbltCAName, kbltCAMountPath, true).
 						withVolumeMount("profiledata", "/run/node-observability", false).
+						withVolumeMount("nob", "/var/run/nob", false).
 						build(),
-					testContainer("kube-rbac-proxy", "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0").
+					testContainer("kube-rbac-proxy", "quay.io/alebedev/kube-rbac-proxy:12.2.171").
 						withArgs(
 							"--secure-listen-address=0.0.0.0:8443",
-							"--upstream=http://127.0.0.1:9000/",
+							"--upstream-unix-socket=/var/run/nob/agent.sock",
 							fmt.Sprintf("--tls-cert-file=%s/tls.crt", certsMountPath),
 							fmt.Sprintf("--tls-private-key-file=%s/tls.key", certsMountPath),
 							"--logtostderr=true",
 							"--v=2",
 						).
 						withVolumeMount(certsName, certsMountPath, true).
+						withVolumeMount("nob", "/var/run/nob", false).
 						build(),
 				).
 				withHostPathVolume(socketName, socketPath, corev1.HostPathSocket).
 				withConfigMapVolume(kbltCAName, kubeletCAConfigMapName).
 				withSecretVolume(certsName, "node-observability-agent").
 				withEmptyDirVolume("profiledata").
+				withEmptyDirVolume("nob").
 				build(),
 		},
 		{
@@ -173,28 +187,33 @@ func TestEnsureDaemonset(t *testing.T) {
 							"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
 							"--storage=/run/node-observability",
 							fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
+							"--unixSocket=/var/run/nob/agent.sock",
+							"--preferUnixSocket",
 						).
 						withPrivileged().
 						withVolumeMount(socketName, socketMountPath, false).
 						withVolumeMount(kbltCAName, kbltCAMountPath, true).
 						withVolumeMount("profiledata", "/run/node-observability", false).
+						withVolumeMount("nob", "/var/run/nob", false).
 						build(),
-					testContainer("kube-rbac-proxy", "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0").
+					testContainer("kube-rbac-proxy", "quay.io/alebedev/kube-rbac-proxy:12.2.171").
 						withArgs(
 							"--secure-listen-address=0.0.0.0:8443",
-							"--upstream=http://127.0.0.1:9000/",
+							"--upstream-unix-socket=/var/run/nob/agent.sock",
 							fmt.Sprintf("--tls-cert-file=%s/tls.crt", certsMountPath),
 							fmt.Sprintf("--tls-private-key-file=%s/tls.key", certsMountPath),
 							"--logtostderr=true",
 							"--v=2",
 						).
 						withVolumeMount(certsName, certsMountPath, true).
+						withVolumeMount("nob", "/var/run/nob", false).
 						build(),
 				).
 				withHostPathVolume(socketName, socketPath, corev1.HostPathSocket).
 				withConfigMapVolume(kbltCAName, kubeletCAConfigMapName).
 				withSecretVolume(certsName, "node-observability-agent").
 				withEmptyDirVolume("profiledata").
+				withEmptyDirVolume("nob").
 				build(),
 		},
 	}

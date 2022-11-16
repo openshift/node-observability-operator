@@ -176,6 +176,8 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 								"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
 								fmt.Sprintf("--storage=%s", dataMountPath),
 								fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
+								"--unixSocket=/var/run/nob/agent.sock",
+								"--preferUnixSocket",
 							},
 							Resources: corev1.ResourceRequirements{},
 							SecurityContext: &corev1.SecurityContext{
@@ -206,15 +208,19 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 									Name:      dataVolumeName,
 									MountPath: dataMountPath,
 								},
+								{
+									MountPath: "/var/run/nob",
+									Name:      "nob",
+								},
 							},
 						},
 						{
 							Name:            "kube-rbac-proxy",
-							Image:           "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0",
+							Image:           "quay.io/alebedev/kube-rbac-proxy:12.2.171",
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Args: []string{
 								"--secure-listen-address=0.0.0.0:8443",
-								"--upstream=http://127.0.0.1:9000/",
+								"--upstream-unix-socket=/var/run/nob/agent.sock",
 								fmt.Sprintf("--tls-cert-file=%s/tls.crt", certsMountPath),
 								fmt.Sprintf("--tls-private-key-file=%s/tls.key", certsMountPath),
 								"--logtostderr=true",
@@ -225,6 +231,10 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 									Name:      certsName,
 									MountPath: certsMountPath,
 									ReadOnly:  true,
+								},
+								{
+									Name:      "nob",
+									MountPath: "/var/run/nob",
 								},
 							},
 						},
@@ -264,6 +274,12 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 						},
 						{
 							Name: dataVolumeName,
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
+							},
+						},
+						{
+							Name: "nob",
 							VolumeSource: corev1.VolumeSource{
 								EmptyDir: &corev1.EmptyDirVolumeSource{},
 							},
