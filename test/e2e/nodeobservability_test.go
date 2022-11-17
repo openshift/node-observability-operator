@@ -90,6 +90,21 @@ var _ = Describe("Node Observability Operator end-to-end test suite", Ordered, f
 				}, 900, time.Second).Should(BeFalse())
 				Expect(run.Status.FailedAgents).To(BeEmpty())
 			})
+
+			By("by verifying generated files", func() {
+				listOpts := []client.ListOption{
+					client.MatchingLabels(labelsForNodeObservability(nodeobservability.Name)),
+				}
+
+				podList := &corev1.PodList{}
+				Expect(k8sClient.List(ctx, podList, listOpts...)).To(Succeed())
+
+				Expect(len(podList.Items)).To(Not(BeZero()))
+
+				for _, pod := range podList.Items {
+					Expect(verifyPodPprofData(cfg, k8sClientSet, pod.Name)).To(BeNil())
+				}
+			})
 		})
 
 		AfterEach(func() {
@@ -239,6 +254,21 @@ var _ = Describe("Node Observability Operator end-to-end test suite using v1alph
 					return run.Status.FinishedTimestamp.IsZero()
 				}, 600, time.Second).Should(BeFalse())
 				Expect(run.Status.FailedAgents).To(BeEmpty(), "Failed agent list is expected to be empty")
+			})
+
+			By("by verifying generated files", func() {
+				listOpts := []client.ListOption{
+					client.MatchingLabels(labelsForNodeObservability(nodeobservability.Name)),
+				}
+
+				podList := &corev1.PodList{}
+				Expect(k8sClient.List(ctx, podList, listOpts...)).To(Succeed())
+
+				Expect(len(podList.Items)).To(Not(BeZero()))
+
+				for _, pod := range podList.Items {
+					Expect(verifyPodPprofData(cfg, k8sClientSet, pod.Name)).To(BeNil())
+				}
 			})
 		})
 

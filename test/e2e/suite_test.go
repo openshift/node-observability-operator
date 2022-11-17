@@ -24,6 +24,7 @@ import (
 	securityv1 "github.com/openshift/api/security/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -40,12 +41,14 @@ import (
 	//+kubebuilder:scaffold:imports
 )
 
-var cfg *rest.Config
-var k8sClient client.Client
-
-// nodesWithoutOperator is a list of nodes on which the operator is not scheduled,
-// restarting them is not supposed to result in the loss of the operator logs.
-var nodesWithoutOperator *corev1.NodeList
+var (
+	cfg          *rest.Config
+	k8sClient    client.Client
+	k8sClientSet *kubernetes.Clientset
+	// nodesWithoutOperator is a list of nodes on which the operator is not scheduled,
+	// restarting them is not supposed to result in the loss of the operator logs.
+	nodesWithoutOperator *corev1.NodeList
+)
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -74,6 +77,9 @@ var _ = BeforeSuite(func() {
 	//+kubebuilder:scaffold:scheme
 
 	cfg, err = config.GetConfig()
+	Expect(err).NotTo(HaveOccurred())
+
+	k8sClientSet, err = kubernetes.NewForConfig(cfg)
 	Expect(err).NotTo(HaveOccurred())
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
