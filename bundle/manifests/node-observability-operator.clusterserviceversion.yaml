@@ -85,11 +85,12 @@ metadata:
         }
       ]
     capabilities: Basic Install
+    olm.skipRange: <0.2.0
     operatorframework.io/suggested-namespace: node-observability-operator
     operators.openshift.io/valid-subscription: '["OpenShift Container Platform"]'
     operators.operatorframework.io/builder: operator-sdk-v1.18.0+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
-  name: node-observability-operator.v0.0.1
+  name: node-observability-operator.v0.2.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -574,7 +575,7 @@ spec:
   relatedImages:
   - image: quay.io/node-observability-operator/node-observability-agent@sha256:977a6adc59ac1467d9f6d1a77854593786b8c43e36111a50925acd64d58e15a6
     name: agent
-  version: 0.0.1
+  version: 0.2.0
   webhookdefinitions:
   - admissionReviewVersions:
     - v1
