@@ -3,7 +3,7 @@
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
 # - use the BUNDLE_VERSION as arg of the bundle target (e.g make bundle BUNDLE_VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export BUNDLE_VERSION=0.0.2)
-BUNDLE_VERSION ?= 0.2.0
+BUNDLE_VERSION ?= 0.3.0
 
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "candidate,fast,stable")
@@ -45,7 +45,7 @@ IMG_VERSION ?= v0.0.1
 IMG ?= $(IMAGE_TAG_BASE):$(IMG_VERSION)
 
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.23
+ENVTEST_K8S_VERSION = 1.25
 
 # CONTAINER_ENGINE defines which container executable to use
 CONTAINER_ENGINE ?= podman
@@ -83,7 +83,7 @@ E2E_TIMEOUT ?= 1h
 BUNDLE_DIR := bundle
 BUNDLE_MANIFEST_DIR := $(BUNDLE_DIR)/manifests
 
-OPERATOR_SDK_VERSION = v1.19.0
+OPERATOR_SDK_VERSION = v1.28.0
 
 OPERATOR_SDK_BIN = $(shell pwd)/bin/operator-sdk
 .PHONY: operator-sdk
