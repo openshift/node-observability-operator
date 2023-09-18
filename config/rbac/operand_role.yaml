@@ -25,6 +25,7 @@ rules:
   - get
 - nonResourceURLs:
   - /node-observability-pprof
+  - /node-observability-scripting
   verbs:
   - get
 - apiGroups:

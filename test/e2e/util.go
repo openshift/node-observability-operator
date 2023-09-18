@@ -36,8 +36,9 @@ const (
 	defaultTestName        = "test-instance"
 	operatorNamespace      = "node-observability-operator"
 	operatorDeploymentName = "node-observability-operator-controller-manager"
-	agentContainerName     = "node-observability-agent"
-	profilingDataDir       = "/run/node-observability"
+	// nolint - ignore G101: not applicable
+	agentContainerName = "node-observability-agent"
+	profilingDataDir   = "/run/node-observability"
 )
 
 // testNodeObservability - minimal CR for the test

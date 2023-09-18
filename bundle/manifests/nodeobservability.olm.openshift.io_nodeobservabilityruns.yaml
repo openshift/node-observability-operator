@@ -215,10 +215,15 @@ spec:
                 description: NodeObservabilityRef is the reference to the parent NodeObservability
                   resource
                 properties:
+                  mode:
+                    description: Mode , this is used to differentiate from the current
+                      crio-kubelet profiling and scripting execution
+                    type: string
                   name:
                     description: 'Name of the referent; More info: http://kubernetes.io/docs/user-guide/identifiers#names'
                     type: string
                 required:
+                - mode
                 - name
                 type: object
             required:

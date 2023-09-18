@@ -179,9 +179,11 @@ spec:
               type:
                 description: 'Type defines the type of profiling queries, which will
                   be enabled The following types are supported: * crio-kubelet - 30s
-                  of /pprof data, requesting this type might cause node restart'
+                  of /pprof data, requesting this type might cause node restart *
+                  scripting - execute a bash script on the desired nodes'
                 enum:
                 - crio-kubelet
+                - scripting
                 type: string
             required:
             - nodeSelector

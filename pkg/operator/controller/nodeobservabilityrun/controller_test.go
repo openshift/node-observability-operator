@@ -24,6 +24,7 @@ import (
 )
 
 const (
+	// nolint - ignore G101: not applicable
 	name        = "node-observability-agent"
 	nodeObsName = "cluster"
 	namespace   = "test"

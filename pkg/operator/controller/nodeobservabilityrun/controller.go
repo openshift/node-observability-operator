@@ -48,10 +48,12 @@ import (
 )
 
 const (
-	pollingPeriod         = time.Second * 5
-	httpRequestTimeout    = time.Second * 10
-	authHeader            = "Authorization"
+	pollingPeriod      = time.Second * 5
+	httpRequestTimeout = time.Second * 10
+	authHeader         = "Authorization"
+	// nolint - ignore G101: not applicable
 	pprofPath             = "node-observability-pprof"
+	scriptPath            = "node-observability-scripting"
 	pprofStatus           = "node-observability-status"
 	nodeObservabilityKind = "NodeObservability"
 )
@@ -128,20 +130,20 @@ func (r *NodeObservabilityRunReconciler) Reconcile(ctx context.Context, req ctrl
 			instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha2.ReasonInProgress, "Profiling query in progress")
 			return ctrl.Result{RequeueAfter: pollingPeriod}, err
 		}
-		r.Log.V(1).Info("profiling query is done")
+		r.Log.V(1).Info("execution query is done")
 		t := metav1.Now()
 		instance.Status.FinishedTimestamp = &t
 		instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugFinished, metav1.ConditionTrue, nodeobservabilityv1alpha2.ReasonFinished, "Profiling query done")
 		return ctrl.Result{}, nil
 	}
 
-	r.Log.V(1).Info("ready to initiate profiling query")
+	r.Log.V(1).Info("ready to initiate an execution query")
 	if err := r.startRun(ctx, instance); err != nil {
 		instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha2.ReasonFailed, fmt.Sprintf("Failed to initiate profiling query: %s", err))
-		return ctrl.Result{}, fmt.Errorf("failed to initiate profiling query: %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to initiate an execution query: %w", err)
 	}
 
-	r.Log.V(1).Info("profiling query initiated")
+	r.Log.V(1).Info("execution query initiated")
 	instance.Status.SetCondition(nodeobservabilityv1alpha2.DebugFinished, metav1.ConditionFalse, nodeobservabilityv1alpha2.ReasonInProgress, "Profiling query initiated")
 
 	// one cycle takes cca 30s
@@ -203,12 +205,17 @@ func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance 
 		failedTargets = append(failedTargets, nodeobservabilityv1alpha2.AgentNode{Name: a.TargetRef.Name, IP: a.IP, Port: port})
 	}
 
+	var url string
 	for _, a := range subset.Addresses {
-		url := formatURL(a.IP, opctrl.AgentServiceName, r.Namespace, port, pprofPath)
+		if instance.Spec.NodeObservabilityRef.Mode == "profiling" {
+			url = formatURL(a.IP, opctrl.AgentServiceName, r.Namespace, port, pprofPath)
+		} else {
+			url = formatURL(a.IP, opctrl.AgentServiceName, r.Namespace, port, scriptPath)
+		}
 		r.Log.V(1).Info("initiating new run for node", "node.name", a.NodeName, "pod.name", a.TargetRef.Name, "pod.ip", a.IP, "pod.port", port, "url", url)
 		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityRunErrorRetriable, r.httpGetCall(url))
 		if err != nil {
-			r.Log.V(1).Info("failed to start profiling, removing node from list", "node.name", a.NodeName, "pod.name", a.TargetRef.Name, "pod.ip", a.IP, "error", err)
+			r.Log.V(1).Info("failed to execute, removing node from list", "node.name", a.NodeName, "pod.name", a.TargetRef.Name, "pod.ip", a.IP, "error", err)
 			failedTargets = append(failedTargets, nodeobservabilityv1alpha2.AgentNode{Name: a.TargetRef.Name, IP: a.IP, Port: port})
 			continue
 		}

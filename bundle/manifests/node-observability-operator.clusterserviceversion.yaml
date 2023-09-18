@@ -152,6 +152,10 @@ spec:
           verbs:
           - get
         - nonResourceURLs:
+          - /node-observability-scripting
+          verbs:
+          - get
+        - nonResourceURLs:
           - /node-observability-status
           verbs:
           - get

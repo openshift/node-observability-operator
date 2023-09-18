@@ -51,6 +51,7 @@ import (
 const (
 	finalizer = "NodeObservability"
 	// the name of the NodeObservability resource which will be reconciled
+	// nolint - ignore G101: not applicable
 	nodeObsCRName        = "cluster"
 	defaultRequeuePeriod = time.Duration(5) * time.Second
 )
@@ -78,6 +79,7 @@ type NodeObservabilityReconciler struct {
 //+kubebuilder:rbac:urls=/debug/*,verbs=get;
 //+kubebuilder:rbac:urls=/node-observability-status,verbs=get;
 //+kubebuilder:rbac:urls=/node-observability-pprof,verbs=get;
+//+kubebuilder:rbac:urls=/node-observability-scripting,verbs=get;
 //+kubebuilder:rbac:groups=authentication.k8s.io,resources=tokenreviews,verbs=create;
 //+kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create;
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=get,resourceNames=node-observability-operator-agent

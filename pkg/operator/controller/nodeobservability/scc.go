@@ -16,6 +16,7 @@ import (
 )
 
 const (
+	// nolint - ignore G101: not applicable
 	sccName = "node-observability-agent"
 )
 
@@ -73,7 +74,7 @@ func (r *NodeObservabilityReconciler) desiredSecurityContextConstraints(nodeObs 
 		AllowPrivilegedContainer: true,
 		DefaultAddCapabilities:   nil,
 		RequiredDropCapabilities: []corev1.Capability{"MKNOD"},
-		AllowedCapabilities:      nil,
+		AllowedCapabilities:      []corev1.Capability{"NET_ADMIN"},
 		AllowHostDirVolumePlugin: true,
 		Volumes:                  []securityv1.FSType{securityv1.FSTypeHostPath, securityv1.FSTypeSecret, securityv1.FSTypeConfigMap, securityv1.FSTypeEmptyDir},
 		AllowHostNetwork:         false,
