@@ -82,7 +82,7 @@ func testNodeObservabilityRun(testName string) *operatorv1alpha2.NodeObservabili
 		Spec: operatorv1alpha2.NodeObservabilityRunSpec{
 			NodeObservabilityRef: &operatorv1alpha2.NodeObservabilityRef{
 				Name: "cluster",
-				Type: "crio-kubelet",
+				Type: operatorv1alpha2.CrioKubeletNodeObservabilityType,
 			},
 		},
 	}

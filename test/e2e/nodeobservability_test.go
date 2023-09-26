@@ -21,7 +21,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -30,7 +29,6 @@ import (
 
 	mcv1 "github.com/openshift/machine-config-operator/pkg/apis/machineconfiguration.openshift.io/v1"
 
-	operatorv1alpha1 "github.com/openshift/node-observability-operator/api/v1alpha1"
 	operatorv1alpha2 "github.com/openshift/node-observability-operator/api/v1alpha2"
 )
 
@@ -187,7 +185,7 @@ var _ = Describe("Node Observability Operator end-to-end test suite", Ordered, f
 	})
 })
 
-// remove v1alpha1 testing for gcp as it is being deprecated
+/*
 var _ = Describe("Node Observability Operator end-to-end test suite using v1alpha1", Ordered, func() {
 	var (
 		nodeobservability *operatorv1alpha1.NodeObservability
@@ -296,6 +294,7 @@ var _ = Describe("Node Observability Operator end-to-end test suite using v1alph
 		}
 	})
 })
+*/
 
 var _ = Describe("Node Observability MachineConfig controller end-to-end test suite", Ordered, func() {
 
