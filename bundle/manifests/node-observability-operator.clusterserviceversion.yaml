@@ -79,7 +79,8 @@ metadata:
           },
           "spec": {
             "nodeObservabilityRef": {
-              "name": "cluster"
+              "name": "cluster",
+              "type": "crio-kubelet"
             }
           }
         }

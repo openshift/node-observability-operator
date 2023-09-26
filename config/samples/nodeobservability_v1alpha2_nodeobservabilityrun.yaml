@@ -6,3 +6,4 @@ metadata:
 spec:
   nodeObservabilityRef:
     name: cluster
+    type: "crio-kubelet"

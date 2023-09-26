@@ -31,8 +31,8 @@ type NodeObservabilityRunSpec struct {
 type NodeObservabilityRef struct {
 	// Name of the referent; More info: http://kubernetes.io/docs/user-guide/identifiers#names
 	Name string `json:"name"`
-	// Mode , this is used to differentiate from the current crio-kubelet profiling and scripting execution
-	Mode string `json:"mode"`
+	// Type , this is used to differentiate from the current crio-kubelet profiling and scripting execution
+	Type NodeObservabilityType `json:"type"`
 }
 
 // NodeObservabilityRunStatus defines the observed state of NodeObservabilityRun

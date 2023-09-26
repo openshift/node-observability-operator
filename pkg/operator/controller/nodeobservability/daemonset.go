@@ -156,7 +156,7 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 
 	var args []string
 
-	if nodeObs.Spec.Type == "scripting" {
+	if nodeObs.Spec.Type == v1alpha2.ScriptingNodeObservabilityType {
 		args = []string{
 			fmt.Sprintf("--storage=%s", dataMountPath),
 			"--mode=scripting",

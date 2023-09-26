@@ -56,6 +56,22 @@ func testNodeObservability() *operatorv1alpha2.NodeObservability {
 	}
 }
 
+// testNodeObservabilityScript - minimal CR for the test
+// nolint: unused
+func testNodeObservabilityScript() *operatorv1alpha2.NodeObservability {
+	return &operatorv1alpha2.NodeObservability{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster",
+		},
+		Spec: operatorv1alpha2.NodeObservabilitySpec{
+			NodeSelector: map[string]string{
+				"node-role.kubernetes.io/worker": "",
+			},
+			Type: operatorv1alpha2.ScriptingNodeObservabilityType,
+		},
+	}
+}
+
 // testNodeObservabilityRun - minimal CR for the test
 func testNodeObservabilityRun(testName string) *operatorv1alpha2.NodeObservabilityRun {
 	return &operatorv1alpha2.NodeObservabilityRun{
@@ -66,6 +82,24 @@ func testNodeObservabilityRun(testName string) *operatorv1alpha2.NodeObservabili
 		Spec: operatorv1alpha2.NodeObservabilityRunSpec{
 			NodeObservabilityRef: &operatorv1alpha2.NodeObservabilityRef{
 				Name: "cluster",
+				Type: "crio-kubelet",
+			},
+		},
+	}
+}
+
+// testNodeObservabilityRunScripting - minimal CR for the test using the scripting type
+// nolint: unused
+func testNodeObservabilityRunScripting(testName string) *operatorv1alpha2.NodeObservabilityRun {
+	return &operatorv1alpha2.NodeObservabilityRun{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      testName,
+			Namespace: operatorNamespace,
+		},
+		Spec: operatorv1alpha2.NodeObservabilityRunSpec{
+			NodeObservabilityRef: &operatorv1alpha2.NodeObservabilityRef{
+				Name: "cluster",
+				Type: "scripting",
 			},
 		},
 	}

@@ -207,10 +207,12 @@ func (r *NodeObservabilityRunReconciler) startRun(ctx context.Context, instance 
 
 	var url string
 	for _, a := range subset.Addresses {
-		if instance.Spec.NodeObservabilityRef.Mode == "profiling" {
+		fmt.Println("DEBUG LMZ ", instance.Spec.NodeObservabilityRef.Name, instance.Spec.NodeObservabilityRef.Type)
+		if instance.Spec.NodeObservabilityRef.Type == nodeobservabilityv1alpha2.CrioKubeletNodeObservabilityType {
 			url = formatURL(a.IP, opctrl.AgentServiceName, r.Namespace, port, pprofPath)
 		} else {
 			url = formatURL(a.IP, opctrl.AgentServiceName, r.Namespace, port, scriptPath)
+			fmt.Println("URL ", url)
 		}
 		r.Log.V(1).Info("initiating new run for node", "node.name", a.NodeName, "pod.name", a.TargetRef.Name, "pod.ip", a.IP, "pod.port", port, "url", url)
 		err := retry.OnError(retry.DefaultBackoff, IsNodeObservabilityRunErrorRetriable, r.httpGetCall(url))

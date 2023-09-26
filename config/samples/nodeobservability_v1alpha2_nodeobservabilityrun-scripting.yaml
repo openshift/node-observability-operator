@@ -1,9 +1,9 @@
 apiVersion: nodeobservability.olm.openshift.io/v1alpha2
 kind: NodeObservabilityRun
 metadata:
-  name: nodeobservabilityrun-sample-1
+  name: nodeobservabilityrun-script-sample-1
   namespace: node-observability-operator
 spec:
   nodeObservabilityRef:
     name: cluster
-    mode: "scripting"
+    type: "scripting"
