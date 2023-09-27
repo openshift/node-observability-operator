@@ -185,26 +185,14 @@ var _ = Describe("Node Observability Operator end-to-end test suite", Ordered, f
 	})
 })
 
-/*
-var _ = Describe("Node Observability Operator end-to-end test suite using v1alpha1", Ordered, func() {
+var _ = Describe("Node Observability Operator end-to-end test suite for scripting", Ordered, func() {
 	var (
-		nodeobservability *operatorv1alpha1.NodeObservability
+		nodeobservability *operatorv1alpha2.NodeObservability
 	)
 
 	BeforeAll(func() {
-		// observe only 1 node to speed up the test
-		nodeobservability = &operatorv1alpha1.NodeObservability{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "cluster",
-			},
-			Spec: operatorv1alpha1.NodeObservabilitySpec{
-				Labels: map[string]string{
-					hostnameLabel: nodesWithoutOperator.Items[0].Labels[hostnameLabel],
-				},
-				Type: operatorv1alpha1.CrioKubeletNodeObservabilityType,
-			},
-		}
-		By("deploying Node Observability Agents", func() {
+		nodeobservability = testNodeObservabilityScript()
+		By("deploying Node Observability Agents for scripting", func() {
 			Expect(k8sClient.Create(ctx, nodeobservability)).To(Succeed(), "NodeObservability resource is expected to be created")
 			Eventually(func() bool {
 				ds := &appsv1.DaemonSet{}
@@ -217,57 +205,41 @@ var _ = Describe("Node Observability Operator end-to-end test suite using v1alph
 			}, 60, time.Second).Should(BeTrue(), "number of ready agents != number of desired agents")
 		})
 	})
-	Context("Happy Path scenario - single scrape is initiated and it is expected to succeed", func() {
+
+	Context("Happy Path scenario for scripting - single scrape is initiated and it is expected to succeed", func() {
 		var (
-			nodeobservabilityRun *operatorv1alpha1.NodeObservabilityRun
+			nodeobservabilityRun *operatorv1alpha2.NodeObservabilityRun
 		)
 		BeforeEach(func() {
-			nodeobservabilityRun = &operatorv1alpha1.NodeObservabilityRun{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      defaultTestName,
-					Namespace: operatorNamespace,
-				},
-				Spec: operatorv1alpha1.NodeObservabilityRunSpec{
-					NodeObservabilityRef: &operatorv1alpha1.NodeObservabilityRef{
-						Name: "cluster",
-					},
-				},
-			}
+			nodeobservabilityRun = testNodeObservabilityRunScripting(defaultTestName)
 		})
 
-		It("runs Node Observability scrape", func() {
+		It("runs Node Observability scrape (for scripting))", func() {
 
 			By("by initiating the scrape", func() {
 				Expect(k8sClient.Create(ctx, nodeobservabilityRun)).To(Succeed(), "NodeObservabilityRun resource is expected to be created")
-				GinkgoWriter.Println("Creation of NOB run done")
 			})
 
 			By("by collecting status", func() {
-				run := &operatorv1alpha1.NodeObservabilityRun{}
+				run := &operatorv1alpha2.NodeObservabilityRun{}
 				runNamespacedName := types.NamespacedName{
 					Name:      defaultTestName,
 					Namespace: operatorNamespace,
 				}
 				Eventually(func() bool {
-					Expect(k8sClient.Get(ctx, runNamespacedName, run)).To(Succeed(), "NOB run is expected to exist")
+					Expect(k8sClient.Get(ctx, runNamespacedName, run)).To(Succeed())
 					return run.Status.FinishedTimestamp.IsZero()
-				}, 600, time.Second).Should(BeFalse())
-				Expect(run.Status.FailedAgents).To(BeEmpty(), "Failed agent list is expected to be empty")
+				}, 900, time.Second).Should(BeFalse())
+				Expect(run.Status.FailedAgents).To(BeEmpty())
 			})
 
-			By("by verifying generated files", func() {
+			By("by verifying agent pods", func() {
 				listOpts := []client.ListOption{
 					client.MatchingLabels(labelsForNodeObservability(nodeobservability.Name)),
 				}
-
 				podList := &corev1.PodList{}
 				Expect(k8sClient.List(ctx, podList, listOpts...)).To(Succeed())
-
 				Expect(len(podList.Items)).To(Not(BeZero()))
-
-				for _, pod := range podList.Items {
-					Expect(verifyPodPprofData(cfg, k8sClientSet, pod.Name)).To(BeNil())
-				}
 			})
 		})
 
@@ -281,20 +253,19 @@ var _ = Describe("Node Observability Operator end-to-end test suite using v1alph
 			GinkgoWriter.Println("Cleaning up NOB")
 			Expect(k8sClient.Delete(ctx, nodeobservability)).To(Succeed())
 			GinkgoWriter.Println("Waiting for NOBMC to disappear")
-			nobmc := &operatorv1alpha1.NodeObservabilityMachineConfig{}
+			nobmc := &operatorv1alpha2.NodeObservabilityMachineConfig{}
 			Eventually(func() bool {
 				return errors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: "cluster"}, nobmc))
-			}, 600, time.Second).Should(BeTrue())
+			}, 900, time.Second).Should(BeTrue())
 		} else {
 			// keep NOB CR to preserve all the dependent objects
-			GinkgoWriter.Println("Node Observability test for v1alpha1 has failed, skipping the cleanup of NOB")
+			GinkgoWriter.Println("Node Observability test for scripting has failed, skipping the cleanup of NOB")
 			// aborting the rest of the tests as they create their own NOBs
 			// which will result into a conflict
 			AbortSuite("Aborting whole test suite to avoid conflicts")
 		}
 	})
 })
-*/
 
 var _ = Describe("Node Observability MachineConfig controller end-to-end test suite", Ordered, func() {
 

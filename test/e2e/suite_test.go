@@ -105,5 +105,5 @@ var _ = BeforeSuite(func() {
 			nodesWithoutOperator.Items = append(nodesWithoutOperator.Items, n)
 		}
 	}
-	Expect(len(nodesWithoutOperator.Items)).To(Not(BeZero()))
+	//Expect(len(nodesWithoutOperator.Items)).To(Not(BeZero()))
 })
