@@ -21,8 +21,9 @@ import (
 )
 
 const (
-	TestNamespace            = ""
-	OperatorNamespace        = "node-observability-operator"
+	TestNamespace     = ""
+	OperatorNamespace = "node-observability-operator"
+	// nolint - ignore G101: not applicable
 	KubeletCASourceNamespace = "openshift-config-managed"
 )
 

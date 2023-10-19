@@ -37,12 +37,15 @@ import (
 )
 
 const (
-	nodeObsInstanceName            = "nodeobservability-sample"
-	kubeletCAConfigMapName         = "kubelet-serving-ca"
+	// nolint - ignore G101: not applicable
+	nodeObsInstanceName = "nodeobservability-sample"
+	// nolint - ignore G101: not applicable
+	kubeletCAConfigMapName = "kubelet-serving-ca"
+	// nolint - ignore G101: not applicable
 	srcKubeletCAConfigMapNameSpace = "openshift-config-managed"
 )
 
-func TestEnsureDaemonset(t *testing.T) {
+func TestEnsureProfilingDaemonset(t *testing.T) {
 	testCases := []struct {
 		name            string
 		existingObjects []runtime.Object
@@ -61,11 +64,13 @@ func TestEnsureDaemonset(t *testing.T) {
 				withContainers(
 					testContainer(podName, "node-observability-agent:latest").
 						withFieldEnv("NODE_IP", "status.hostIP").
+						withEnv("EXECUTE_SCRIPT", "/tmp/scripts/metrics.sh").
 						withCommand("node-observability-agent").
 						withArgs(
 							"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
 							"--storage=/run/node-observability",
 							fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
+							"--mode=profiling",
 						).
 						withPrivileged().
 						withVolumeMount(socketName, socketMountPath, false).
@@ -101,11 +106,13 @@ func TestEnsureDaemonset(t *testing.T) {
 					withContainers(
 						testContainer(podName, "node-observability-agent:latest").
 							withFieldEnv("NODE_IP", "status.hostIP").
+							withEnv("EXECUTE_SCRIPT", "/tmp/scripts/metrics.sh").
 							withCommand("node-observability").
 							withArgs(
 								"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
 								"--storage=/run/node-observability",
 								fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
+								"--mode=profiling",
 							).
 							withPrivileged().
 							withVolumeMount(socketName, socketMountPath, true).
@@ -125,11 +132,13 @@ func TestEnsureDaemonset(t *testing.T) {
 				withContainers(
 					testContainer(podName, "node-observability-agent:latest").
 						withFieldEnv("NODE_IP", "status.hostIP").
+						withEnv("EXECUTE_SCRIPT", "/tmp/scripts/metrics.sh").
 						withCommand("node-observability-agent").
 						withArgs(
 							"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
 							"--storage=/run/node-observability",
 							fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
+							"--mode=profiling",
 						).
 						withPrivileged().
 						withVolumeMount(socketName, socketMountPath, false).
@@ -168,11 +177,13 @@ func TestEnsureDaemonset(t *testing.T) {
 				withContainers(
 					testContainer(podName, "node-observability-agent:latest").
 						withFieldEnv("NODE_IP", "status.hostIP").
+						withEnv("EXECUTE_SCRIPT", "/tmp/scripts/metrics.sh").
 						withCommand("node-observability-agent").
 						withArgs(
 							"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
 							"--storage=/run/node-observability",
 							fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
+							"--mode=profiling",
 						).
 						withPrivileged().
 						withVolumeMount(socketName, socketMountPath, false).
@@ -214,6 +225,104 @@ func TestEnsureDaemonset(t *testing.T) {
 					NodeSelector: map[string]string{
 						"node-role.kubernetes.io/worker": "",
 					},
+					Type: operatorv1alpha2.CrioKubeletNodeObservabilityType,
+				},
+			}
+			sa := &corev1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: test.OperatorNamespace,
+					Name:      serviceAccountName,
+				},
+			}
+			tempCM := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: test.OperatorNamespace,
+					Name:      kubeletCAConfigMapName,
+				},
+			}
+			_, err := r.ensureDaemonSet(context.TODO(), nodeObs, sa, r.Namespace, tempCM)
+			if err != nil {
+				t.Fatalf("unexpected error received: %v", err)
+			}
+
+			ds := &appsv1.DaemonSet{}
+			err = r.Client.Get(context.Background(), types.NamespacedName{Namespace: test.TestNamespace, Name: daemonSetName}, ds)
+			if err != nil {
+				t.Fatalf("failed to get daemonset: %v", err)
+			}
+			if diff := cmp.Diff(ds, tc.expectedDS); diff != "" {
+				t.Errorf("resource mismatch:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestEnsureScriptingDaemonset(t *testing.T) {
+	testCases := []struct {
+		name            string
+		existingObjects []runtime.Object
+		serviceaccount  *corev1.ServiceAccount
+		expectedDS      *appsv1.DaemonSet
+	}{
+		{
+			name: "New scripting daemonset",
+			existingObjects: []runtime.Object{
+				makeKubeletCACM(),
+			},
+			expectedDS: testDaemonset(daemonSetName, test.TestNamespace, serviceAccountName).
+				withTemplateAnnotation("nodeobservability.olm.openshift.io/kubelet-ca-configmap-hash", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855").
+				withNodeSelector(map[string]string{"node-role.kubernetes.io/worker": ""}).
+				withControllerReference(nodeObsInstanceName).
+				withContainers(
+					testContainer(podName, "node-observability-agent:latest").
+						withFieldEnv("NODE_IP", "status.hostIP").
+						withEnv("EXECUTE_SCRIPT", "/tmp/scripts/metrics.sh").
+						withCommand("node-observability-agent").
+						withArgs(
+							"--storage=/run/node-observability",
+							"--mode=scripting",
+						).
+						withPrivileged().
+						withVolumeMount(socketName, socketMountPath, false).
+						withVolumeMount(kbltCAName, kbltCAMountPath, true).
+						withVolumeMount("profiledata", "/run/node-observability", false).
+						build(),
+					testContainer("kube-rbac-proxy", "gcr.io/kubebuilder/kube-rbac-proxy:v0.11.0").
+						withArgs(
+							"--secure-listen-address=0.0.0.0:8443",
+							"--upstream=http://127.0.0.1:9000/",
+							fmt.Sprintf("--tls-cert-file=%s/tls.crt", certsMountPath),
+							fmt.Sprintf("--tls-private-key-file=%s/tls.key", certsMountPath),
+							"--logtostderr=true",
+							"--v=2",
+						).
+						withVolumeMount(certsName, certsMountPath, true).
+						build(),
+				).
+				withHostPathVolume(socketName, socketPath, corev1.HostPathSocket).
+				withConfigMapVolume(kbltCAName, kubeletCAConfigMapName).
+				withSecretVolume(certsName, "node-observability-agent").
+				withEmptyDirVolume("profiledata").
+				build(),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cl := fake.NewClientBuilder().WithRuntimeObjects(tc.existingObjects...).Build()
+			r := &NodeObservabilityReconciler{
+				Client:     cl,
+				Scheme:     test.Scheme,
+				Namespace:  test.TestNamespace,
+				Log:        zap.New(zap.UseDevMode(true)),
+				AgentImage: "node-observability-agent:latest",
+			}
+			nodeObs := &operatorv1alpha2.NodeObservability{
+				ObjectMeta: metav1.ObjectMeta{Name: nodeObsInstanceName},
+				Spec: operatorv1alpha2.NodeObservabilitySpec{
+					NodeSelector: map[string]string{
+						"node-role.kubernetes.io/worker": "",
+					},
+					Type: operatorv1alpha2.ScriptingNodeObservabilityType,
 				},
 			}
 			sa := &corev1.ServiceAccount{

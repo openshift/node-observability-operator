@@ -17,7 +17,8 @@ import (
 
 const (
 	// cluster role is created via operator bundle, refer to config/rbac/operand_role.yaml
-	clusterRoleName        = "node-observability-operator-agent"
+	clusterRoleName = "node-observability-operator-agent"
+	// nolint - ignore G101: not applicable
 	clusterRoleBindingName = "node-observability-agent"
 )
 

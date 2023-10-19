@@ -16,6 +16,7 @@ import (
 )
 
 const (
+	// nolint - ignore G101: not applicable
 	serviceAccountName = "node-observability-agent"
 )
 

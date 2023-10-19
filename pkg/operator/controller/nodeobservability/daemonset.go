@@ -18,21 +18,24 @@ import (
 )
 
 const (
-	podName               = "node-observability-agent"
-	socketName            = "socket"
-	socketPath            = "/var/run/crio/crio.sock"
-	socketMountPath       = "/var/run/crio/crio.sock"
-	kbltCAMountPath       = "/var/run/secrets/kubelet-serving-ca/"
-	kbltCAMountedFile     = "ca-bundle.crt"
-	kbltCAName            = "kubelet-ca"
-	defaultScheduler      = "default-scheduler"
+	// nolint - ignore G101: not applicable
+	podName           = "node-observability-agent"
+	socketName        = "socket"
+	socketPath        = "/var/run/crio/crio.sock"
+	socketMountPath   = "/var/run/crio/crio.sock"
+	kbltCAMountPath   = "/var/run/secrets/kubelet-serving-ca/"
+	kbltCAMountedFile = "ca-bundle.crt"
+	kbltCAName        = "kubelet-ca"
+	defaultScheduler  = "default-scheduler"
+	// nolint - ignore G101: not applicable
 	obsoleteDaemonSetName = "node-observability-ds"
-	daemonSetName         = "node-observability-agent"
-	certsName             = "certs"
-	certsMountPath        = "/var/run/secrets/openshift.io/certs"
-	kubeletCAAnnotation   = "nodeobservability.olm.openshift.io/kubelet-ca-configmap-hash"
-	dataVolumeName        = "profiledata"
-	dataMountPath         = "/run/node-observability"
+	// nolint - ignore G101: not applicable
+	daemonSetName       = "node-observability-agent"
+	certsName           = "certs"
+	certsMountPath      = "/var/run/secrets/openshift.io/certs"
+	kubeletCAAnnotation = "nodeobservability.olm.openshift.io/kubelet-ca-configmap-hash"
+	dataVolumeName      = "profiledata"
+	dataMountPath       = "/run/node-observability"
 )
 
 // ensureDaemonSet ensures that the daemonset exists
@@ -151,6 +154,22 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 	vst := corev1.HostPathSocket
 	privileged := true
 
+	var args []string
+
+	if nodeObs.Spec.Type == v1alpha2.ScriptingNodeObservabilityType {
+		args = []string{
+			fmt.Sprintf("--storage=%s", dataMountPath),
+			"--mode=scripting",
+		}
+	} else {
+		args = []string{
+			"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
+			fmt.Sprintf("--storage=%s", dataMountPath),
+			fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
+			"--mode=profiling",
+		}
+	}
+
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      daemonSetName,
@@ -172,12 +191,8 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 							ImagePullPolicy: corev1.PullIfNotPresent,
 							Name:            podName,
 							Command:         []string{"node-observability-agent"},
-							Args: []string{
-								"--tokenFile=/var/run/secrets/kubernetes.io/serviceaccount/token",
-								fmt.Sprintf("--storage=%s", dataMountPath),
-								fmt.Sprintf("--caCertFile=%s%s", kbltCAMountPath, kbltCAMountedFile),
-							},
-							Resources: corev1.ResourceRequirements{},
+							Args:            args,
+							Resources:       corev1.ResourceRequirements{},
 							SecurityContext: &corev1.SecurityContext{
 								Privileged: &privileged,
 							},
@@ -189,6 +204,10 @@ func (r *NodeObservabilityReconciler) desiredDaemonSet(nodeObs *v1alpha2.NodeObs
 											FieldPath: "status.hostIP",
 										},
 									},
+								},
+								{
+									Name:  "EXECUTE_SCRIPT",
+									Value: "/tmp/scripts/metrics.sh",
 								},
 							},
 							VolumeMounts: []corev1.VolumeMount{

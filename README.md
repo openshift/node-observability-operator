@@ -11,6 +11,18 @@ Afterward, the profiling requests can be created to trigger different types of p
 - [Verifying the installation of NodeObservability Operator](#verifying-the-installation-of-nodeobservability-operator)
 - [Creating the NodeObservability CR](#creating-the-nodeobservability-cr)
 
+## Architecture Overview
+
+![design overview](./docs/assets/node-observability-overview.png)
+
+### Description
+
+The node-observability-operator once installed will create a daemonset on all or only labeled nodes, once 
+the cluster-admin creates and deploys a CRD for nodeobservability. After ensuring all agent pods are running on the desired nodes
+the cluster-admin can then create a node-observability-run CRD, this will then call the API end points of all agents and trigger
+either a profiling or scripting execution, the profiling data/ scripting artifacts will be stored in the agent container using hostPath for later retrieval
+
+
 ## Deploying the `NodeObservability` Operator
 
 NodeObservability Operator can be deployed using one of the following procedures.

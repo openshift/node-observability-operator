@@ -19,11 +19,13 @@ package nodeobservabilitycontroller
 import "k8s.io/apimachinery/pkg/types"
 
 const (
+	// nolint - ignore G101: not applicable
 	// SourceKubeletCAConfigMapNamespace namespace where the Kubelet CA is stored
 	SourceKubeletCAConfigMapNamespace = "openshift-config-managed"
 	// KubeletCAConfigMapName name of the Kubelet CA configmap
 	KubeletCAConfigMapName = "kubelet-serving-ca"
 	// AgentServiceName name of the service backed up by the agent's daemonset.
+	// nolint - ignore G101: not applicable
 	AgentServiceName = "node-observability-agent"
 	// nolint - ignore G101: "secret" substring in the name
 	// ServingCertSecretName secret which contains certificates

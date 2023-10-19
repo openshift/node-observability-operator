@@ -288,4 +288,4 @@ catalog-push: ## Push a catalog image.
 .PHONY: lint
 ## Checks the code with golangci-lint
 lint:
-	$(GOLANGCI_LINT_BIN) run -c .golangci.yaml --deadline=30m
+	GOGC=1 $(GOLANGCI_LINT_BIN) run -c .golangci.yaml --deadline=30m

@@ -4,6 +4,7 @@ Node Observability project is a web of controllers and node agents/daemons
 that allows you to:
 * enable richer debug/profiling setting on worker nodes
 * collect kubelet and crio `/pprof` data
+* execute and collect specific bash scripts (networking,core-dns etc)
 
 ## Deploy
 

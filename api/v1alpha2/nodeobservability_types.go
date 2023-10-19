@@ -20,11 +20,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// +kubebuilder:validation:Enum=crio-kubelet;
+// +kubebuilder:validation:Enum=crio-kubelet;scripting
 type NodeObservabilityType string
 
 const (
 	CrioKubeletNodeObservabilityType NodeObservabilityType = "crio-kubelet"
+	ScriptingNodeObservabilityType   NodeObservabilityType = "scripting"
 )
 
 // NodeObservabilitySpec defines the desired state of NodeObservability
@@ -36,6 +37,7 @@ type NodeObservabilitySpec struct {
 	// Type defines the type of profiling queries, which will be enabled
 	// The following types are supported:
 	//   * crio-kubelet - 30s of /pprof data, requesting this type might cause node restart
+	//   * scripting - execute a bash script on the desired nodes
 	Type NodeObservabilityType `json:"type"`
 }
 
