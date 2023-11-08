@@ -43,7 +43,7 @@ spec:
               fieldPath: metadata.namespace
         - name: RELATED_IMAGE_AGENT
           # agent commit id: 6e637bb1494d87d8e4983704f6d83a7331a61dda
-          value: quay.io/node-observability-operator/node-observability-agent:latest
+          value: "quay.io/node-observability-operator/node-observability-agent:latest"
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
