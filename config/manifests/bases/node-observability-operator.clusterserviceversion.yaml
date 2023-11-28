@@ -4,9 +4,10 @@ metadata:
   annotations:
     alm-examples: '[]'
     capabilities: Basic Install
-    olm.skipRange: <0.2.0
+    olm.skipRange: <0.3.0
     operatorframework.io/suggested-namespace: node-observability-operator
-  name: node-observability-operator.v0.2.0
+    operators.openshift.io/valid-subscription: OpenShift Container Platform
+  name: node-observability-operator.v0.3.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -78,4 +79,4 @@ spec:
   minKubeVersion: 1.23.0
   provider:
     name: Red Hat, Inc.
-  version: 0.2.0
+  version: 0.3.0
