@@ -6,7 +6,8 @@ metadata:
     capabilities: Basic Install
     olm.skipRange: <0.3.0
     operatorframework.io/suggested-namespace: node-observability-operator
-    operators.openshift.io/valid-subscription: OpenShift Container Platform
+    operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine", "OpenShift
+      Container Platform", "OpenShift Platform Plus"]'
   name: node-observability-operator.v0.3.0
   namespace: placeholder
 spec:
