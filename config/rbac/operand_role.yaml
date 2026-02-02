@@ -16,7 +16,7 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - nodes/proxy
+  - nodes/pods
   verbs:
   - get
 - nonResourceURLs:

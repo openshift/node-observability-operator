@@ -208,7 +208,7 @@ spec:
         - apiGroups:
           - ""
           resources:
-          - nodes/proxy
+          - nodes/pods
           verbs:
           - get
           - list
