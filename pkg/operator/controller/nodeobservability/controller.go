@@ -75,7 +75,7 @@ type NodeObservabilityReconciler struct {
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=list;get;watch
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;
 //+kubebuilder:rbac:groups=core,resources=nodes,verbs=list;get;
-//+kubebuilder:rbac:groups=core,resources=nodes/proxy,verbs=list;get;
+//+kubebuilder:rbac:groups=core,resources=nodes/pods,verbs=list;get;
 //+kubebuilder:rbac:urls=/debug/*,verbs=get;
 //+kubebuilder:rbac:urls=/node-observability-status,verbs=get;
 //+kubebuilder:rbac:urls=/node-observability-pprof,verbs=get;
